@@ -6,7 +6,7 @@
 
     .sidebar {
       width: 200px;
-      background-color: #e8fdce;
+      background-color: #FFF6E2;
       color: rgb(0, 0, 0);
       height: 100vh;
       padding: 20px;
@@ -57,33 +57,75 @@
 }
 
 /* Individual Card Styling */
-.card {
-  background-color: #ffffff;
+.card-totalusers{
+  background-color: #FED16A;
   border-radius: 10px;
   box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
   padding: 20px;
-  width: 300px;
+  width: 500px;
+  height: 85px;
   transition: transform 0.3s ease, box-shadow 0.3s ease;
 }
 
+.card-totaltickets {
+  background-color: #FF9733;
+  border-radius: 10px;
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+  padding: 20px;
+  width: 500px;
+  height: 85px;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.card-resolvedissues {
+  background-color: #476E4E;
+  border-radius: 10px;
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+  padding: 20px;
+  width: 500px;
+  height: 85px;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
 /* Hover effect for floating feel */
-.card:hover {
+.card-totalusers:hover,
+.card-totaltickets:hover,
+.card-resolvedissues:hover {
   transform: translateY(-10px);
   box-shadow: 0 15px 30px rgba(0, 0, 0, 0.15);
 }
 
-.card h3 {
+.card-totalusers h3,
+.card-totaltickets h3,
+.card-resolvedissues h3 {
   margin-top: 0;
   margin-bottom: 10px;
-  font-size: 1.2rem;
+  font-size: 40px;
+  margin-left: 10px;
+  color: #ffffff;
+
 }
 
-.card p {
-  margin: 0;
-  color: #555;
+.card-totalusers p,
+.card-totaltickets p,
+.card-resolvedissues p {
+  margin-top: 30px;
+  color: #ffffff;
   text-align: right;
+  font-weight: 500;  
+  font-family:"Kantumruy Pro", sans-serif;
+  font-size: 20px;
 }
 
 h1{
-  text-align: center;
+  text-align: left;
+}
+
+.card{
+  background-color: #ffffff;
+  border-radius: 10px;
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+  padding: 20px;
+  width: 500px;
+  height: 100px;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
 }
