@@ -6,7 +6,7 @@
 
     .sidebar {
       width: 200px;
-      background-color: #F9F2E1;
+      background-color: #e8fdce;
       color: rgb(0, 0, 0);
       height: 100vh;
       padding: 20px;
@@ -84,3 +84,6 @@
   text-align: right;
 }
 
+h1{
+  text-align: center;
+}
