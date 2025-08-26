@@ -1,7 +1,5 @@
-// File Upload Component
-import React, { useRef } from 'react';
-import { Upload, X, File, Image } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { useCallback, useState } from 'react';
+import { Upload, X, File, Image, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 interface FileUploadProps {
@@ -9,7 +7,7 @@ interface FileUploadProps {
   onFilesAdd: (files: File[]) => void;
   onFileRemove: (index: number) => void;
   maxFiles?: number;
-  maxSize?: number; // in MB
+  maxSize?: number; // MB
   acceptedTypes?: string[];
 }
 
@@ -19,29 +17,76 @@ export const FileUpload: React.FC<FileUploadProps> = ({
   onFileRemove,
   maxFiles = 5,
   maxSize = 10,
-  acceptedTypes = ['image/*', '.pdf', '.doc', '.docx', '.txt']
+  acceptedTypes = ['image/*', 'application/pdf', 'text/*', '.log']
 }) => {
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const [error, setError] = useState<string>('');
 
-  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFiles = Array.from(event.target.files || []);
-    const validFiles = selectedFiles.filter(file => {
+  const validateFiles = (fileList: File[]): File[] => {
+    const validFiles: File[] = [];
+    let errorMessage = '';
+
+    for (const file of fileList) {
+      // Check file size
       if (file.size > maxSize * 1024 * 1024) {
-        alert(`File ${file.name} is too large. Maximum size is ${maxSize}MB.`);
-        return false;
+        errorMessage = `File "${file.name}" is too large. Maximum size is ${maxSize}MB.`;
+        continue;
       }
-      return true;
-    });
 
-    if (files.length + validFiles.length > maxFiles) {
-      alert(`Maximum ${maxFiles} files allowed.`);
-      return;
+      // Check file count
+      if (files.length + validFiles.length >= maxFiles) {
+        errorMessage = `Maximum ${maxFiles} files allowed.`;
+        break;
+      }
+
+      validFiles.push(file);
     }
 
-    onFilesAdd(validFiles);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
+    setError(errorMessage);
+    return validFiles;
+  };
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+
+    const droppedFiles = Array.from(e.dataTransfer.files);
+    const validFiles = validateFiles(droppedFiles);
+    
+    if (validFiles.length > 0) {
+      onFilesAdd(validFiles);
     }
+  }, [files.length, maxFiles, maxSize, onFilesAdd]);
+
+  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFiles = Array.from(e.target.files || []);
+    const validFiles = validateFiles(selectedFiles);
+    
+    if (validFiles.length > 0) {
+      onFilesAdd(validFiles);
+    }
+    
+    // Reset input value to allow selecting the same file again
+    e.target.value = '';
+  }, [files.length, maxFiles, maxSize, onFilesAdd]);
+
+  const getFileIcon = (file: File) => {
+    if (file.type.startsWith('image/')) return <Image className="h-4 w-4" />;
+    if (file.type === 'application/pdf') return <FileText className="h-4 w-4" />;
+    return <File className="h-4 w-4" />;
   };
 
   const formatFileSize = (bytes: number) => {
@@ -52,66 +97,69 @@ export const FileUpload: React.FC<FileUploadProps> = ({
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
-  const getFileIcon = (file: File) => {
-    if (file.type.startsWith('image/')) {
-      return <Image className="h-4 w-4 text-green-500" />;
-    }
-    return <File className="h-4 w-4 text-blue-500" />;
-  };
-
   return (
     <div className="space-y-4">
-      <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors">
-        <input
-          ref={fileInputRef}
-          type="file"
-          multiple
-          onChange={handleFileSelect}
-          accept={acceptedTypes.join(',')}
-          className="hidden"
-        />
-        <Upload className="mx-auto h-8 w-8 text-gray-400 mb-2" />
-        <p className="text-sm text-gray-600 mb-2">
-          Drag and drop files here, or{' '}
-          <Button
-            type="button"
-            variant="link"
-            className="p-0 h-auto text-blue-600 hover:text-blue-800"
-            onClick={() => fileInputRef.current?.click()}
-          >
-            browse
-          </Button>
-        </p>
-        <p className="text-xs text-gray-500">
-          Maximum {maxFiles} files, {maxSize}MB each
-        </p>
+      {/* Drop Zone */}
+      <div
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        className={`
+          border-2 border-dashed rounded-lg p-6 text-center transition-colors
+          ${isDragOver 
+            ? 'border-blue-500 bg-blue-50' 
+            : 'border-gray-300 hover:border-gray-400'
+          }
+          ${files.length >= maxFiles ? 'opacity-50 pointer-events-none' : ''}
+        `}
+      >
+        <Upload className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+        <div className="space-y-2">
+          <p className="text-lg font-medium">
+            {isDragOver ? 'Drop files here' : 'Drag and drop files here'}
+          </p>
+          <p className="text-sm text-gray-500">
+            or{' '}
+            <label className="text-blue-600 hover:text-blue-500 cursor-pointer font-medium">
+              browse files
+              <input
+                type="file"
+                multiple
+                accept={acceptedTypes.join(',')}
+                onChange={handleFileSelect}
+                className="hidden"
+                disabled={files.length >= maxFiles}
+              />
+            </label>
+          </p>
+          <p className="text-xs text-gray-400">
+            Maximum {maxFiles} files, {maxSize}MB each
+          </p>
+        </div>
       </div>
 
-      <AnimatePresence>
-        {files.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            className="space-y-2"
-          >
+      {/* Error Message */}
+      {error && (
+        <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded p-2">
+          {error}
+        </div>
+      )}
+
+      {/* File List */}
+      {files.length > 0 && (
+        <div className="space-y-2">
+          <h4 className="text-sm font-medium">Attached Files ({files.length})</h4>
+          <div className="space-y-2">
             {files.map((file, index) => (
-              <motion.div
+              <div
                 key={`${file.name}-${index}`}
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: 20 }}
-                className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border"
+                className="flex items-center justify-between p-2 bg-gray-50 rounded border"
               >
-                <div className="flex items-center space-x-3">
+                <div className="flex items-center space-x-2 flex-1 min-w-0">
                   {getFileIcon(file)}
-                  <div>
-                    <p className="text-sm font-medium text-gray-900 truncate max-w-xs">
-                      {file.name}
-                    </p>
-                    <p className="text-xs text-gray-500">
-                      {formatFileSize(file.size)}
-                    </p>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{file.name}</p>
+                    <p className="text-xs text-gray-500">{formatFileSize(file.size)}</p>
                   </div>
                 </div>
                 <Button
@@ -119,15 +167,15 @@ export const FileUpload: React.FC<FileUploadProps> = ({
                   variant="ghost"
                   size="sm"
                   onClick={() => onFileRemove(index)}
-                  className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                  className="text-red-600 hover:text-red-700 hover:bg-red-50 ml-2"
                 >
                   <X className="h-4 w-4" />
                 </Button>
-              </motion.div>
+              </div>
             ))}
-          </motion.div>
-        )}
-      </AnimatePresence>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -57,7 +57,8 @@ export const SupportForm: React.FC = () => {
   };
 
   return (
-    <Card className="w-full max-w-2xl mx-auto">
+    <Card className="w-full h-full min-h-screen mx-auto">
+
       <CardHeader>
         <div className="flex items-center space-x-2">
           <MessageCircle className="h-6 w-6 text-blue-600" />
