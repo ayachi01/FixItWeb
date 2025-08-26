@@ -6,48 +6,152 @@
   <link rel="stylesheet" href="style.css">
   <title>FixIt Dashboard</title>
   
+  <!-- Fonts & Icons -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Kantumruy+Pro:ital,wght@0,100..700;1,100..700&display=swap" rel="stylesheet">
-
-    <script src="https://code.iconify.design/iconify-icon/1.0.8/iconify-icon.min.js"></script>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Kantumruy+Pro:ital,wght@0,100..700;1,100..700&display=swap" rel="stylesheet">
+  <script src="https://code.iconify.design/iconify-icon/1.0.8/iconify-icon.min.js"></script>
   
+  <!-- Chart.js Library -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <!-- Inline styles for layout -->
+  <style>
+    .chart-section {
+      display: flex;
+      align-items: stretch;
+      justify-content: space-between;
+      gap: 20px;
+      height: 100%;
+      width: 100%;
+    }
+
+    .chart-container,
+    .category-list {
+      flex: 1;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+
+      box-sizing: border-box;
+    }
+
+    .chart-container canvas {
+      width: 100% !important;
+      height: auto !important;
+      max-width: 100%;
+    }
+
+    .category-list ul {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      width: 100%;
+      font-family: 'Kantumruy Pro', sans-serif;
+      font-size: 16px;
+    }
+
+    .category-list li {
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+    }
+
+    .category-list span {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      margin-right: 10px;
+      border-radius: 2px;
+    }
+
+
+  </style>
 </head>
 <body>
   <div class="sidebar">
     <h2>Fix It</h2>
-    <a href="dashboard.html"><iconify-icon icon="line-md:home"></iconify-icon>Dashboard</a>
-    <a href="ticket.html"><iconify-icon icon="line-md:check-list-3"></iconify-icon>Ticket</a>
-    <a href="reports.html"><iconify-icon icon="line-md:clipboard"></iconify-icon>Reports</a>
-    <a href="chatlogs.html"><iconify-icon icon="line-md:chat-round-dots"></iconify-icon>Chatlogs</a>
-    <a href="maintenance.html"><iconify-icon icon="line-md:phone-call-loop"></iconify-icon>Maintenance</a>
+    <a href="dashboard.html"><iconify-icon icon="mdi:home-variant-outline"></iconify-icon>Dashboard</a>
+    <a href="ticket.html"><iconify-icon icon="mdi:format-list-checkbox"></iconify-icon>Ticket</a>
+    <a href="reports.html"><iconify-icon icon="mdi:clipboard-outline"></iconify-icon>Reports</a>
+    <a href="chatlogs.html"><iconify-icon icon="mdi:chat-outline"></iconify-icon>Chatlogs</a>
+    <a href="maintenance.html"><iconify-icon icon="mdi:phone-in-talk-outline"></iconify-icon>Maintenance</a>
   </div>
 
   <div class="main-content">
     <h1>Dashboard</h1>
 
     <div class="card-container">
-        
-    <div class="card-totalusers">
-    <h3>1000</h3>
-    <p>TOTAL USERS</p>
-  </div>
-  <div class="card-totaltickets">
-    <h3>500</h3>
-    <p>TOTAL TICKETS</p>
-  </div>
-  <div class="card-resolvedissues">
-    <h3>500</h3>
-    <p>RESOLVED ISSUES</p>
-  </div>
-</div>
+      <div class="card-totalusers">
+        <h3>1000</h3>
+        <p>TOTAL USERS</p>
+      </div>
+      <div class="card-totaltickets">
+        <h3>500</h3>
+        <p>TOTAL TICKETS</p>
+      </div>
+      <div class="card-resolvedissues">
+        <h3>500</h3>
+        <p>RESOLVED ISSUES</p>
+      </div>
+    </div>
 
-<div class="card">
-  <h3> Reports by Categories</h3>
-</div>
-  </div>
+    <!-- ✅ Reports by Categories Card -->
+    <div class="card">
+      <h3>Reports by Categories</h3>
+      <div class="chart-section">
         
- 
+        <!-- Left: Pie Chart -->
+        <div class="chart-container">
+          <canvas id="reportsPieChart"></canvas>
+        </div>
 
+        <!-- Right: Category Labels -->
+        <div class="category-list">
+          <ul>
+            <li><span style="background-color: #FF6384;"></span> Chair — 120</li>
+            <li><span style="background-color: #36A2EB;"></span> Lights — 150</li>
+            <li><span style="background-color: #FFCE56;"></span> Furniture — 100</li>
+            <li><span style="background-color: #4BC0C0;"></span> Plumbing — 80</li>
+            <li><span style="background-color: #F97A00;"></span> Others — 50</li>
+          </ul>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- Pie Chart Script -->
+  <script>
+    const ctx = document.getElementById('reportsPieChart').getContext('2d');
+    const reportsPieChart = new Chart(ctx, {
+      type: 'pie',
+      data: {
+        labels: ['Chair', 'Lights', 'Furniture', 'Plumbing', 'Others'],
+        datasets: [{
+          label: 'Reports',
+          data: [120, 150, 100, 80, 50],
+          backgroundColor: [
+            '#FF6384',
+            '#36A2EB',
+            '#FFCE56',
+            '#4BC0C0',
+            '#F97A00'
+          ],
+          borderColor: '#ffffff',
+          borderWidth: 2
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            display: false
+          }
+        }
+      }
+    });
+  </script>
 </body>
 </html>

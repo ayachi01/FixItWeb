@@ -126,6 +126,6 @@ h1{
   box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
   padding: 20px;
   width: 500px;
-  height: 100px;
+  height: 200px;
   transition: transform 0.3s ease, box-shadow 0.3s ease;
 }
