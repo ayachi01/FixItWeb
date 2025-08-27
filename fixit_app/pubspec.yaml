@@ -83,6 +83,7 @@ flutter:
     - assets/images/check_mark.png
     - assets/images/mail.png
     - assets/images/mailbox.png
+    - assets/images/lock.png
 
   # Fonts must also live under flutter:
   fonts:

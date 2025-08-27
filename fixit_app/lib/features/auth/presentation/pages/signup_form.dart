@@ -65,7 +65,7 @@ class SignupFormState extends State<SignupForm> {
                     fontFamily: 'Poppins-SemiBold',
                     fontWeight: FontWeight.w600,
                     fontSize: 16,
-                    color: Color(0XFF808080),
+                    color: Color(0XFF4D4D4D),
                   ),
                   textAlign: TextAlign.center,
                 ),

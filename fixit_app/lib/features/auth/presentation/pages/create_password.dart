@@ -26,19 +26,44 @@ class _CreatePasswordState extends State<CreatePassword> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+
+              // Lock Image
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 83),
+                child: Image.asset(
+                  'assets/images/lock.png',
+                  fit: BoxFit.contain,
+                  alignment: Alignment.topCenter,
+                ),
+              ),
+
+              const SizedBox(height: 70),
               // Title
               const Center(
                 child: Text(
                   "Create New Password",
                   style: TextStyle(
                     fontSize: 35,
-                    fontFamily: 'KantumruyPro-Bold',
+                    fontFamily: 'KantumruyPro',
                     fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
+              const SizedBox(height: 15),
 
-              const SizedBox(height: 50),
+              // Description
+              const Text(
+                "Your new password must be different from previously used password.",
+                style: TextStyle(
+                      fontSize: 16,
+                      fontFamily: 'Poppins-SemiBold',
+                      fontWeight: FontWeight.w600,
+                      color: Color(0XFF4D4D4D),
+                    ),
+                    textAlign: TextAlign.center,
+              ),
+
+              const SizedBox(height: 40),
 
               // Password Title
               const Text(
@@ -120,7 +145,7 @@ class _CreatePasswordState extends State<CreatePassword> {
                   return null;
                 },
               ),
-              const SizedBox(height: 200),
+              const SizedBox(height: 110),
 
               // Change Password Button
               SizedBox(

@@ -35,12 +35,12 @@ class _VerifyEmailState extends State<VerifyEmail> {
                   padding: const EdgeInsets.symmetric(horizontal: 75),
                   child: Image.asset(
                     'assets/images/mail.png',
-                    height: 300,
                     fit: BoxFit.contain,
                     alignment: Alignment.topCenter,
                   ),
                 ),
 
+                const SizedBox(height: 140),
                 // Title
                 Center(
                   child: const Text(
@@ -64,7 +64,7 @@ class _VerifyEmailState extends State<VerifyEmail> {
                       fontSize: 16,
                       fontFamily: 'Poppins-SemiBold',
                       fontWeight: FontWeight.w600,
-                      color: Color(0XFFB0B0B0),
+                      color: Color(0XFF4D4D4D),
                     ),
                     textAlign: TextAlign.center,
                   ),
@@ -74,13 +74,13 @@ class _VerifyEmailState extends State<VerifyEmail> {
 
                 // Text Fields
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 35, vertical: 20),
+                  padding: const EdgeInsets.symmetric(vertical: 20),
                   child: Row(
                     children: [
 
                       // Text Field 1
                       SizedBox(
-                        width: 74,
+                        width: 70,
                         height: 60,
                         child: TextFormField(
                           keyboardType: TextInputType.number,
@@ -92,7 +92,7 @@ class _VerifyEmailState extends State<VerifyEmail> {
 
                       // Text Field 2
                       SizedBox(
-                        width: 74,
+                        width: 70,
                         height: 60,
                         child: TextFormField(
                           keyboardType: TextInputType.number,
@@ -104,7 +104,7 @@ class _VerifyEmailState extends State<VerifyEmail> {
 
                       // Text Field 3
                       SizedBox(
-                        width: 74,
+                        width: 70,
                         height: 60,
                         child: TextFormField(
                           keyboardType: TextInputType.number,
@@ -116,7 +116,7 @@ class _VerifyEmailState extends State<VerifyEmail> {
 
                       // Text Field 4
                       SizedBox(
-                        width: 74,
+                        width: 70,
                         height: 60,
                         child: TextFormField(
                           keyboardType: TextInputType.number,
@@ -147,7 +147,7 @@ class _VerifyEmailState extends State<VerifyEmail> {
                       ),
                     ),
 
-                    const SizedBox(height: 200),
+                    const SizedBox(height: 170),
 
                // Confirm Button
                 SizedBox(
