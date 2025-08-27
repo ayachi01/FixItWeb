@@ -1,0 +1,16 @@
+{% extends 'base.html' %}
+{% block title %}FixIT - Welcome{% endblock %}
+{% block content %}
+  <h1>Welcome to FixIT</h1>
+  <p>Report and track maintenance issues on campus.</p>
+  {% if user.is_authenticated %}
+    <p><a href="{% url 'reports:ticket_list' %}" class="btn btn-primary">View Tickets</a></p>
+    <p><a href="{% url 'reports:ticket_new' %}" class="btn btn-primary">Report an Issue</a></p>
+    {% if user.role == 'admin' %}
+      <p><a href="{% url 'reports:admin_dashboard' %}" class="btn btn-primary">Admin Dashboard</a></p>
+    {% endif %}
+  {% else %}
+    <p><a href="{% url 'reports:register' %}" class="btn btn-primary">Register</a></p>
+    <p><a href="{% url 'login' %}" class="btn btn-secondary">Login</a></p>
+  {% endif %}
+{% endblock %}

@@ -1,0 +1,16 @@
+{% extends 'base.html' %}
+{% block content %}
+  <h1>Admin Control Panel</h1>
+  <h2>Tickets</h2>
+  <ul>
+    {% for ticket in tickets %}
+      <li>{{ ticket.description }} - {{ ticket.status }} (<a href="{% url 'reports:ticket_update' ticket.pk %}">Edit</a>)</li>
+    {% endfor %}
+  </ul>
+  <h2>Users</h2>
+  <ul>
+    {% for user in users %}
+      <li>{{ user.username }} - {{ user.role }}</li>
+    {% endfor %}
+  </ul>
+{% endblock %}

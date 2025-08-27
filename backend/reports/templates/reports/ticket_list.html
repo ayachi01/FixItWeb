@@ -1,0 +1,19 @@
+{% extends 'base.html' %}
+{% block content %}
+  <h1>Tickets</h1>
+  <a href="{% url 'reports:ticket_new' %}">Create New Ticket</a>
+  <ul>
+    {% for ticket in tickets %}
+      <li>
+        <a href="{% url 'reports:ticket_detail' ticket.pk %}">
+          {{ ticket.description }} - {{ ticket.location }} ({{ ticket.status }})
+        </a>
+        {% if ticket.photo %}
+          <img src="{{ ticket.photo.url }}" alt="Ticket Photo" width="100">
+        {% endif %}
+      </li>
+    {% empty %}
+      <li>No tickets found.</li>
+    {% endfor %}
+  </ul>
+{% endblock %}
