@@ -1,5 +1,10 @@
 {
     "cSpell.words": [
         "cupertino"
-    ]
+    ],
+
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+        "source.fixAll": "explicit"
+    }
 }

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '/features/auth/presentation/pages/forgot_password.dart';
-import '/features/auth/presentation/pages/homepage.dart';
+import '/features/dashboard/presentation/pages/homepage.dart';
 import '/features/auth/presentation/pages/signup_form.dart';
 import '/core/widgets/welcome_button.dart';
 import '/core/theme/input_decoration.dart';
@@ -199,7 +199,8 @@ class _LoginFormState extends State<LoginForm> {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (context) => const HomePage(),
+                            builder: (context) => HomePage(
+                            ),
                           ),
                         );
                       }

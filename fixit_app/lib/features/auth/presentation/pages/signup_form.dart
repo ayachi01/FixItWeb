@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '/features/auth/presentation/pages/homepage.dart';
+import '/features/dashboard/presentation/pages/homepage.dart';
 import '/features/auth/presentation/pages/login_form.dart';
 import '/core/widgets/welcome_button.dart';
 import '/core/theme/input_decoration.dart';
@@ -8,10 +8,10 @@ class SignupForm extends StatefulWidget {
   const SignupForm({super.key});
 
   @override
-  State<SignupForm> createState() => _SignupFormState();
+  State<SignupForm> createState() => SignupFormState();
 }
 
-class _SignupFormState extends State<SignupForm> {
+class SignupFormState extends State<SignupForm> {
   // Form Key
   final _signUpFormKey = GlobalKey<FormState>();
   // Controllers
@@ -313,7 +313,10 @@ class _SignupFormState extends State<SignupForm> {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => const HomePage(),
+                          builder: (context) => HomePage(
+                            firstNameController: firstNameController,
+                            lastNameController: lastNameController,
+                          ),
                         ),
                       );
                     }
