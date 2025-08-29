@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useLoginViewModel } from '../hooks/useLoginViewModel';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 interface LoginFormProps {
   onSuccess?: (data: any) => void;
@@ -33,6 +34,15 @@ export const LoginForm: React.FC<LoginFormProps> = ({
     setIsValidEmail(emailRegex.test(viewModel.formData.email));
   }, [viewModel.formData.email]);
 
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const handleLoginSuccess = () => {
+    // Get the intended destination from location state, or default to dashboard
+    const from = location.state?.from?.pathname || '/dashboard';
+    navigate(from, { replace: true });
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -40,6 +50,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({
     
     if (result.success) {
       onSuccess?.(result.data);
+      handleLoginSuccess();
     } else if (result.error){
       onError?.(result.error);
     }

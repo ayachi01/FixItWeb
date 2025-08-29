@@ -4,13 +4,13 @@ import {
   BookOpen,
   Bot,
   Cog ,
-  Frame,
   LifeBuoy,
   Map,
-  PieChart,
   Send,
   Settings2,
-  CircleGauge ,
+  CircleGauge, 
+  Proportions,
+  MessageSquare,
 } from "lucide-react"
 
 import { NavMain } from "@/components/nav-main"
@@ -31,7 +31,7 @@ const data = {
   navMain: [
     {
       title: "Dashboard",
-      url: "db",
+      url: "dashboard",
       icon: CircleGauge ,
       isActive: true,
       items: [
@@ -50,20 +50,20 @@ const data = {
       ],
     },
     {
-      title: "Models",
+      title: "Agents",
       url: "#",
       icon: Bot,
       items: [
         {
-          title: "Genesis",
+          title: "Assigned",
           url: "#",
         },
         {
-          title: "Explorer",
+          title: "Unassigned",
           url: "#",
         },
         {
-          title: "Quantum",
+          title: "Completed",
           url: "#",
         },
       ],
@@ -129,14 +129,14 @@ const data = {
   ],
   projects: [
     {
-      name: "Design Engineering",
+      name: "Reports",
       url: "#",
-      icon: Frame,
+      icon: Proportions,
     },
     {
-      name: "Sales & Marketing",
+      name: "Chatlogs",
       url: "#",
-      icon: PieChart,
+      icon: MessageSquare,
     },
     {
       name: "Facilities",

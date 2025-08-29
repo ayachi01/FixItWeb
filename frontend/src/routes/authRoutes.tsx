@@ -5,7 +5,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { AuthProvider } from '@/features/auth/context/AuthContext';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import LoginPage from '@/pages/admin/Login';
-import DashboardPages from '@/pages/admin/DashboardPage';
+import DashboardPages from '@/pages/admin/dashboard/Page';
 import { useAuth } from '@/features/auth/context/AuthContext';
 import RegisterPage from '@/pages/admin/RegisterPage';
 
