@@ -84,6 +84,16 @@ flutter:
     - assets/images/mail.png
     - assets/images/mailbox.png
     - assets/images/lock.png
+    - assets/images/chatbot.png
+    - assets/images/home.png
+    - assets/images/home_selected.png
+    - assets/images/my_reports.png
+    - assets/images/my_reports_selected.png
+    - assets/images/settings.png
+    - assets/images/settings_selected.png
+    - assets/images/no_list.png
+    - assets/images/scan.png
+    - assets/images/sample_brkn_chair.png
 
   # Fonts must also live under flutter:
   fonts:
@@ -106,6 +116,8 @@ flutter:
 
     - family: KantumruyPro
       fonts:
+        - asset: assets/fonts/KantumruyPro-Regular.ttf
+          weight: 400
         - asset: assets/fonts/KantumruyPro-SemiBold.ttf
           weight: 600
         - asset: assets/fonts/KantumruyPro-Bold.ttf
@@ -114,8 +126,8 @@ flutter:
     - family: PlusJakartaSans
       fonts:
         - asset: assets/fonts/PlusJakartaSans-Light.ttf
-          weight: 400
+          weight: 300
         - asset: assets/fonts/PlusJakartaSans-Regular.ttf
-          weight: 500
+          weight: 400
         - asset: assets/fonts/PlusJakartaSans-Bold.ttf
           weight: 700
