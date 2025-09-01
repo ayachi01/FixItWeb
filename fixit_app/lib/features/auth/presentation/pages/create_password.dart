@@ -43,19 +43,19 @@ class _CreatePasswordState extends State<CreatePassword> {
                 child: Text(
                   "Create New Password",
                   style: TextStyle(
-                    fontSize: 35,
+                    fontSize: 30,
                     fontFamily: 'KantumruyPro',
                     fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
-              const SizedBox(height: 15),
+              const SizedBox(height: 10),
 
               // Description
               const Text(
                 "Your new password must be different from previously used password.",
                 style: TextStyle(
-                      fontSize: 16,
+                      fontSize: 14,
                       fontFamily: 'Poppins-SemiBold',
                       fontWeight: FontWeight.w600,
                       color: Color(0XFF4D4D4D),
@@ -145,7 +145,7 @@ class _CreatePasswordState extends State<CreatePassword> {
                   return null;
                 },
               ),
-              const SizedBox(height: 110),
+              const SizedBox(height: 100),
 
               // Change Password Button
               SizedBox(

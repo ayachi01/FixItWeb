@@ -13,15 +13,20 @@ class TicketCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final imagePath = report['image'];
 
-    final imageWidget = (imagePath != null && File(imagePath).existsSync()
-    ? Image.file(
-      File(imagePath),
-      width: 72,
-      height: 108,
-      fit: BoxFit.cover,
-    )
-    : _placeholderBox()
-    );
+    Widget imageWidget;
+    if (imagePath != null && imagePath.isNotEmpty) {
+    final file = File(imagePath);
+    imageWidget = file.existsSync()
+        ? Image.file(
+            file,
+            width: 72,
+            height: 108,
+            fit: BoxFit.cover,
+          )
+        : _placeholderBox();
+    } else { 
+      imageWidget = _placeholderBox();
+    }
 
     // Card
     return Card(
@@ -34,12 +39,7 @@ class TicketCard extends StatelessWidget {
           children: [
             ClipRRect(
               borderRadius: BorderRadius.circular(15),
-              child: Image.asset(
-                imagePath,
-                height: 70,
-                width: 70,
-                fit: BoxFit.cover,
-              ),
+              child: imageWidget,
             ),
             const SizedBox(width: 14),
             Expanded(

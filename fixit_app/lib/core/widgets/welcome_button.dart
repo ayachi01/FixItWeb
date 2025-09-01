@@ -36,7 +36,7 @@ class WelcomeButton extends StatelessWidget {
         text,
         style: TextStyle(
           fontSize: 18,
-          fontFamily: 'Inter',
+          fontFamily: 'Inter_24pt-Medium',
           fontWeight: FontWeight.w500,
         ),
       ),

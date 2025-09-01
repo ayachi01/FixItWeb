@@ -54,13 +54,13 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                   ),
                 ),
 
-                const SizedBox(height: 20),
+                const SizedBox(height: 15),
 
                 // Description
                 const Text(
                   "Please enter the email address associated with your account.",
                   style: TextStyle(
-                    fontSize: 16,
+                    fontSize: 14,
                     fontFamily: 'Poppins-SemiBold',
                     fontWeight: FontWeight.w600,
                     color: Color(0XFF4D4D4D),
@@ -100,7 +100,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                   },
                 ),
 
-                const SizedBox(height: 200),
+                const SizedBox(height: 190),
 
                // Confirm Button
                 SizedBox(

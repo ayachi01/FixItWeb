@@ -34,6 +34,7 @@ dependencies:
     sdk: flutter
     
   cupertino_icons: ^1.0.8
+  image_picker: ^1.2.0
 
   #State Management
   flutter_bloc: ^8.1.3
@@ -45,7 +46,7 @@ dependencies:
   equatable: ^2.0.5
 
   #Service Locator
-  get_it: ^8.0.4
+  get_it: ^8.1.0
 
   #Date Format
   intl: ^0.18.1

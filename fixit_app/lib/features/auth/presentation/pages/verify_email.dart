@@ -23,7 +23,7 @@ class _VerifyEmailState extends State<VerifyEmail> {
       body: SafeArea(
         top: false,
         child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 70),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 90),
           child: Form(
             key: _verifyEmailKey,
             child: Column(
@@ -40,11 +40,11 @@ class _VerifyEmailState extends State<VerifyEmail> {
                   ),
                 ),
 
-                const SizedBox(height: 140),
+                const SizedBox(height: 120),
                 // Title
                 Center(
                   child: const Text(
-                    "Verify your email",
+                    "Verify Your Email",
                     style: TextStyle(
                       fontSize: 35,
                       fontFamily: 'KantumruyPro',
@@ -54,14 +54,14 @@ class _VerifyEmailState extends State<VerifyEmail> {
                   ),
                 ),
 
-                const SizedBox(height: 20),
+                const SizedBox(height: 15),
 
                 // Description
                 Center(
                   child: const Text(
                     "Please enter the 4 digit code sent to your email.",
                     style: TextStyle(
-                      fontSize: 16,
+                      fontSize: 14,
                       fontFamily: 'Poppins-SemiBold',
                       fontWeight: FontWeight.w600,
                       color: Color(0XFF4D4D4D),
@@ -147,7 +147,7 @@ class _VerifyEmailState extends State<VerifyEmail> {
                       ),
                     ),
 
-                    const SizedBox(height: 170),
+                    const SizedBox(height: 165),
 
                // Confirm Button
                 SizedBox(

@@ -71,7 +71,7 @@ class _LoginFormState extends State<LoginForm> {
                     style: TextStyle(
                       fontFamily: 'Poppins-SemiBold',
                       fontWeight: FontWeight.w600,
-                      fontSize: 16,
+                      fontSize: 14,
                       color: Color(0XFF4D4D4D),
                     ),
                     textAlign: TextAlign.center,
@@ -185,7 +185,7 @@ class _LoginFormState extends State<LoginForm> {
                   ),
                 ),
 
-                const SizedBox(height: 80),
+                const SizedBox(height: 35),
 
                 // Login Button
                 SizedBox(

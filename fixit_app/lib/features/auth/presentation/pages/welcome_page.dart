@@ -34,7 +34,7 @@ class WelcomePage extends StatelessWidget {
                       style: TextStyle(
                         fontFamily: 'PlusJakartaSans',
                         fontWeight: FontWeight.w400,
-                        fontSize: 34,
+                        fontSize: 30,
                         color: Colors.black,
                       ),
                     ),
@@ -50,13 +50,13 @@ class WelcomePage extends StatelessWidget {
                   ],
                 ),
 
-                const SizedBox(height: 20),
+                const SizedBox(height: 15),
 
                 //Subtitle
                 const Padding(
                   padding: EdgeInsets.symmetric(horizontal: 20.0),
                   child: Text(
-                    'Report campus maintenance issues quickly and efficiently',
+                    'Report campus maintenance issues quickly and efficiently.',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontFamily: 'PlusJakartaSans',
