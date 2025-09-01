@@ -79,6 +79,7 @@ flutter:
 
   # Assets must be indented here
   assets:
+    - assets/images/scan_button.png
     - assets/images/logo.png
     - assets/images/check_mark.png
     - assets/images/mail.png
