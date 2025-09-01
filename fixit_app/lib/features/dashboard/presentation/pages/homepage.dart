@@ -1,8 +1,9 @@
 import 'package:fixit/features/reports/presentation/pages/scanner_screen.dart';
 import 'package:flutter/material.dart';
+import '/features/reports/presentation/pages/my_reports.dart';
+import '/features/reports/presentation/pages/create_report.dart';
 import '/core/widgets/profile_avatar.dart';
 import '/core/widgets/search_bar.dart';
-import '/features/reports/presentation/pages/my_reports.dart';
 import '/core/widgets/bottom_nav_bar.dart';
 import '/core/widgets/ticket_card.dart';
 import '/core/widgets/floating_action_button.dart';
@@ -58,10 +59,14 @@ class _HomePageState extends State<HomePage> {
                   fontSize: 30,
                   fontFamily: 'PlusJakartaSans-Bold',
                   fontWeight: FontWeight.w700,
-                  color: Colors.black,
+                  color: Color(0XFF386641),
                 ),
               ),
-              const TextSpan(text: "!"),
+              const TextSpan(
+                text: "!",
+                style: const TextStyle(
+                  color: Color(0XFF386641),
+                )),
             ],
           ),
         ),
@@ -175,7 +180,7 @@ class _HomePageState extends State<HomePage> {
             context,
             MaterialPageRoute(
               builder: (context) => ScannerScreen(),
-            ), // temporary navigation
+            ),
           );
         },
       ),
@@ -195,13 +200,14 @@ class _HomePageState extends State<HomePage> {
               MaterialPageRoute(builder: (context) => MyReportsPage()),
             );
           }
-          /* Tapusin ko kapag may page na, kaya naka-comment muna ^_^
+
           // Directs to Chatbot Page
           if (index == 2) { 
           Navigator.push( context, 
-          MaterialPageRoute(builder: (context) => ChatbotPage()), ); 
+          MaterialPageRoute(builder: (context) => CreateReport()), ); // Temporary navigation para ma-check ko lang ui ^_^
           } 
-          
+
+          /* Tapusin ko kapag may page na, kaya naka-comment muna ^_^
           // Directs to Settings Page 
           if (index == 3) { 
           Navigator.push(
