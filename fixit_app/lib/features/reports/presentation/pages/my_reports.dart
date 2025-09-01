@@ -1,6 +1,19 @@
 import 'package:flutter/material.dart';
+import '/core/widgets/bottom_nav_bar.dart';
+import 'package:fixit/features/dashboard/presentation/pages/homepage.dart';
+import '/core/widgets/floating_action_button.dart';
+import 'package:fixit/features/reports/presentation/pages/scanner_screen.dart';
 
-class MyReportsPage extends StatelessWidget {
+class MyReportsPage extends StatefulWidget {
+  const MyReportsPage({Key? key}) : super(key: key);
+
+  @override
+  State<MyReportsPage> createState() => _MyReportsPageState();
+}
+
+class _MyReportsPageState extends State<MyReportsPage> {
+  int _selectedIndex = 1;
+
   final List<Map<String, dynamic>> reports = [
     {
       'id': 'FXT-250004',
@@ -94,24 +107,43 @@ class MyReportsPage extends StatelessWidget {
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {},
-        backgroundColor: const Color(0xFF386641),
-        child: const Icon(Icons.qr_code_scanner),
+      // Floating Action Button
+      floatingActionButton: CustomFAB(
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => ScannerScreen(),
+            ), // temporary navigation
+          );
+        },
       ),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: 1,
-        selectedItemColor: const Color(0xFF386641),
-        unselectedItemColor: Colors.grey,
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.list_alt),
-            label: 'My Reports',
-          ),
-        ],
+      // Bottom Navigation Bar
+      bottomNavigationBar: BottomNavBar(
+        currentIndex: _selectedIndex,
         onTap: (index) {
-          // Navigation logic here
+          setState(() {
+            _selectedIndex = index;
+          });
+
+          //Navigates to Homepage
+          if (index == 0) {
+            Navigator.pushAndRemoveUntil(
+              context,
+              MaterialPageRoute(builder: (context) => const HomePage()),
+              (route) => false,
+            );
+          }
+
+          // Navigate to My Reports Page
+          if (index == 1) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => MyReportsPage()),
+            );
+          }
+
+          // Placeholder for chatbot & settings page
         },
       ),
     );
@@ -163,7 +195,10 @@ class ReportCard extends StatelessWidget {
                         ),
                       ),
                       const Spacer(),
-                      const Icon(Icons.more_vert, size: 20),
+                      GestureDetector(
+                        onTap: () => _showReportOptions(context),
+                        child: const Icon(Icons.more_vert, size: 20),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 4),
@@ -218,6 +253,74 @@ class ReportCard extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+  // ... (all your existing code above is untouched)
+
+  void _showReportOptions(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+        backgroundColor: Colors.white,
+        insetPadding: const EdgeInsets.only(right: 40, top: 180),
+        child: SizedBox(
+          width: 120,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildDialogOption(
+                'View',
+                onTap: () {
+                  Navigator.pop(context);
+                  // TODO: Add View logic
+                },
+              ),
+              _buildDialogOption(
+                'Edit',
+                onTap: () {
+                  Navigator.pop(context);
+                  // TODO: Add Edit logic
+                },
+              ),
+              _buildDialogOption(
+                'Delete',
+                color: Colors.red,
+                onTap: () {
+                  Navigator.pop(context);
+                  // TODO: Add Delete logic
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDialogOption(
+    String text, {
+    VoidCallback? onTap,
+    Color color = Colors.black,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 10.0, horizontal: 16),
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            text,
+            style: TextStyle(
+              fontSize: 14,
+              color: color,
+              fontWeight: text == 'Delete'
+                  ? FontWeight.w500
+                  : FontWeight.normal,
+            ),
+          ),
         ),
       ),
     );

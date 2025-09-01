@@ -1,3 +1,4 @@
+import 'package:fixit/features/reports/presentation/pages/scanner_screen.dart';
 import 'package:flutter/material.dart';
 import '/core/widgets/profile_avatar.dart';
 import '/core/widgets/search_bar.dart';
@@ -30,7 +31,8 @@ class _HomePageState extends State<HomePage> {
     final firstName = widget.firstNameController?.text ?? "User";
 
     return Scaffold(
-      resizeToAvoidBottomInset: false, // keep FAB in place when keyboard is shown
+      resizeToAvoidBottomInset:
+          false, // keep FAB in place when keyboard is shown
       backgroundColor: const Color(0XFFF8F8F8),
 
       // AppBar
@@ -72,8 +74,8 @@ class _HomePageState extends State<HomePage> {
               imageURL: "https://i.pravatar.cc/300", // Temporary URL
               radius: 27,
             ),
-          )
-        ]
+          ),
+        ],
       ),
 
       // Body
@@ -102,12 +104,14 @@ class _HomePageState extends State<HomePage> {
               // Ticket List Title
               Padding(
                 padding: const EdgeInsets.only(right: 215),
-                child: const Text("Ticket List",
-                style: TextStyle(
-                  fontSize: 27,
-                  fontFamily: 'PlusJakartaSans-Regular',
-                  fontWeight: FontWeight.w500,
-                )),
+                child: const Text(
+                  "Ticket List",
+                  style: TextStyle(
+                    fontSize: 27,
+                    fontFamily: 'PlusJakartaSans-Regular',
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
               ),
 
               const SizedBox(height: 50),
@@ -139,23 +143,23 @@ class _HomePageState extends State<HomePage> {
                     ],
                   ),
                 )
-
               // Ticket Cards
               else
                 Column(
                   children: [
-                    TicketCard(report: {
-                      'id': 'FXT-250004',
-                      'visibility': 'Public',
-                      'title': 'Broken Chair',
-                      'description': 'One of the chairs is missing a leg...',
-                      'status': 'Submitted',
-                      'statusColor': Color(0XFF666666),
-                      'location': 'PTC',
-                      'likes': 0,
-                      'time': '07/26/25 10:26 AM',
-                      'image': 'assets/images/sample_brkn_chair.jpg',
-                      }
+                    TicketCard(
+                      report: {
+                        'id': 'FXT-250004',
+                        'visibility': 'Public',
+                        'title': 'Broken Chair',
+                        'description': 'One of the chairs is missing a leg...',
+                        'status': 'Submitted',
+                        'statusColor': Color(0XFF666666),
+                        'location': 'PTC',
+                        'likes': 0,
+                        'time': '07/26/25 10:26 AM',
+                        'image': 'assets/images/sample_brkn_chair.jpg',
+                      },
                     ),
                   ],
                 ),
@@ -169,11 +173,13 @@ class _HomePageState extends State<HomePage> {
         onPressed: () {
           Navigator.push(
             context,
-            MaterialPageRoute(builder: (context) => MyReportsPage()), // temporary navigation
+            MaterialPageRoute(
+              builder: (context) => ScannerScreen(),
+            ), // temporary navigation
           );
-        }
+        },
       ),
-      
+
       // Bottom Navigation Bar
       bottomNavigationBar: BottomNavBar(
         currentIndex: _selectedIndex,
