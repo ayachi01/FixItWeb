@@ -21,5 +21,6 @@ from django.http import HttpResponse
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/auth/', include('authentication.urls')),
+    path('api/', include('chat.urls')),
     path("", lambda request: HttpResponse("Hello, backend is running!")),
 ]

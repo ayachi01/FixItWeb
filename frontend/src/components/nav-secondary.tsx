@@ -1,4 +1,4 @@
-import * as React from "react"
+import { Link, useLocation } from "react-router-dom"
 import { type LucideIcon } from "lucide-react"
 
 import {
@@ -12,7 +12,6 @@ import {
 
 export function NavSecondary({
   items,
-  onSectionChange,
   ...props
 }: {
   items: {
@@ -20,23 +19,25 @@ export function NavSecondary({
     url: string
     icon: LucideIcon
   }[]
-  onSectionChange?: (section: string) => void
 } & React.ComponentPropsWithoutRef<typeof SidebarGroup>) {
+  const location = useLocation()
+
   return (
     <SidebarGroup {...props}>
-       <SidebarGroupLabel>Help & Feedback</SidebarGroupLabel>
+      <SidebarGroupLabel>Help & Feedback</SidebarGroupLabel>
       <SidebarGroupContent>
         <SidebarMenu>
           {items.map((item) => (
             <SidebarMenuItem key={item.title}>
-              <SidebarMenuButton asChild size="sm">
-                <button
-                  onClick={() => onSectionChange?.(item.url)}
-                  className="flex items-center space-x-2 w-full text-left"
-                >
-                  <item.icon />
-                  <span>{item.title}</span>
-                </button>
+              <SidebarMenuButton
+                asChild
+                size="sm"
+                isActive={location.pathname === item.url}
+              >
+                <Link to={item.url}>
+                  <item.icon className="text-sidebar-foreground dark:text-white"/>
+                  <span className="text-sidebar-foreground dark:text-white">{item.title}</span>
+                </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
           ))}

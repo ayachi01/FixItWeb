@@ -1,12 +1,12 @@
 "use client"
 
 import {
-  BadgeCheck,
+  Settings ,
   Bell,
   ChevronsUpDown,
-  CreditCard,
+  Palette ,
   LogOut,
-  Sparkles,
+  UserRoundPen ,
 } from "lucide-react"
 
 import {
@@ -123,19 +123,19 @@ export function NavUser() {
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
               <DropdownMenuItem>
-                <Sparkles />
-                Upgrade to Pro
+                <UserRoundPen />
+                My Profile
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
               <DropdownMenuItem>
-                <BadgeCheck />
-                Account
+                <Settings  />
+                Settings
               </DropdownMenuItem>
               <DropdownMenuItem>
-                <CreditCard />
-                Billing
+                <Palette  />
+                Theme & Display
               </DropdownMenuItem>
               <DropdownMenuItem>
                 <Bell />

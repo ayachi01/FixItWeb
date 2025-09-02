@@ -89,11 +89,25 @@ class LogoutView(APIView):
     def post(self, request):
         try:
             refresh_token = request.data.get('refreshToken')
-            if refresh_token:
-                token = RefreshToken(refresh_token)
+            if not refresh_token:
+                return Response(
+                    {'error': 'Refresh token is required'}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            token = RefreshToken(refresh_token)
+            
+            # Try to blacklist the token
+            try:
                 token.blacklist()
+            except AttributeError:
+                # Blacklisting not available, but we can still "logout" on frontend
+                pass
+                
             return Response({'message': 'Successfully logged out'}, status=status.HTTP_200_OK)
-        except Exception:
+            
+        except Exception as e:
+            print(f"Logout error: {e}")
             return Response({'error': 'Invalid token'}, status=status.HTTP_400_BAD_REQUEST)
 
 class RefreshTokenView(APIView):

@@ -1,6 +1,6 @@
 "use client"
 
-import { Link } from "react-router-dom"
+import { NavLink } from "react-router-dom"
 import { ChevronRight, type LucideIcon } from "lucide-react"
 
 import {
@@ -42,10 +42,15 @@ export function NavMain({
           <Collapsible key={item.title} asChild defaultOpen={item.isActive}>
             <SidebarMenuItem>
               <SidebarMenuButton asChild tooltip={item.title}>
-                <Link to={item.url}>
-                  <item.icon />
-                  <span>{item.title}</span>
-                </Link>
+                <NavLink
+                  to={item.url}
+                  className={({ isActive }) => 
+                    isActive ? "data-[active=true]" : ""
+                  }
+                >
+                  <item.icon className="text-sidebar-foreground dark:text-white"/>
+                   <span className="text-sidebar-foreground dark:text-white">{item.title}</span>
+                </NavLink>
               </SidebarMenuButton>
               {item.items?.length ? (
                 <>
@@ -60,9 +65,16 @@ export function NavMain({
                       {item.items?.map((subItem) => (
                         <SidebarMenuSubItem key={subItem.title}>
                           <SidebarMenuSubButton asChild>
-                            <Link to={subItem.url}>
-                              <span>{subItem.title}</span>
-                            </Link>
+                            <NavLink 
+                              to={subItem.url} 
+                              className={({ isActive }) => 
+                                isActive ? "data-[active=true]" : ""
+                              }
+                            >
+                            <span className="text-muted-foreground dark:text-gray-300">
+                            {subItem.title}
+                            </span>
+                            </NavLink>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
                       ))}

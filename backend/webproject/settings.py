@@ -43,8 +43,11 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'rest_framework',
     'rest_framework_simplejwt',
+    'rest_framework_simplejwt.token_blacklist',
     'corsheaders',
     'authentication',
+    'channels',
+    'chat',
 ]
 
 MIDDLEWARE = [
@@ -76,6 +79,14 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'webproject.wsgi.application'
+ASGI_APPLICATION = 'webproject.asgi.application'
+
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels.layers.InMemoryChannelLayer'
+    }
+}
+ASGI_APPLICATION = 'webproject.asgi.application'
 
 
 # Database
@@ -179,3 +190,10 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:5173",
 ]
 CORS_ALLOW_CREDENTIALS = True
+
+# Channels configuration (development: in-memory layer)
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels.layers.InMemoryChannelLayer",
+    }
+}

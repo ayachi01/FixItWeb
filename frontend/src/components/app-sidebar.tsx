@@ -1,5 +1,5 @@
 import * as React from "react"
-import { Link } from "react-router-dom"
+import { Link, useLocation } from "react-router-dom"
 import {
   BookOpen,
   Bot,
@@ -27,139 +27,142 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
 
-const data = {
-  navMain: [
-    {
-      title: "Dashboard",
-      url: "dashboard",
-      icon: CircleGauge ,
-      isActive: true,
-      items: [
-        {
-          title: "History",
-          url: "#",
-        },
-        {
-          title: "Starred",
-          url: "#",
-        },
-        {
-          title: "Settings",
-          url: "#",
-        },
-      ],
-    },
-    {
-      title: "Agents",
-      url: "#",
-      icon: Bot,
-      items: [
-        {
-          title: "Assigned",
-          url: "#",
-        },
-        {
-          title: "Unassigned",
-          url: "#",
-        },
-        {
-          title: "Completed",
-          url: "#",
-        },
-      ],
-    },
-    {
-      title: "Issues",
-      url: "#",
-      icon: BookOpen,
-      items: [
-        {
-          title: "All Issues",
-          url: "#",
-        },
-        {
-          title: "Open / In Progress",
-          url: "#",
-        },
-        {
-          title: "Resolved / Closed",
-          url: "#",
-        },
-        {
-          title: "Manual Submission",
-          url: "#",
-        },
-      ],
-    },
-    {
-      title: "Settings",
-      url: "#",
-      icon: Settings2,
-      items: [
-        {
-          title: "General",
-          url: "#",
-        },
-        {
-          title: "Team",
-          url: "#",
-        },
-        {
-          title: "Billing",
-          url: "#",
-        },
-        {
-          title: "Limits",
-          url: "#",
-        },
-      ],
-    },
-  ],
-  navSecondary: [
-    {
-      title: "Support",
-      url: "support",
-      icon: LifeBuoy,
-    },
-    {
-      title: "Feedback",
-      url: "feedback",
-      icon: Send,
-    },
-  ],
-  projects: [
-    {
-      name: "Reports",
-      url: "#",
-      icon: Proportions,
-    },
-    {
-      name: "Chatlogs",
-      url: "#",
-      icon: MessageSquare,
-    },
-    {
-      name: "Facilities",
-      url: "#",
-      icon: Map,
-    },
-  ],
-}
+export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+  const location = useLocation()
 
-export function AppSidebar({ onSectionChange, ...props }: React.ComponentProps<typeof Sidebar> & { onSectionChange?: (section: string) => void }) {
+  const data = {
+    navMain: [
+      {
+        title: "Dashboard",
+        url: "/dashboard",
+        icon: CircleGauge,
+        isActive: location.pathname === "/dashboard",
+        items: [
+          {
+            title: "History",
+            url: "/dashboard/history",
+          },
+          {
+            title: "Starred",
+            url: "/dashboard/starred",
+          },
+          {
+            title: "Settings",
+            url: "/dashboard/settings",
+          },
+        ],
+      },
+      {
+        title: "Agents",
+        url: "/dashboard/agents",
+        icon: Bot,
+        items: [
+          {
+            title: "Assigned",
+            url: "/dashboard/agents/assigned",
+          },
+          {
+            title: "Unassigned",
+            url: "/dashboard/agents/unassigned",
+          },
+          {
+            title: "Completed",
+            url: "/dashboard/agents/completed",
+          },
+        ],
+      },
+      {
+        title: "Issues",
+        url: "/dashboard/issues",
+        icon: BookOpen,
+        items: [
+          {
+            title: "All Issues",
+            url: "/dashboard/issues",
+          },
+          {
+            title: "Open / In Progress",
+            url: "/dashboard/issues/open",
+          },
+          {
+            title: "Resolved / Closed",
+            url: "/dashboard/issues/closed",
+          },
+          {
+            title: "Manual Submission",
+            url: "/dashboard/issues/manual",
+          },
+        ],
+      },
+      {
+        title: "Settings",
+        url: "/dashboard/settings",
+        icon: Settings2,
+        items: [
+          {
+            title: "General",
+            url: "/dashboard/settings/general",
+          },
+          {
+            title: "Team",
+            url: "/dashboard/settings/team",
+          },
+          {
+            title: "Billing",
+            url: "/dashboard/settings/billing",
+          },
+          {
+            title: "Limits",
+            url: "/dashboard/settings/limits",
+          },
+        ],
+      },
+    ],
+    projects: [
+      {
+        name: "Reports",
+        url: "/dashboard/reports",
+        icon: Proportions,
+      },
+      {
+        name: "Chatlogs",
+        url: "/dashboard/chat",
+        icon: MessageSquare,
+      },
+      {
+        name: "Facilities",
+        url: "/dashboard/facilities",
+        icon: Map,
+      },
+    ],
+    navSecondary: [
+      {
+        title: "Support",
+        url: "/dashboard/support",
+        icon: LifeBuoy,
+      },
+      {
+        title: "Feedback",
+        url: "/dashboard/feedback",
+        icon: Send,
+      },
+    ],
+  }
+
   return (
-    <Sidebar variant="inset" {...props}>
+    <Sidebar variant="inset" className="sidebar" {...props}>
       <SidebarHeader>
+        
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" asChild>
-              <Link to="/db">
+              <Link to="/dashboard">
                 <div className="bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg">
                   <Cog className="size-4" />
                 </div>
                 <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-medium">FixIT Inc</span>
-                  <span className="truncate text-xs">Upang</span>
+                  <span className="truncate font-medium text-sidebar-foreground dark:text-white">FixIt</span>
+                  <span className="truncate text-xs text-muted-foreground dark:text-gray-400">Upang </span>
                 </div>
               </Link>
             </SidebarMenuButton>
@@ -169,7 +172,7 @@ export function AppSidebar({ onSectionChange, ...props }: React.ComponentProps<t
       <SidebarContent>
         <NavMain items={data.navMain} />
         <NavProjects projects={data.projects} />
-        <NavSecondary items={data.navSecondary} onSectionChange={onSectionChange} className="mt-auto" />
+        <NavSecondary items={data.navSecondary} className="mt-auto" />
       </SidebarContent>
       <SidebarFooter>
         <NavUser />

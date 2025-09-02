@@ -58,51 +58,6 @@ export function DashboardMetrics() {
       color: "text-purple-600",
       bgColor: "bg-purple-50"
     },
-    // New KPI metrics
-    {
-      title: "Avg Resolution Time",
-      value: "4.2h",
-      change: "-15%",
-      trend: "down",
-      description: "Improved efficiency",
-      subtitle: "Average time to resolve",
-      icon: Timer,
-      color: "text-orange-600",
-      bgColor: "bg-orange-50"
-    },
-    {
-      title: "Urgent Issues",
-      value: "3",
-      change: "-50%",
-      trend: "down",
-      description: "Significant improvement",
-      subtitle: "High priority tickets",
-      icon: AlertTriangle,
-      color: "text-red-600",
-      bgColor: "bg-red-50"
-    },
-    {
-      title: "User Satisfaction",
-      value: "4.6/5",
-      change: "+0.3",
-      trend: "up",
-      description: "Excellent rating",
-      subtitle: "Average user rating",
-      icon: Star,
-      color: "text-amber-600",
-      bgColor: "bg-amber-50"
-    },
-    {
-      title: "Feedback Count",
-      value: "28",
-      change: "+40%",
-      trend: "up",
-      description: "More engagement",
-      subtitle: "This month's feedback",
-      icon: MessageSquare,
-      color: "text-indigo-600",
-      bgColor: "bg-indigo-50"
-    }
   ]
 
   return (
@@ -112,13 +67,6 @@ export function DashboardMetrics() {
       <div className="grid gap-3 sm:gap-4 md:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-4">
         {metrics.slice(0, 4).map((metric, index) => (
           <MetricCard key={index} metric={metric} />
-        ))}
-      </div>
-      
-      {/* Additional KPI Cards */}
-      <div className="grid gap-3 sm:gap-4 md:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        {metrics.slice(4).map((metric, index) => (
-          <MetricCard key={index + 4} metric={metric} />
         ))}
       </div>
     </div>

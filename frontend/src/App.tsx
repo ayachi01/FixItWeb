@@ -12,6 +12,11 @@ import { VerifyOtp } from '@/features/auth/components/VerifyOtp';
 import PrivacyPolicy from './pages/admin/legal/PrivacyPolicy';
 import TermsOfService from './pages/admin/legal/TermsOfServices';
 import Dashboard from './pages/admin/dashboard/Page';
+import ChatLogs from '@/features/chat/components/ChatLogs';
+import { SupportForm } from '@/features/support/components/SupportForm';
+import { FeedbackForm } from '@/features/support/components/FeedbackForm';
+import ReportPage from '@/features/report/components/ReportPage';
+import { ThemeProvider } from "@/components/theme-provider";
 
 // Component to handle authenticated redirects for login/register
 const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -24,11 +29,20 @@ const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   return <>{children}</>;
 };
 
+// Dashboard Home Component (what shows when you're just on /dashboard)
+const DashboardHome = () => {
+  return (
+    <div className="flex flex-1 flex-col gap-4 p-3 sm:p-4 pt-0 space-y-6">
+      {/* Your existing dashboard content */}
+    </div>
+  );
+};
+
 // Main App component
 const AppRoutes: React.FC = () => {
   return (
     <Routes>
-      {/* Public routes - redirect to dashboard if authenticated */}
+      {/* Public routes */}
       <Route 
         path="/login" 
         element={
@@ -56,44 +70,50 @@ const AppRoutes: React.FC = () => {
         } 
       />
 
-      {/* Legal pages - accessible to all */}
+      {/* Legal pages */}
       <Route path="/terms" element={<TermsOfService />} />
       <Route path="/privacy" element={<PrivacyPolicy />} />
 
-      {/* OTP verification - special case */}
+      {/* OTP verification */}
       <Route
         path="/verify-otp"
         element={
           <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 p-4">
             <VerifyOtp
-              email="user@example.com" // TODO: Replace with actual email from state/context
-              onSuccess={() => { /* handle success */ }}
-              onBack={() => { /* handle back */ }}
-              onResendOtp={() => { /* handle resend OTP */ }}
+              email="user@example.com"
+              onSuccess={() => {}}
+              onBack={() => {}}
+              onResendOtp={() => {}}
             />
           </div>
         }
       />
 
-      {/* Protected routes */}
+      {/* Protected dashboard routes with nested routing */}
       <Route 
         path="/dashboard" 
         element={
           <ProtectedRoute>
             <Dashboard />
           </ProtectedRoute>
-        } 
-      />
+        }
+      >
+        <Route index element={<DashboardHome />} />
+        <Route path="chat" element={<ChatLogs />} />
+        <Route path="reports" element={<ReportPage />} />
+        <Route path="support" element={<SupportForm />} />
+        <Route path="feedback" element={<FeedbackForm />} />
+      </Route>
       
       {/* Root redirect */}
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
       
-      {/* Legacy route redirects for backward compatibility */}
+      {/* Legacy route redirects */}
       <Route path="/db" element={<Navigate to="/dashboard" replace />} />
       <Route path="/ToS" element={<Navigate to="/terms" replace />} />
       <Route path="/Privacy-policy" element={<Navigate to="/privacy" replace />} />
       
-      {/* Catch all route - redirect to dashboard for authenticated users, login for others */}
+      {/* Catch all route */}
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>
   );
@@ -101,11 +121,13 @@ const AppRoutes: React.FC = () => {
 
 const App: React.FC = () => {
   return (
-    <AuthProvider>
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-        <AppRoutes />
-      </div>
-    </AuthProvider>
+    <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">
+      <AuthProvider>
+        <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+          <AppRoutes />
+        </div>
+      </AuthProvider>
+    </ThemeProvider>
   );
 };
 

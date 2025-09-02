@@ -5,6 +5,8 @@ import { motion } from 'framer-motion';
 import { LoginForm } from '@/features/auth/components/loginForm';
 import type { AuthResponse } from '@/features/auth/models/auth.types';
 import { GalleryVerticalEnd } from 'lucide-react';
+import { ModeToggle } from "@/components/mode-toggle";
+
 export const LoginPage: React.FC = () => {
 
   const handleLoginSuccess = (data: AuthResponse) => {
@@ -57,29 +59,32 @@ export const LoginPage: React.FC = () => {
     <motion.div
       initial="initial"
       animate="animate"
-      className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden"
+      className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden bg-gray-50 dark:bg-gray-900"
     >
+      <div className="absolute top-4 right-4 z-20">
+        <ModeToggle />
+      </div>
       
       {/* Decorative Elements */}
       <motion.div
         variants={decorativeVariants}
         initial="initial"
         animate="animate"
-        className="absolute top-10 left-10 w-20 h-20 bg-white/10 rounded-full blur-xl"
+        className="absolute top-10 left-10 w-20 h-20 bg-white/10 rounded-full blur-xl dark:bg-white/5"
       />
       <motion.div
         variants={decorativeVariants}
         initial="initial"
         animate="animate"
         transition={{ delay: 0.2 }}
-        className="absolute top-1/4 right-10 w-32 h-32 bg-white/5 rounded-full blur-2xl"
+        className="absolute top-1/4 right-10 w-32 h-32 bg-white/5 rounded-full blur-2xl dark:bg-white/10"
       />
       <motion.div
         variants={decorativeVariants}
         initial="initial"
         animate="animate"
         transition={{ delay: 0.4 }}
-        className="absolute bottom-10 left-1/4 w-24 h-24 bg-white/8 rounded-full blur-xl"
+        className="absolute bottom-10 left-1/4 w-24 h-24 bg-white/8 rounded-full blur-xl dark:bg-white/10"
       />
       <motion.div
         variants={containerVariants}
@@ -118,9 +123,9 @@ export const LoginPage: React.FC = () => {
           transition={{ delay: 1, duration: 0.5 }}
           className="text-center mt-6"
         >
-          <div className="text-center text-black/80 text-sm text-balance">
-            By clicking continue, you agree to our <a href="/ToS">Terms of Service</a>{" "}
-            and <a href="/Privacy-policy">Privacy Policy</a>.
+          <div className="text-center text-black/80 dark:text-white/80 text-sm text-balance">
+            By clicking continue, you agree to our <a href="/ToS" className="underline">Terms of Service</a>{" "}
+            and <a href="/Privacy-policy" className="underline">Privacy Policy</a>.
           </div>
           
         </motion.div>
