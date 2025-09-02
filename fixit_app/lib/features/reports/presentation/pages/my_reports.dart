@@ -1,8 +1,11 @@
+import 'package:fixit/features/reports/presentation/pages/view_report.dart';
 import 'package:flutter/material.dart';
 import '/core/widgets/bottom_nav_bar.dart';
 import 'package:fixit/features/dashboard/presentation/pages/homepage.dart';
 import '/core/widgets/floating_action_button.dart';
 import 'package:fixit/features/reports/presentation/pages/scanner_screen.dart';
+import 'package:fixit/features/reports/presentation/pages/view_report.dart';
+import 'package:fixit/features/reports/presentation/pages/edit_report.dart';
 
 class MyReportsPage extends StatefulWidget {
   const MyReportsPage({Key? key}) : super(key: key);
@@ -112,9 +115,7 @@ class _MyReportsPageState extends State<MyReportsPage> {
         onPressed: () {
           Navigator.push(
             context,
-            MaterialPageRoute(
-              builder: (context) => ScannerScreen(),
-            ), // temporary navigation
+            MaterialPageRoute(builder: (context) => ScannerScreen()),
           );
         },
       ),
@@ -275,14 +276,20 @@ class ReportCard extends StatelessWidget {
                 'View',
                 onTap: () {
                   Navigator.pop(context);
-                  // TODO: Add View logic
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => ViewReport()),
+                  );
                 },
               ),
               _buildDialogOption(
                 'Edit',
                 onTap: () {
                   Navigator.pop(context);
-                  // TODO: Add Edit logic
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => EditReport()),
+                  );
                 },
               ),
               _buildDialogOption(
