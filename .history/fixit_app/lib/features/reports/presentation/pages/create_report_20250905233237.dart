@@ -4,7 +4,6 @@ import '/features/dashboard/presentation/pages/homepage.dart';
 import '/core/theme/input_decoration.dart';
 import '/core/widgets/welcome_button.dart';
 import '/features/reports/presentation/viewmodels/report_viewmodel.dart';
-
 class CreateReport extends StatefulWidget {
   const CreateReport({super.key});
 
@@ -154,18 +153,14 @@ class CreateReportState extends State<CreateReport> {
                 const SizedBox(height: 8),
 
                 // Date
-                Consumer<ReportViewModel>(
-                  builder: (context, vm, child) {
-                    return TextFormField(
-                      readOnly: true,
-                      controller: TextEditingController(text: vm.formattedDate),
-                      decoration: inputDecoration("Enter Date").copyWith(
-                        suffixIcon: IconButton(
-                          onPressed: () => vm.pickDate(context),
-                          icon: const Icon(Icons.calendar_month),
-                          color: Colors.black,
-                        ),
-                      ),
+                Consumer<ReportViewModel>( 
+                  builder: (context, vm, child) { 
+                    return TextFormField( readOnly: true, 
+                    controller: TextEditingController( text: vm.formattedDate,
+                     ), 
+                    decoration: inputDecoration("Enter Date").copyWith( 
+                      suffixIcon: IconButton( 
+                        onPressed: () => vm.pickDate(context), icon: const Icon(Icons.calendar_month), color: Colors.black, ),
                       validator: (value) {
                         if (value == null || value.isEmpty) {
                           return "Please select a date!";
@@ -281,7 +276,10 @@ class CreateReportState extends State<CreateReport> {
                           SizedBox(width: 8),
                           Text(
                             "Add clear image of the issue",
-                            style: TextStyle(fontSize: 16, fontFamily: 'Inter'),
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontFamily: 'Inter',
+                            ),
                           ),
                         ],
                       ),

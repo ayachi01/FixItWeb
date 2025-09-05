@@ -157,8 +157,8 @@ class CreateReportState extends State<CreateReport> {
                 Consumer<ReportViewModel>(
                   builder: (context, vm, child) {
                     return TextFormField(
+                      controller: vm.dateCtrl,
                       readOnly: true,
-                      controller: TextEditingController(text: vm.formattedDate),
                       decoration: inputDecoration("Enter Date").copyWith(
                         suffixIcon: IconButton(
                           onPressed: () => vm.pickDate(context),
@@ -281,7 +281,10 @@ class CreateReportState extends State<CreateReport> {
                           SizedBox(width: 8),
                           Text(
                             "Add clear image of the issue",
-                            style: TextStyle(fontSize: 16, fontFamily: 'Inter'),
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontFamily: 'Inter',
+                            ),
                           ),
                         ],
                       ),

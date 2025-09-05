@@ -216,6 +216,7 @@ class _HomePageState extends State<HomePage> {
             );
           }
 
+
           /* Tapusin ko kapag may page na, kaya naka-comment muna ^_^
           // Directs to Settings Page 
           if (index == 3) { 

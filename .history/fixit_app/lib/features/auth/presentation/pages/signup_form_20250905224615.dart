@@ -27,7 +27,6 @@ class SignupFormState extends State<SignupForm> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      resizeToAvoidBottomInset: false,
       backgroundColor: const Color(0XFFF8F8F8),
       body: SingleChildScrollView(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 55),
@@ -40,7 +39,8 @@ class SignupFormState extends State<SignupForm> {
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: const [
                   Center(
-                    // Title
+
+                     // Title
                     child: Text(
                       "Create your account",
                       style: TextStyle(
@@ -173,10 +173,13 @@ class SignupFormState extends State<SignupForm> {
                 controller: passwordController,
                 obscureText: obscurePassword,
                 decoration: inputDecoration("Enter your password").copyWith(
+
                   // Toggle Password Visibility Icon
                   suffixIcon: IconButton(
                     icon: Icon(
-                      obscurePassword ? Icons.visibility_off : Icons.visibility,
+                      obscurePassword
+                          ? Icons.visibility_off
+                          : Icons.visibility,
                       color: Colors.grey,
                     ),
                     onPressed: () {
@@ -214,10 +217,13 @@ class SignupFormState extends State<SignupForm> {
                 controller: confirmPasswordController,
                 obscureText: obscurePassword,
                 decoration: inputDecoration("Confirm your password").copyWith(
+
                   // Toggle Password Visibility Icon
                   suffixIcon: IconButton(
                     icon: Icon(
-                      obscurePassword ? Icons.visibility_off : Icons.visibility,
+                      obscurePassword
+                          ? Icons.visibility_off
+                          : Icons.visibility,
                       color: Colors.grey,
                     ),
                     onPressed: () {
@@ -326,7 +332,10 @@ class SignupFormState extends State<SignupForm> {
                 children: [
                   const Text(
                     "Already have an account?",
-                    style: TextStyle(fontSize: 18, fontFamily: 'Inter'),
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontFamily: 'Inter',
+                    ),
                   ),
 
                   const SizedBox(width: 6),

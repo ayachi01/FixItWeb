@@ -7,8 +7,6 @@ import '/core/widgets/search_bar.dart';
 import '/core/widgets/bottom_nav_bar.dart';
 import '/core/widgets/ticket_card.dart';
 import '/core/widgets/floating_action_button.dart';
-import 'package:provider/provider.dart';
-import '/features/reports/presentation/viewmodels/report_viewmodel.dart';
 
 class HomePage extends StatefulWidget {
   final TextEditingController? firstNameController;
@@ -203,18 +201,19 @@ class _HomePageState extends State<HomePage> {
             );
           }
 
-          // Directs to CreateReport Page
-          if (index == 2) {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => ChangeNotifierProvider(
-                  create: (_) => ReportViewModel(),
-                  child: const CreateReport(),
-                ),
-              ),
-            );
-          }
+         // Directs to CreateReport Page
+if (index == 2) {
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (context) => ChangeNotifierProvider(
+        create: (_) => ReportViewModel(),
+        child: const CreateReport(),
+      ),
+    ),
+  ); // ✅ properly closed
+}
+
 
           /* Tapusin ko kapag may page na, kaya naka-comment muna ^_^
           // Directs to Settings Page 

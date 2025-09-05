@@ -203,18 +203,19 @@ class _HomePageState extends State<HomePage> {
             );
           }
 
-          // Directs to CreateReport Page
-          if (index == 2) {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => ChangeNotifierProvider(
-                  create: (_) => ReportViewModel(),
-                  child: const CreateReport(),
-                ),
-              ),
-            );
-          }
+         // Directs to CreateReport Page
+if (index == 2) {
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (context) => ChangeNotifierProvider(
+        create: (_) => ReportViewModel(),
+        child: const CreateReport(),
+      ),
+    ),
+  );
+}
+
 
           /* Tapusin ko kapag may page na, kaya naka-comment muna ^_^
           // Directs to Settings Page 

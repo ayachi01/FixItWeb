@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import '/features/dashboard/presentation/pages/homepage.dart';
 import '/core/theme/input_decoration.dart';
 import '/core/widgets/welcome_button.dart';
-import '/features/reports/presentation/viewmodels/report_viewmodel.dart';
 
 class CreateReport extends StatefulWidget {
   const CreateReport({super.key});
@@ -20,7 +18,12 @@ class CreateReportState extends State<CreateReport> {
   final incidentType = TextEditingController();
   final description = TextEditingController();
   final location = TextEditingController();
+  final dateCtrl = TextEditingController();
+  final timeCtrl = TextEditingController();
+  late TextEditingController _timeController;
 
+  DateTime? selectedDate;
+  TimeOfDay? pickTime;
   String? _selectedOption = "Public";
 
   @override
@@ -28,7 +31,42 @@ class CreateReportState extends State<CreateReport> {
     incidentType.dispose();
     description.dispose();
     location.dispose();
+    dateCtrl.dispose();
+    timeCtrl.dispose();
     super.dispose();
+  }
+
+  // Date Picker
+  Future<void> _pickDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: selectedDate ?? DateTime.now(),
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2100),
+    );
+
+    if (picked != null) {
+      setState(() {
+        selectedDate = picked;
+        dateCtrl.text =
+            "${picked.day.toString().padLeft(2, '0')}-${picked.month.toString().padLeft(2, '0')}-${picked.year}";
+      });
+    }
+  }
+
+  // Time Picker
+  Future<void> _pickTime() async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: pickTime ?? TimeOfDay.now(),
+    );
+
+    if (picked != null) {
+      setState(() {
+        pickTime = picked;
+        timeCtrl.text = picked.format(context);
+      });
+    }
   }
 
   @override
@@ -58,6 +96,7 @@ class CreateReportState extends State<CreateReport> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+
                 // Incident Type Title
                 const Text(
                   "Incident Type",
@@ -73,7 +112,6 @@ class CreateReportState extends State<CreateReport> {
                 TextFormField(
                   controller: incidentType,
                   keyboardType: TextInputType.text,
-                  maxLength: 50,
                   decoration: inputDecoration("Enter Incident Type"),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
@@ -128,7 +166,8 @@ class CreateReportState extends State<CreateReport> {
                   keyboardType: TextInputType.text,
                   decoration: inputDecoration("Enter Location").copyWith(
                     suffixIcon: IconButton(
-                      onPressed: () {},
+                      onPressed: () {
+                      },
                       icon: const Icon(Icons.location_on),
                       color: Colors.black,
                     ),
@@ -154,25 +193,21 @@ class CreateReportState extends State<CreateReport> {
                 const SizedBox(height: 8),
 
                 // Date
-                Consumer<ReportViewModel>(
-                  builder: (context, vm, child) {
-                    return TextFormField(
-                      readOnly: true,
-                      controller: TextEditingController(text: vm.formattedDate),
-                      decoration: inputDecoration("Enter Date").copyWith(
-                        suffixIcon: IconButton(
-                          onPressed: () => vm.pickDate(context),
-                          icon: const Icon(Icons.calendar_month),
-                          color: Colors.black,
-                        ),
-                      ),
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return "Please select a date!";
-                        }
-                        return null;
-                      },
-                    );
+                TextFormField(
+                  readOnly: true,
+                  controller: dateCtrl,
+                  decoration: inputDecoration("Enter Date").copyWith(
+                    suffixIcon: IconButton(
+                      onPressed: _pickDate,
+                      icon: const Icon(Icons.calendar_month),
+                      color: Colors.black,
+                    ),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return "Please select a date!";
+                    }
+                    return null;
                   },
                 ),
                 const SizedBox(height: 20),
@@ -189,37 +224,36 @@ class CreateReportState extends State<CreateReport> {
                 const SizedBox(height: 8),
 
                 // Time
-                Consumer<ReportViewModel>(
-                  builder: (context, vm, child) {
-                    return TextFormField(
-                      controller: vm.timeCtrl,
-                      readOnly: true,
-                      decoration: inputDecoration("Enter Time").copyWith(
-                        suffixIcon: IconButton(
-                          onPressed: () => vm.pickTime(context),
-                          icon: const Icon(Icons.access_time_outlined),
-                          color: Colors.black,
-                        ),
-                      ),
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return "Please select a time!";
-                        }
-                        return null;
-                      },
-                    );
+                TextFormField(
+                  readOnly: true,
+                  controller: timeCtrl,
+                  decoration: inputDecoration("Enter Time").copyWith(
+                    suffixIcon: IconButton(
+                      onPressed: _pickTime,
+                      icon: const Icon(Icons.access_time_outlined),
+                      color: Colors.black,
+                    ),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return "Please select a time!";
+                    }
+                    return null;
                   },
                 ),
                 const SizedBox(height: 20),
 
                 // Visibility with Radio Buttons
-                const Text(
-                  "Visibility:",
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontFamily: 'Inter',
-                    color: Color(0XFF000000),
-                  ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text("Visibility:",
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontFamily: 'Inter',
+                      color: Color(0XFF000000),
+                    )),
+                  ],
                 ),
                 Row(
                   children: [
@@ -239,6 +273,7 @@ class CreateReportState extends State<CreateReport> {
                         contentPadding: EdgeInsets.zero,
                       ),
                     ),
+                    
                     SizedBox(
                       width: 150,
                       child: RadioListTile<String>(
@@ -255,70 +290,67 @@ class CreateReportState extends State<CreateReport> {
                         contentPadding: EdgeInsets.zero,
                       ),
                     ),
-                  ],
+                    ],
                 ),
                 const SizedBox(height: 20),
 
                 // Add Clear Image
                 Container(
-                  width: double.infinity,
-                  height: 100,
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.grey),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
+                  width:,
                   child: Center(
                     child: MaterialButton(
                       onPressed: () {
                         // Handle button press
                       },
-                      textColor: Colors.black,
-                      padding: const EdgeInsets.all(16),
+                       textColor: Colors.black,
+                        padding: const EdgeInsets.all(16),
                       child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: const [
-                          Icon(Icons.add_a_photo),
-                          SizedBox(width: 8),
-                          Text(
-                            "Add clear image of the issue",
-                            style: TextStyle(fontSize: 16, fontFamily: 'Inter'),
+                      mainAxisSize: MainAxisSize.min,
+                      children: const [
+                      Icon(Icons.add_a_photo),
+                      SizedBox(width: 8),
+                      Text(
+                       "Add clear image of the issue",
+                      style: TextStyle(
+                      fontSize: 16,
+                       fontFamily: 'Inter',
+          ),
+        ),
+      ],
+    ),
+  ),
+),
+                ),
+                    // Submit Report Button
+                     Center(
+                       child: Padding(
+                         padding: const EdgeInsets.only(top: 30),
+                         child: SizedBox(
+                            width: double.infinity,
+                            height: 56,
+                            child: WelcomeButton(
+                              text: "Submit Report",
+                              isPrimary: true,
+                              onPressed: () {
+                                if (_createReportKey.currentState!.validate()) {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => HomePage(
+                                      ),
+                                    ),
+                                  );
+                                }
+                              },
+                            ),
                           ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-
-                // Submit Report Button
-                Center(
-                  child: Padding(
-                    padding: const EdgeInsets.only(top: 30),
-                    child: SizedBox(
-                      width: double.infinity,
-                      height: 56,
-                      child: WelcomeButton(
-                        text: "Submit Report",
-                        isPrimary: true,
-                        onPressed: () {
-                          if (_createReportKey.currentState!.validate()) {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => const HomePage(),
-                              ),
-                            );
-                          }
-                        },
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 20),
+                       ),
+                     ),
               ],
             ),
           ),
-        ),
-      ),
+        )
+        )
     );
   }
 }

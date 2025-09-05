@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import '/features/dashboard/presentation/pages/homepage.dart';
 import '/core/theme/input_decoration.dart';
 import '/core/widgets/welcome_button.dart';
@@ -20,7 +19,12 @@ class CreateReportState extends State<CreateReport> {
   final incidentType = TextEditingController();
   final description = TextEditingController();
   final location = TextEditingController();
+  final dateCtrl = TextEditingController();
+  final timeCtrl = TextEditingController();
+  late TextEditingController _timeController;
 
+  DateTime? selectedDate;
+  TimeOfDay? pickTime;
   String? _selectedOption = "Public";
 
   @override
@@ -30,6 +34,7 @@ class CreateReportState extends State<CreateReport> {
     location.dispose();
     super.dispose();
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -154,25 +159,21 @@ class CreateReportState extends State<CreateReport> {
                 const SizedBox(height: 8),
 
                 // Date
-                Consumer<ReportViewModel>(
-                  builder: (context, vm, child) {
-                    return TextFormField(
-                      readOnly: true,
-                      controller: TextEditingController(text: vm.formattedDate),
-                      decoration: inputDecoration("Enter Date").copyWith(
-                        suffixIcon: IconButton(
-                          onPressed: () => vm.pickDate(context),
-                          icon: const Icon(Icons.calendar_month),
-                          color: Colors.black,
-                        ),
-                      ),
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return "Please select a date!";
-                        }
-                        return null;
-                      },
-                    );
+                TextFormField(
+                  readOnly: true,
+                  controller: dateCtrl,
+                  decoration: inputDecoration("Enter Date").copyWith(
+                    suffixIcon: IconButton(
+                      onPressed: _pickDate,
+                      icon: const Icon(Icons.calendar_month),
+                      color: Colors.black,
+                    ),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return "Please select a date!";
+                    }
+                    return null;
                   },
                 ),
                 const SizedBox(height: 20),
@@ -189,25 +190,21 @@ class CreateReportState extends State<CreateReport> {
                 const SizedBox(height: 8),
 
                 // Time
-                Consumer<ReportViewModel>(
-                  builder: (context, vm, child) {
-                    return TextFormField(
-                      controller: vm.timeCtrl,
-                      readOnly: true,
-                      decoration: inputDecoration("Enter Time").copyWith(
-                        suffixIcon: IconButton(
-                          onPressed: () => vm.pickTime(context),
-                          icon: const Icon(Icons.access_time_outlined),
-                          color: Colors.black,
-                        ),
-                      ),
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return "Please select a time!";
-                        }
-                        return null;
-                      },
-                    );
+                TextFormField(
+                  readOnly: true,
+                  controller: timeCtrl,
+                  decoration: inputDecoration("Enter Time").copyWith(
+                    suffixIcon: IconButton(
+                      onPressed: _pickTime,
+                      icon: const Icon(Icons.access_time_outlined),
+                      color: Colors.black,
+                    ),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return "Please select a time!";
+                    }
+                    return null;
                   },
                 ),
                 const SizedBox(height: 20),
@@ -281,7 +278,10 @@ class CreateReportState extends State<CreateReport> {
                           SizedBox(width: 8),
                           Text(
                             "Add clear image of the issue",
-                            style: TextStyle(fontSize: 16, fontFamily: 'Inter'),
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontFamily: 'Inter',
+                            ),
                           ),
                         ],
                       ),
