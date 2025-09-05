@@ -1,14 +1,11 @@
-{% extends 'base.html' %}
-{% load static %}
-
-{% block title %}Login{% endblock %}
-
+{% extends 'core/base.html' %}
 {% block content %}
-<h1>Login</h1>
+<h2>Login</h2>
 <form method="post">
     {% csrf_token %}
     {{ form.as_p }}
-    <button type="submit" class="btn btn-primary">Login</button>
+    <button type="submit">Login</button>
 </form>
-<p>Don't have an account? <a href="{% url 'reports:register' %}">Register</a></p>
+<p><a href="{% url 'core:public_ticket_list' %}">View public tickets without logging in</a></p>
+<p><a href="{% url 'core:register' %}">Register for an account</a></p>
 {% endblock %}

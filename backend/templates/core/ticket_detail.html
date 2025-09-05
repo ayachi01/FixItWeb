@@ -1,0 +1,23 @@
+{% extends 'core/base.html' %}
+{% block content %}
+<h1>Ticket Details</h1>
+<p><strong>Description:</strong> {{ ticket.description }}</p>
+<p><strong>Building:</strong> {{ ticket.building.name }}</p>
+<p><strong>Room:</strong> {{ ticket.room }}</p>
+<p><strong>Category:</strong> {{ ticket.category|title }}</p>
+<p><strong>Urgency:</strong> {{ ticket.urgency|title }}</p>
+<p><strong>Status:</strong> {{ ticket.status|title }}</p>
+{% if ticket.photo %}
+    <p><strong>Photo:</strong><br><img src="{{ ticket.photo.url }}" alt="Ticket Photo" style="max-width: 300px;"></p>
+{% endif %}
+<p><strong>Reported by:</strong> {{ ticket.reporter.username }}</p>
+<p><strong>Created at:</strong> {{ ticket.created_at }}</p>
+{% if user.role == 'admin' or user.role == 'staff' %}
+    <p><strong>Assigned to:</strong> {{ ticket.assigned_to.username|default:"Not assigned" }}</p>
+    <p><strong>AI Suggested Category:</strong> {{ ticket.ai_suggested_category|title }}</p>
+    <p><strong>AI Suggested Urgency:</strong> {{ ticket.ai_suggested_urgency|title }}</p>
+    <p><strong>AI Sentiment Score:</strong> {{ ticket.ai_sentiment_score }}</p>
+    <a href="{% url 'core:ticket_update' ticket.pk %}">Edit Ticket</a>
+{% endif %}
+<a href="{% url 'core:ticket_list' %}">Back to Tickets</a>
+{% endblock %}

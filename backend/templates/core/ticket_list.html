@@ -1,0 +1,46 @@
+{% extends 'core/base.html' %}
+{% block content %}
+<h1>Tickets</h1>
+{% if user.is_authenticated %}
+    <h2>Notifications</h2>
+    <form method="post" action="{% url 'core:notification_list' %}">
+        {% csrf_token %}
+        <ul>
+        {% for notification in user.notifications.all %}
+            <li>
+                <input type="checkbox" name="notification_ids" value="{{ notification.id }}" {% if notification.is_read %}disabled{% endif %}>
+                {{ notification.message }} ({{ notification.created_at }}) {% if not notification.is_read %}(Unread){% endif %}
+            </li>
+        {% empty %}
+            <li>No notifications.</li>
+        {% endfor %}
+        </ul>
+        {% if unread_notifications_count %}
+            <button type="submit">Mark Selected as Read</button>
+        {% endif %}
+    </form>
+{% endif %}
+<ul>
+{% for ticket in tickets %}
+    <li>
+        <a href="{% url 'core:ticket_detail' ticket.pk %}">{{ ticket.description }}</a> 
+        (Status: {{ ticket.status|title }}, Urgency: {{ ticket.urgency|title }}, Building: {{ ticket.building.name|default:"No building" }})
+        {% if user.is_superuser or user.role in 'university_admin,administrative_staff,janitorial_staff,utility_worker,it_support,security_guard,maintenance_officer' %}
+            - <a href="{% url 'core:ticket_update' ticket.pk %}">Edit</a>
+        {% endif %}
+        {% if user.role in 'janitorial_staff,utility_worker,it_support,security_guard' and ticket.status == 'open' %}
+            - <form method="post" action="{% url 'core:ticket_accept' ticket.pk %}" style="display: inline;">
+                {% csrf_token %}
+                <button type="submit">Accept</button>
+            </form>
+        {% endif %}
+        {% if user.role in 'janitorial_staff,utility_worker,it_support,security_guard' and ticket.status == 'accepted' and ticket.assigned_to == user %}
+            - <a href="{% url 'core:ticket_resolve' ticket.pk %}">Resolve</a>
+        {% endif %}
+    </li>
+{% empty %}
+    <li>No tickets available.</li>
+{% endfor %}
+</ul>
+<a href="{% url 'core:ticket_new' %}">Report New Issue</a>
+{% endblock %}

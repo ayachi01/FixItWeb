@@ -1,0 +1,21 @@
+{% extends 'core/base.html' %}
+{% block content %}
+<h1>Notifications</h1>
+<form method="post">
+    {% csrf_token %}
+    <ul>
+    {% for notification in notifications %}
+        <li>
+            <input type="checkbox" name="notification_ids" value="{{ notification.id }}" {% if notification.is_read %}disabled{% endif %}>
+            {{ notification.message }} ({{ notification.created_at }}) {% if not notification.is_read %}(Unread){% endif %}
+        </li>
+    {% empty %}
+        <li>No notifications.</li>
+    {% endfor %}
+    </ul>
+    {% if unread_notifications_count %}
+        <button type="submit">Mark Selected as Read</button>
+    {% endif %}
+</form>
+<a href="{% url 'core:ticket_list' %}">Back to Tickets</a>
+{% endblock %}

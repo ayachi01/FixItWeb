@@ -1,0 +1,40 @@
+{% extends 'core/base.html' %}
+{% block content %}
+<h1>Buildings</h1>
+{% if user.is_authenticated %}
+    <h2>Notifications</h2>
+    <form method="post" action="{% url 'core:notification_list' %}">
+        {% csrf_token %}
+        <ul>
+        {% for notification in user.notifications.all %}
+            <li>
+                <input type="checkbox" name="notification_ids" value="{{ notification.id }}" {% if notification.is_read %}disabled{% endif %}>
+                {{ notification.message }} ({{ notification.created_at }}) {% if not notification.is_read %}(Unread){% endif %}
+            </li>
+        {% empty %}
+            <li>No notifications.</li>
+        {% endfor %}
+        </ul>
+        {% if unread_notifications_count %}
+            <button type="submit">Mark Selected as Read</button>
+        {% endif %}
+    </form>
+{% endif %}
+<ul>
+{% for building in buildings %}
+    <li>
+        {{ building.name }} (Campus: {{ building.campus|default:"Not specified" }}, Location: {{ building.latitude|default:"N/A" }}, {{ building.longitude|default:"N/A" }})
+    </li>
+{% empty %}
+    <li>No buildings available.</li>
+{% endfor %}
+</ul>
+{% if user.is_superuser or user.role in 'university_admin,maintenance_officer' %}
+    <p><a href="{% url 'core:building_create' %}">Create New Building</a></p>
+{% endif %}
+{% if user.is_authenticated %}
+    <p><a href="{% url 'core:ticket_list' %}">Back to Tickets</a></p>
+{% else %}
+    <p><a href="{% url 'login' %}">Login to manage tickets</a></p>
+{% endif %}
+{% endblock %}

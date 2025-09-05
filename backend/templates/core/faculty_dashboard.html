@@ -1,0 +1,29 @@
+{% extends 'core/base.html' %}
+{% block content %}
+<h1>Faculty Dashboard</h1>
+<h2>Ticket Summary</h2>
+<p>Open: {{ ticket_stats.open }}</p>
+<p>Accepted: {{ ticket_stats.accepted }}</p>
+<p>Resolved: {{ ticket_stats.resolved }}</p>
+<p>Closed: {{ ticket_stats.closed }}</p>
+<h2>My Reported Tickets</h2>
+<ul>
+{% for ticket in tickets %}
+    <li>
+        <a href="{% url 'core:ticket_detail' ticket.pk %}">{{ ticket.description }}</a> 
+        (Status: {{ ticket.status|title }}, Building: {{ ticket.building.name }})
+    </li>
+{% empty %}
+    <li>No tickets reported.</li>
+{% endfor %}
+</ul>
+<h2>Campus Buildings</h2>
+<ul>
+{% for building in buildings %}
+    <li>{{ building.name }} ({{ building.campus }})</li>
+{% empty %}
+    <li>No buildings available.</li>
+{% endfor %}
+</ul>
+<a href="{% url 'core:ticket_new' %}">Report New Issue</a>
+{% endblock %}
