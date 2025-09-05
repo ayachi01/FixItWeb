@@ -1,11 +1,10 @@
-import 'package:fixit/features/reports/presentation/pages/view_report.dart';
 import 'package:flutter/material.dart';
-import '/core/widgets/bottom_nav_bar.dart';
 import 'package:fixit/features/dashboard/presentation/pages/homepage.dart';
-import '/core/widgets/floating_action_button.dart';
+import 'package:fixit/features/reports/presentation/pages/edit_report.dart';
 import 'package:fixit/features/reports/presentation/pages/scanner_screen.dart';
 import 'package:fixit/features/reports/presentation/pages/view_report.dart';
-import 'package:fixit/features/reports/presentation/pages/edit_report.dart';
+import '/core/widgets/bottom_nav_bar.dart';
+import '/core/widgets/floating_action_button.dart';
 
 class MyReportsPage extends StatefulWidget {
   const MyReportsPage({Key? key}) : super(key: key);
@@ -44,10 +43,16 @@ class _MyReportsPageState extends State<MyReportsPage> {
     },
   ];
 
+  void _deleteReport(int index) {
+    setState(() {
+      reports.removeAt(index);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0XFFF8F8F8),
+      backgroundColor: const Color(0xFFF8F8F8),
       appBar: PreferredSize(
         preferredSize: const Size.fromHeight(100),
         child: AppBar(
@@ -103,14 +108,16 @@ class _MyReportsPageState extends State<MyReportsPage> {
               child: ListView.builder(
                 itemCount: reports.length,
                 itemBuilder: (context, index) {
-                  return ReportCard(report: reports[index]);
+                  return ReportCard(
+                    report: reports[index],
+                    onDelete: () => _deleteReport(index),
+                  );
                 },
               ),
             ),
           ],
         ),
       ),
-      // Floating Action Button
       floatingActionButton: CustomFAB(
         onPressed: () {
           Navigator.push(
@@ -119,7 +126,6 @@ class _MyReportsPageState extends State<MyReportsPage> {
           );
         },
       ),
-      // Bottom Navigation Bar
       bottomNavigationBar: BottomNavBar(
         currentIndex: _selectedIndex,
         onTap: (index) {
@@ -127,7 +133,6 @@ class _MyReportsPageState extends State<MyReportsPage> {
             _selectedIndex = index;
           });
 
-          //Navigates to Homepage
           if (index == 0) {
             Navigator.pushAndRemoveUntil(
               context,
@@ -136,15 +141,12 @@ class _MyReportsPageState extends State<MyReportsPage> {
             );
           }
 
-          // Navigate to My Reports Page
           if (index == 1) {
             Navigator.push(
               context,
-              MaterialPageRoute(builder: (context) => MyReportsPage()),
+              MaterialPageRoute(builder: (context) => const MyReportsPage()),
             );
           }
-
-          // Placeholder for chatbot & settings page
         },
       ),
     );
@@ -153,8 +155,10 @@ class _MyReportsPageState extends State<MyReportsPage> {
 
 class ReportCard extends StatelessWidget {
   final Map<String, dynamic> report;
+  final VoidCallback? onDelete;
 
-  const ReportCard({Key? key, required this.report}) : super(key: key);
+  const ReportCard({Key? key, required this.report, this.onDelete})
+    : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -258,7 +262,6 @@ class ReportCard extends StatelessWidget {
       ),
     );
   }
-  // ... (all your existing code above is untouched)
 
   void _showReportOptions(BuildContext context) {
     showDialog(
@@ -297,12 +300,36 @@ class ReportCard extends StatelessWidget {
                 color: Colors.red,
                 onTap: () {
                   Navigator.pop(context);
-                  // TODO: Add Delete logic
+                  _confirmDelete(context);
                 },
               ),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  void _confirmDelete(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Delete Report"),
+        content: const Text("Are you sure you want to delete this report?"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancel"),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () {
+              Navigator.pop(context); // close confirm
+              if (onDelete != null) onDelete!(); // trigger delete
+            },
+            child: const Text("Delete"),
+          ),
+        ],
       ),
     );
   }
