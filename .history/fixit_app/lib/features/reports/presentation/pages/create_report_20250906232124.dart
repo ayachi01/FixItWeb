@@ -24,7 +24,6 @@ class CreateReportState extends State<CreateReport> {
   DateTime? selectedDate;
   TimeOfDay? pickTime;
   String? _selectedOption = "Public";
-  String? dropDownValue;
 
   @override
   void dispose() {
@@ -113,9 +112,20 @@ class CreateReportState extends State<CreateReport> {
                 ),
                 const SizedBox(height: 15),
 
+                // Location Title
+                const Text(
+                  "Location",
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontFamily: 'Inter',
+                    color: Color(0XFF000000),
+                  ),
+                ),
+                const SizedBox(height: 8),
+
                 // Building Title
                 const Text(
-                  "Building",
+                  "Date",
                   style: TextStyle(
                     fontSize: 16,
                     fontFamily: 'Inter',
@@ -125,40 +135,6 @@ class CreateReportState extends State<CreateReport> {
                 const SizedBox(height: 8),
 
                 // Building
-                DropdownButtonFormField<String>(
-                  value: dropDownValue,
-                  hint: const Text('Select Building'),
-                  onChanged: (String? newValue) {
-                    setState(() {
-                      dropDownValue = newValue!;
-                    });
-                  },
-
-                  // Drop Down Items
-                  items: const [
-                    // PTC
-                    DropdownMenuItem<String>(value: 'PTC', child: Text('PTC')),
-                    // Faculty
-                    DropdownMenuItem<String>(value: 'MBA', child: Text('MBA')),
-                    // CMA
-                    DropdownMenuItem<String>(value: 'CMA', child: Text('CMA')),
-                    // NH
-                    DropdownMenuItem<String>(value: 'NH', child: Text('NH')),
-                    // RS
-                    DropdownMenuItem<String>(value: 'RS', child: Text('RS')),
-                    // BE
-                    DropdownMenuItem<String>(value: 'BE', child: Text('BE')),
-                  ],
-                  decoration: inputDecoration(""),
-
-                  // Validator
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return "Please select an option!";
-                    }
-                    return null;
-                  },
-                ),
                 const SizedBox(height: 20),
 
                 // Date Title

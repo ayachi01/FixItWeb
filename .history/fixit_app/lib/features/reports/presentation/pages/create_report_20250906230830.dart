@@ -19,18 +19,15 @@ class CreateReportState extends State<CreateReport> {
   // Controllers
   final incidentType = TextEditingController();
   final description = TextEditingController();
-  final building = TextEditingController();
+  final location = TextEditingController();
 
-  DateTime? selectedDate;
-  TimeOfDay? pickTime;
   String? _selectedOption = "Public";
-  String? dropDownValue;
 
   @override
   void dispose() {
     incidentType.dispose();
     description.dispose();
-    building.dispose();
+    location.dispose();
     super.dispose();
   }
 
@@ -113,9 +110,9 @@ class CreateReportState extends State<CreateReport> {
                 ),
                 const SizedBox(height: 15),
 
-                // Building Title
+                // Location Title
                 const Text(
-                  "Building",
+                  "Location",
                   style: TextStyle(
                     fontSize: 16,
                     fontFamily: 'Inter',
@@ -124,37 +121,21 @@ class CreateReportState extends State<CreateReport> {
                 ),
                 const SizedBox(height: 8),
 
-                // Building
-                DropdownButtonFormField<String>(
-                  value: dropDownValue,
-                  hint: const Text('Select Building'),
-                  onChanged: (String? newValue) {
-                    setState(() {
-                      dropDownValue = newValue!;
-                    });
-                  },
-
-                  // Drop Down Items
-                  items: const [
-                    // PTC
-                    DropdownMenuItem<String>(value: 'PTC', child: Text('PTC')),
-                    // Faculty
-                    DropdownMenuItem<String>(value: 'MBA', child: Text('MBA')),
-                    // CMA
-                    DropdownMenuItem<String>(value: 'CMA', child: Text('CMA')),
-                    // NH
-                    DropdownMenuItem<String>(value: 'NH', child: Text('NH')),
-                    // RS
-                    DropdownMenuItem<String>(value: 'RS', child: Text('RS')),
-                    // BE
-                    DropdownMenuItem<String>(value: 'BE', child: Text('BE')),
-                  ],
-                  decoration: inputDecoration(""),
-
-                  // Validator
+                // Location
+                TextFormField(
+                  readOnly: true,
+                  controller: location,
+                  keyboardType: TextInputType.text,
+                  decoration: inputDecoration("Enter Location").copyWith(
+                    suffixIcon: IconButton(
+                      onPressed: () {},
+                      icon: const Icon(Icons.location_on),
+                      color: Colors.black,
+                    ),
+                  ),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
-                      return "Please select an option!";
+                      return "Please enter location!";
                     }
                     return null;
                   },
@@ -177,7 +158,7 @@ class CreateReportState extends State<CreateReport> {
                   builder: (context, vm, child) {
                     return TextFormField(
                       readOnly: true,
-                      controller: vm.dateCtrl,
+                      controller: vm.formattedDate,
                       decoration: inputDecoration("Enter Date").copyWith(
                         suffixIcon: IconButton(
                           onPressed: () => vm.pickDate(context),

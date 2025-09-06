@@ -15,7 +15,7 @@ class ReportViewModel extends ChangeNotifier {
       context: context,
       initialDate: selectedDate ?? DateTime.now(),
       firstDate: DateTime(2024),
-      lastDate: DateTime(2030),
+      lastDate: DateTime(2),
     );
 
     if (picked != null) {

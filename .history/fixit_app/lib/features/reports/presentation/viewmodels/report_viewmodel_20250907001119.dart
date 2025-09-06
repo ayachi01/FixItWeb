@@ -8,6 +8,9 @@ class ReportViewModel extends ChangeNotifier {
   // State variables
   DateTime? selectedDate;
   TimeOfDay? selectedTime;
+  String? selectedImagePath;
+
+  ReportViewModel(this.pickImageUseCase);
 
   // Date Picker
   Future<void> pickDate(BuildContext context) async {
@@ -52,5 +55,11 @@ class ReportViewModel extends ChangeNotifier {
   String get formattedTime {
     if (selectedTime == null) return "";
     return timeCtrl.text;
+  }
+
+  // Image Picker
+  Future<void> pickImage() async {
+    selectedImagePath = await pickImageUseCase();
+    notifyListeners();
   }
 }

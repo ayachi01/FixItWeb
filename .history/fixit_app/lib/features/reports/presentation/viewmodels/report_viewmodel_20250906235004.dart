@@ -4,6 +4,7 @@ class ReportViewModel extends ChangeNotifier {
   // Controllers
   final TextEditingController dateCtrl = TextEditingController();
   final TextEditingController timeCtrl = TextEditingController();
+  final PickImageUseCase pick
 
   // State variables
   DateTime? selectedDate;
