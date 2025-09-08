@@ -1,6 +1,9 @@
 {
     "cSpell.words": [
-        "cupertino"
+        "cupertino",
+        "fixit",
+        "viewmodels",
+        "viewmodel"
     ],
 
     "editor.formatOnSave": true,
