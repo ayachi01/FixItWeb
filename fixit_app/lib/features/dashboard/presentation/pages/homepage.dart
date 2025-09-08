@@ -1,15 +1,16 @@
 import 'package:fixit/core/services/image_picker_service.dart';
 import 'package:fixit/features/reports/presentation/pages/scanner_screen.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '/features/reports/presentation/pages/my_reports.dart';
 import '/features/reports/presentation/pages/create_report.dart';
+import '/features/settings/presentation/pages/settings.dart';
+import '/features/reports/presentation/viewmodels/report_viewmodel.dart';
 import '/core/widgets/profile_avatar.dart';
 import '/core/widgets/search_bar.dart';
 import '/core/widgets/bottom_nav_bar.dart';
 import '/core/widgets/ticket_card.dart';
 import '/core/widgets/floating_action_button.dart';
-import 'package:provider/provider.dart';
-import '/features/reports/presentation/viewmodels/report_viewmodel.dart';
 
 class HomePage extends StatefulWidget {
   final TextEditingController? firstNameController;
@@ -202,17 +203,17 @@ class _HomePageState extends State<HomePage> {
               });
             }
           }
-        },
 
-        /* Tapusin ko kapag may page na, kaya naka-comment muna ^_^
-          // Directs to Settings Page 
-          if (index == 3) { 
-          Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => SettingsPage()),
-          );
-          //} 
-          // */
+          // Navigate to Settings Page
+          if (index == 3) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => Settings(
+                firstNameController: widget.firstNameController,
+              )),
+            );
+          }
+        },
       ),
     );
   }
