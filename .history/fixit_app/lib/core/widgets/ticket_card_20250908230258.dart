@@ -70,8 +70,6 @@ class TicketCard extends StatelessWidget {
                       PopupMenuButton<String>(
                         icon: const Icon(Icons.more_vert, size: 16),
                         onSelected: (value) {
-
-                          // View
                           if (value == 'View') {
                             Navigator.push(
                               context,
@@ -79,8 +77,6 @@ class TicketCard extends StatelessWidget {
                                 builder: (context) => ViewReport(),
                               ),
                             );
-                          
-                          // Edit
                           } else if (value == 'Edit') {
                             Navigator.push(
                               context,
@@ -90,16 +86,7 @@ class TicketCard extends StatelessWidget {
                             );
                           }
                         },
-                        itemBuilder: (context) => [
-                          PopupMenuItem(child: Text('View')),
-                          PopupMenuItem(child: Text('Edit')),
-                          PopupMenuItem(
-                            child: Text(
-                              'Delete',
-                              style: TextStyle(color: Color(0XFFFF3B30)),
-                            ),
-                          ),
-                        ],
+                        itemBuilder: (context),
                       ),
                     ],
                   ),

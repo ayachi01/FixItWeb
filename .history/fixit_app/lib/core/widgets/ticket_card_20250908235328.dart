@@ -80,7 +80,6 @@ class TicketCard extends StatelessWidget {
                               ),
                             );
                           
-                          // Edit
                           } else if (value == 'Edit') {
                             Navigator.push(
                               context,

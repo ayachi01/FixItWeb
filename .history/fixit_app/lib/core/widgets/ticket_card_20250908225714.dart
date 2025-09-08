@@ -69,9 +69,14 @@ class TicketCard extends StatelessWidget {
                       // Menu Button
                       PopupMenuButton<String>(
                         icon: const Icon(Icons.more_vert, size: 16),
-                        onSelected: (value) {
-
-                          // View
+                          itemBuilder:
+                          (context) => [
+                            PopupMenuItem(child: Text('View'), value: 'View'),
+                            PopupMenuItem(child: Text('Edit'), value: 'Edit'),
+                            PopupMenuItem(child: Text('Delete'),value: 'Delete',
+                            ),
+                          ]
+    
                           if (value == 'View') {
                             Navigator.push(
                               context,
@@ -79,9 +84,8 @@ class TicketCard extends StatelessWidget {
                                 builder: (context) => ViewReport(),
                               ),
                             );
-                          
-                          // Edit
-                          } else if (value == 'Edit') {
+                          }
+                          if (value == 'Edit') {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
@@ -90,16 +94,6 @@ class TicketCard extends StatelessWidget {
                             );
                           }
                         },
-                        itemBuilder: (context) => [
-                          PopupMenuItem(child: Text('View')),
-                          PopupMenuItem(child: Text('Edit')),
-                          PopupMenuItem(
-                            child: Text(
-                              'Delete',
-                              style: TextStyle(color: Color(0XFFFF3B30)),
-                            ),
-                          ),
-                        ],
                       ),
                     ],
                   ),

@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'dart:io';
-import '/features/reports/presentation/pages/edit_report.dart';
-import '/features/reports/presentation/pages/view_report.dart';
 
 class TicketCard extends StatelessWidget {
   final Map<String, dynamic> report;
@@ -10,6 +8,7 @@ class TicketCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+
     // Image Handling
     final imagePath = report['image'] ?? "";
     Widget imageWidget;
@@ -42,10 +41,10 @@ class TicketCard extends StatelessWidget {
                 children: [
                   Row(
                     children: [
+
                       // ID
                       Text(
-                        (report['id'] != null &&
-                                report['id'].toString().isNotEmpty)
+                        (report['id'] != null && report['id'].toString().isNotEmpty)
                             ? report['id'].toString()
                             : "No ID",
                         style: const TextStyle(
@@ -65,42 +64,27 @@ class TicketCard extends StatelessWidget {
                         ),
                       ),
                       const Spacer(),
-
+                      
                       // Menu Button
                       PopupMenuButton<String>(
                         icon: const Icon(Icons.more_vert, size: 16),
                         onSelected: (value) {
-
-                          // View
-                          if (value == 'View') {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => ViewReport(),
+                          itemBuilder: (context) => [
+                            PopupMenuItem(
+                              child: Text('View'),
+                              value: 'View'
                               ),
-                            );
-                          
-                          // Edit
-                          } else if (value == 'Edit') {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => EditReport(),
-                              ),
-                            );
-                          }
-                        },
-                        itemBuilder: (context) => [
-                          PopupMenuItem(child: Text('View')),
-                          PopupMenuItem(child: Text('Edit')),
-                          PopupMenuItem(
-                            child: Text(
-                              'Delete',
-                              style: TextStyle(color: Color(0XFFFF3B30)),
+                            PopupMenuItem(
+                              child: Text('Edit'),
+                              value: 'Edit',
                             ),
-                          ),
-                        ],
-                      ),
+                            PopupMenuItem(
+                              child: Text('Delete'),
+                              value: 'Delete',
+                            ),
+                          ];
+                        }
+                      )
                     ],
                   ),
                   const SizedBox(height: 2),
@@ -185,7 +169,6 @@ class TicketCard extends StatelessWidget {
     );
   }
 }
-
 // Placeholder for missing image
 Widget _placeholderBox() {
   return Container(height: 108, width: 72, color: Colors.grey.shade300);
