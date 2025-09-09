@@ -15,11 +15,13 @@ import '/core/widgets/floating_action_button.dart';
 class HomePage extends StatefulWidget {
   final TextEditingController? firstNameController;
   final TextEditingController? lastNameController;
+  final TextEditingController? emailController;
 
   const HomePage({
     super.key,
     this.firstNameController,
     this.lastNameController,
+    this.emailController,
   });
 
   @override
@@ -210,6 +212,8 @@ class _HomePageState extends State<HomePage> {
               context,
               MaterialPageRoute(builder: (context) => Settings(
                 firstNameController: widget.firstNameController,
+                lastNameController: widget.lastNameController,
+                emailController: widget.emailController,
               )),
             );
           }

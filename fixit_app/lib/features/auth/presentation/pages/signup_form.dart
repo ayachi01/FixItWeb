@@ -310,6 +310,7 @@ class SignupFormState extends State<SignupForm> {
                           builder: (context) => HomePage(
                             firstNameController: firstNameController,
                             lastNameController: lastNameController,
+                            emailController: emailController,
                           ),
                         ),
                       );
