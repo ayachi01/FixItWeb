@@ -63,7 +63,6 @@ class CreateReportState extends State<CreateReport> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-
                 // Incident Type Title
                 const Text(
                   "Incident Type",
@@ -130,7 +129,7 @@ class CreateReportState extends State<CreateReport> {
 
                 // Building Title
                 DropdownButtonFormField<String>(
-                  value: dropDownValue,
+                  initialValue: dropDownValue,
                   hint: const Text('Select Building'),
                   onChanged: (String? newValue) {
                     setState(() {
@@ -396,7 +395,8 @@ class CreateReportState extends State<CreateReport> {
                                   context
                                       .read<ReportViewModel>()
                                       .selectedImage
-                                      ?.path ?? '',
+                                      ?.path ??
+                                  '',
                               'status': '',
                               'statusColor': '',
                               'like': 0,
