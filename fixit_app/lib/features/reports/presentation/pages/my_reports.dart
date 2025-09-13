@@ -1,18 +1,33 @@
+import 'package:fixit/core/services/image_picker_service.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '/features/reports/presentation/viewmodels/report_viewmodel.dart';
 import 'package:fixit/features/dashboard/presentation/pages/homepage.dart';
 import 'package:fixit/features/reports/presentation/pages/scanner_screen.dart';
+import '/features/settings/presentation/pages/settings.dart';
+import '/features/reports/presentation/pages/create_report.dart';
 import '/core/widgets/bottom_nav_bar.dart';
 import '/core/widgets/floating_action_button.dart';
-import '/core/widgets/ticket_card.dart'; // ✅ New import
+import '/core/widgets/ticket_card.dart';
 
 class MyReportsPage extends StatefulWidget {
-  const MyReportsPage({Key? key}) : super(key: key);
+  final TextEditingController? firstNameController;
+  final TextEditingController? lastNameController;
+  final TextEditingController? emailController;
+
+  const MyReportsPage({
+    super.key,
+    this.firstNameController,
+    this.lastNameController,
+    this.emailController,
+  });
 
   @override
   State<MyReportsPage> createState() => _MyReportsPageState();
 }
 
 class _MyReportsPageState extends State<MyReportsPage> {
+  List<Widget> ticketCards = [];
   int _selectedIndex = 1;
 
   @override
@@ -70,15 +85,29 @@ class _MyReportsPageState extends State<MyReportsPage> {
               ),
             ),
             const SizedBox(height: 10),
-            // ✅ ListView.builder can be modified or removed if data is fetched inside TicketCard
-            const Expanded(
-              child: TicketCard(
-                report: {},
-              ), // Assume TicketCard is a widget that builds a single ticket card
+
+            Expanded(
+              child: ticketCards.isEmpty
+                  ? Center(
+                      child: Text(
+                        "No Reports Found",
+                        style: TextStyle(
+                          fontSize: 18,
+                          color: Colors.grey[600],
+                        ),
+                      ),
+                    )
+                  : ListView.builder(
+                      itemCount: ticketCards.length,
+                      itemBuilder: (context, index) {
+                        return ticketCards[index];
+                      },
+                    ),
             ),
           ],
         ),
       ),
+
       floatingActionButton: CustomFAB(
         onPressed: () {
           Navigator.push(
@@ -87,9 +116,10 @@ class _MyReportsPageState extends State<MyReportsPage> {
           );
         },
       ),
+
       bottomNavigationBar: BottomNavBar(
         currentIndex: _selectedIndex,
-        onTap: (index) {
+        onTap: (index) async {
           setState(() {
             _selectedIndex = index;
           });
@@ -106,6 +136,37 @@ class _MyReportsPageState extends State<MyReportsPage> {
             Navigator.push(
               context,
               MaterialPageRoute(builder: (context) => const MyReportsPage()),
+            );
+          }
+
+          // Navigate to CreateReport Page for temporary testing
+          if (index == 2) {
+            final newReport = await Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => ChangeNotifierProvider(
+                  create: (_) => ReportViewModel(ImagePickerService()),
+                  child: const CreateReport(),
+                ),
+              ),
+            );
+
+            if (newReport != null) {
+              setState(() {
+                ticketCards.add(TicketCard(report: newReport));
+              });
+            }
+          }
+
+          // Navigate to Settings Page
+          if (index == 3) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => Settings(
+                firstNameController: widget.firstNameController,
+                lastNameController: widget.lastNameController,
+                emailController: widget.emailController,
+              )),
             );
           }
         },

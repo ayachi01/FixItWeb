@@ -129,7 +129,7 @@ class CreateReportState extends State<CreateReport> {
 
                 // Building Title
                 DropdownButtonFormField<String>(
-                  initialValue: dropDownValue,
+                  value: dropDownValue,
                   hint: const Text('Select Building'),
                   onChanged: (String? newValue) {
                     setState(() {
