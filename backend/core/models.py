@@ -28,7 +28,6 @@ class UserProfile(models.Model):
     email_domain = models.CharField(max_length=100, blank=True)
 
     def save(self, *args, **kwargs):
-        # Auto-assign role for self-service users based on email domain
         if not self.role and self.user.email:
             self.email_domain = self.user.email.split('@')[-1]
             if self.email_domain == 'student.university.edu':
@@ -37,7 +36,6 @@ class UserProfile(models.Model):
                 self.role = 'Faculty'
             elif self.email_domain == 'admin.university.edu':
                 self.role = 'Admin Staff'
-        # Set permissions based on role
         if self.role in ['Student', 'Faculty', 'Admin Staff', 'Visitor', 'Janitorial Staff', 'Utility Worker', 'IT Support', 'Security Guard', 'Maintenance Officer', 'Registrar', 'HR', 'University Admin']:
             self.can_report = True
         if self.role in ['Janitorial Staff', 'Utility Worker', 'IT Support', 'Security Guard']:
@@ -60,10 +58,8 @@ class Invite(models.Model):
     requires_admin_approval = models.BooleanField(default=False)
 
     def save(self, *args, **kwargs):
-        # Set 24-hour expiration
         if not self.expires_at:
             self.expires_at = timezone.now() + timezone.timedelta(hours=24)
-        # Require admin approval for security-sensitive roles
         if self.role in ['Security Guard', 'Maintenance Officer']:
             self.requires_admin_approval = True
         super().save(*args, **kwargs)
@@ -110,11 +106,15 @@ class Ticket(models.Model):
         ('Secondary', 'Secondary'),
         ('Admin', 'Admin'),
     ]
+    URGENCY_CHOICES = [
+        ('Standard', 'Standard'),
+        ('Urgent', 'Urgent'),
+    ]
     reporter = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='reported_tickets')
     location = models.ForeignKey(Location, on_delete=models.CASCADE, related_name='tickets')
     description = models.TextField()
     category = models.CharField(max_length=50, choices=CATEGORY_CHOICES)
-    urgency = models.CharField(max_length=50, choices=['Standard', 'Urgent'], default='Standard')
+    urgency = models.CharField(max_length=50, choices=URGENCY_CHOICES, default='Standard')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Created')
     escalation_level = models.CharField(max_length=20, choices=ESCALATION_CHOICES, default='None')
     assigned_to = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='assigned_tickets')
@@ -154,6 +154,7 @@ class GuestReport(models.Model):
         ('Closed', 'Closed'),
     ]
     CATEGORY_CHOICES = Ticket.CATEGORY_CHOICES
+    URGENCY_CHOICES = Ticket.URGENCY_CHOICES
     guest_name = models.CharField(max_length=100)
     guest_email = models.EmailField()
     guest_contact = models.CharField(max_length=50)
@@ -161,7 +162,7 @@ class GuestReport(models.Model):
     location = models.ForeignKey(Location, on_delete=models.CASCADE)
     description = models.TextField()
     category = models.CharField(max_length=50, choices=CATEGORY_CHOICES)
-    urgency = models.CharField(max_length=50, choices=['Standard', 'Urgent'], default='Standard')
+    urgency = models.CharField(max_length=50, choices=URGENCY_CHOICES, default='Standard')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Created')
     escalation_level = models.CharField(max_length=20, choices=Ticket.ESCALATION_CHOICES, default='None')
     assigned_to = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='guest_assigned_tickets')
