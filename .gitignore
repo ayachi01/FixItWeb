@@ -1,0 +1,20 @@
+# Python/Django
+*.pyc
+__pycache__/
+*.pyo
+*.pyd
+.Python
+env/
+*.env
+db.sqlite3
+
+# Node/React
+node_modules/
+dist/
+.parcel-cache/
+
+# Misc
+*.log
+*.pot
+*.pyc
+local_settings.py
