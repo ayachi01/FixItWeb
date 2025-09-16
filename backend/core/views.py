@@ -9,8 +9,8 @@ from pyotp import random_base32, TOTP
 from django.contrib.auth.models import User
 from .models import UserProfile, Invite, Location, Ticket, GuestReport, TicketImage, TicketActionLog, Notification, AuditLog
 from .serializers import UserProfileSerializer, InviteSerializer, TicketSerializer, GuestReportSerializer, NotificationSerializer
-# from .tasks import send_notification, check_escalation
 from django.conf import settings
+from .tasks import send_guest_notification, check_escalation
 import uuid
 
 JWT_SECRET = 'your-secret-key'  # Replace with secure key in settings.py
@@ -187,48 +187,62 @@ class TicketViewSet(viewsets.ModelViewSet):
         if serializer.is_valid():
             ticket = serializer.save()
             TicketActionLog.objects.create(ticket=ticket, action='Created', performed_by=request.user)
-            check_escalation.delay(ticket.id, is_ticket=True)
-            send_notification.delay(
-                user_id=request.user.id,
-                ticket_id=ticket.id,
-                message=f'Ticket #{ticket.id} Created'
-            )
+            # check_escalation.delay(ticket.id, is_ticket=True)
+            # send_notification.delay(
+            #     user_id=request.user.id,
+            #     ticket_id=ticket.id,
+            #     message=f'Ticket #{ticket.id} Created'
+            # )
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class GuestReportViewSet(viewsets.ModelViewSet):
     queryset = GuestReport.objects.all()
     serializer_class = GuestReportSerializer
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [permissions.AllowAny]  # Guests don't log in
 
     @action(detail=False, methods=['post'])
     def report_issue(self, request):
-        """Create a guest report with photo proof and tracking code."""
-        serializer = GuestReportSerializer(data=request.data)
+        """Guest submits a new issue with optional image"""
+        serializer = self.get_serializer(data=request.data, context={'request': request})
         if serializer.is_valid():
-            guest_report = serializer.save()
-            TicketActionLog.objects.create(guest_report=guest_report, action='Created', performed_by=None)
-            check_escalation.delay(guest_report.id, is_ticket=False)
-            send_notification.delay(
-                guest_email=guest_report.guest_email,
-                guest_report_id=guest_report.id,
-                message=f'Guest Report #{guest_report.id} Created. Track it with code: {guest_report.tracking_code}'
+            report = serializer.save()
+
+            # Log the creation
+            TicketActionLog.objects.create(
+                guest_report=report,
+                action="Created",
+                performed_by=None
             )
+
+           # Async tasks
+            # Fixed
+            send_guest_notification.delay(
+                guest_email=report.guest_email,
+                guest_report_id=report.id,
+                tracking_code=report.tracking_code
+)
+
+
             return Response({
-                'message': 'Guest report created',
-                'tracking_code': str(guest_report.tracking_code)
+                "message": "Guest report created successfully",
+                "tracking_code": str(report.tracking_code)
             }, status=status.HTTP_201_CREATED)
+
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     @action(detail=False, methods=['get'], url_path='track/(?P<tracking_code>[^/.]+)')
     def track(self, request, tracking_code=None):
-        """Track guest report status by tracking code."""
+        """Guests track their issue using tracking_code"""
         try:
-            guest_report = GuestReport.objects.get(tracking_code=tracking_code)
-            serializer = GuestReportSerializer(guest_report)
-            return Response(serializer.data)
+            report = GuestReport.objects.get(tracking_code=tracking_code)
+            serializer = self.get_serializer(report)
+            return Response(serializer.data, status=status.HTTP_200_OK)
         except GuestReport.DoesNotExist:
-            return Response({'error': 'Invalid tracking code'}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"error": "Invalid tracking code"},
+                status=status.HTTP_404_NOT_FOUND
+            )
 
 class NotificationViewSet(viewsets.ModelViewSet):
     queryset = Notification.objects.all()
