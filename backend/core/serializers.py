@@ -30,15 +30,21 @@ class GuestReportSerializer(serializers.ModelSerializer):
     class Meta:
         model = GuestReport
         fields = '__all__'
+        read_only_fields = ['id', 'tracking_code', 'status', 'created_at', 'updated_at']
 
-    def validate(self, data):
-        if 'image' in self.context['request'].FILES:
-            GuestReportImage.objects.create(
-                guest_report=data.get('guest_report'),
-                image_url=self.context['request'].FILES['image'],
-                guest_email=data.get('guest_email')
-            )
-        return data
+    def create(self, validated_data):
+        request = self.context.get("request")
+
+        # ✅ Assign uploaded image if provided
+        if request and "image" in request.FILES:
+            validated_data["image"] = request.FILES["image"]
+
+        # ✅ Create GuestReport directly
+        report = GuestReport.objects.create(**validated_data)
+
+        return report
+
+
 
 class NotificationSerializer(serializers.ModelSerializer):
     class Meta:

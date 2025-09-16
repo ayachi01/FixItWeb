@@ -155,6 +155,7 @@ class GuestReport(models.Model):
     ]
     CATEGORY_CHOICES = Ticket.CATEGORY_CHOICES
     URGENCY_CHOICES = Ticket.URGENCY_CHOICES
+
     guest_name = models.CharField(max_length=100)
     guest_email = models.EmailField()
     guest_contact = models.CharField(max_length=50)
@@ -171,9 +172,11 @@ class GuestReport(models.Model):
     created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
 
+    # ✅ New field: only one image per report
+    image = models.ImageField(upload_to="guest_reports/", null=True, blank=True)
+
     def clean(self):
-        if self.status == 'Created' and not self.images.exists():
-            raise ValidationError('At least one photo is required when creating a guest report.')
+        # No need to check self.images anymore since only one image is allowed
         if self.assigned_to and self.status == 'Assigned':
             role = self.assigned_to.profile.role if hasattr(self.assigned_to, 'profile') else None
             allowed_categories = {
@@ -191,6 +194,7 @@ class GuestReport(models.Model):
 
     def __str__(self):
         return f"Guest Report #{self.id} - {self.status} - Tracking: {self.tracking_code}"
+
 
 class TicketImage(models.Model):
     ticket = models.ForeignKey(Ticket, on_delete=models.CASCADE, related_name='images', null=True)
