@@ -3,7 +3,12 @@ from django.contrib.auth.models import User
 from django.utils import timezone
 from django.core.exceptions import ValidationError
 import uuid
+from django.db.models.signals import post_save
+from django.dispatch import receiver
 
+# ======================
+# User Profile Extension
+# ======================
 class UserProfile(models.Model):
     ROLE_CHOICES = [
         ('Student', 'Student'),
@@ -36,17 +41,27 @@ class UserProfile(models.Model):
                 self.role = 'Faculty'
             elif self.email_domain == 'admin.university.edu':
                 self.role = 'Admin Staff'
-        if self.role in ['Student', 'Faculty', 'Admin Staff', 'Visitor', 'Janitorial Staff', 'Utility Worker', 'IT Support', 'Security Guard', 'Maintenance Officer', 'Registrar', 'HR', 'University Admin']:
+
+        # Permissions
+        if self.role in ['Student', 'Faculty', 'Admin Staff', 'Visitor',
+                         'Janitorial Staff', 'Utility Worker', 'IT Support',
+                         'Security Guard', 'Maintenance Officer', 'Registrar',
+                         'HR', 'University Admin']:
             self.can_report = True
         if self.role in ['Janitorial Staff', 'Utility Worker', 'IT Support', 'Security Guard']:
             self.can_fix = True
         if self.role in ['Maintenance Officer', 'University Admin']:
             self.can_assign = True
+
         super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.user.username} - {self.role}"
 
+
+# ======================
+# Invite-based Registration
+# ======================
 class Invite(models.Model):
     email = models.EmailField(unique=True)
     token = models.UUIDField(default=uuid.uuid4, editable=False)
@@ -67,6 +82,71 @@ class Invite(models.Model):
     def __str__(self):
         return f"Invite for {self.email} - {self.role}"
 
+
+# ======================
+# Student Self-Service Registration (OTP/Email verification)
+# ======================
+
+
+class StudentRegistration(models.Model):
+    STATUS_CHOICES = [
+        ("Pending", "Pending Verification"),
+        ("Verified", "Verified"),
+        ("Expired", "Expired"),
+    ]
+
+    user = models.OneToOneField(
+        User, on_delete=models.CASCADE, related_name="student_registration"
+    )
+    otp_code = models.CharField(max_length=6)  # 6-digit OTP
+    token = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)  # secure link
+    created_at = models.DateTimeField(default=timezone.now)
+    expires_at = models.DateTimeField()
+    status = models.CharField(
+        max_length=20, choices=STATUS_CHOICES, default="Pending"
+    )
+
+    def save(self, *args, **kwargs):
+        if not self.expires_at:
+            self.expires_at = timezone.now() + timezone.timedelta(
+                minutes=15
+            )  # OTP valid for 15 mins
+        super().save(*args, **kwargs)
+
+    def is_valid(self):
+        return self.status == "Pending" and self.expires_at > timezone.now()
+
+    def __str__(self):
+        return f"Student Registration - {self.user.email} ({self.status})"
+
+
+@receiver(post_save, sender=StudentRegistration)
+def create_student_profile(sender, instance, created, **kwargs):
+    """
+    When a student verifies registration, ensure they get a UserProfile
+    with the 'Student' role and can log in.
+    """
+    from core.models import UserProfile  # local import to avoid circular import
+
+    user = instance.user
+    if instance.status == "Verified":
+        # Activate the user for login
+        if not user.is_active:
+            user.is_active = True
+            user.save()
+
+        # Ensure UserProfile exists and has the correct role
+        profile, _ = UserProfile.objects.get_or_create(user=user)
+        if profile.role != "Student" or not profile.is_email_verified:
+            profile.role = "Student"
+            profile.is_email_verified = True
+            profile.save()
+
+
+
+# ======================
+# Locations
+# ======================
 class Location(models.Model):
     id = models.AutoField(primary_key=True)
     building_name = models.CharField(max_length=100)
@@ -79,6 +159,10 @@ class Location(models.Model):
     class Meta:
         unique_together = ('building_name', 'floor_number', 'room_identifier')
 
+
+# ======================
+# Ticketing System
+# ======================
 class Ticket(models.Model):
     STATUS_CHOICES = [
         ('Created', 'Created'),
@@ -110,6 +194,7 @@ class Ticket(models.Model):
         ('Standard', 'Standard'),
         ('Urgent', 'Urgent'),
     ]
+
     reporter = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='reported_tickets')
     location = models.ForeignKey(Location, on_delete=models.CASCADE, related_name='tickets')
     description = models.TextField()
@@ -126,6 +211,7 @@ class Ticket(models.Model):
     def clean(self):
         if self.status == 'Created' and not self.images.exists():
             raise ValidationError('At least one photo is required when creating a ticket.')
+
         if self.assigned_to and self.status == 'Assigned':
             role = self.assigned_to.profile.role if hasattr(self.assigned_to, 'profile') else None
             allowed_categories = {
@@ -144,6 +230,10 @@ class Ticket(models.Model):
     def __str__(self):
         return f"Ticket #{self.id} - {self.status} - Escalation: {self.escalation_level}"
 
+
+# ======================
+# Guest Report
+# ======================
 class GuestReport(models.Model):
     STATUS_CHOICES = [
         ('Created', 'Created'),
@@ -172,11 +262,10 @@ class GuestReport(models.Model):
     created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
 
-    # ✅ New field: only one image per report
+    # ✅ Only one image allowed
     image = models.ImageField(upload_to="guest_reports/", null=True, blank=True)
 
     def clean(self):
-        # No need to check self.images anymore since only one image is allowed
         if self.assigned_to and self.status == 'Assigned':
             role = self.assigned_to.profile.role if hasattr(self.assigned_to, 'profile') else None
             allowed_categories = {
@@ -196,6 +285,9 @@ class GuestReport(models.Model):
         return f"Guest Report #{self.id} - {self.status} - Tracking: {self.tracking_code}"
 
 
+# ======================
+# Ticket Attachments & Resolution
+# ======================
 class TicketImage(models.Model):
     ticket = models.ForeignKey(Ticket, on_delete=models.CASCADE, related_name='images', null=True)
     guest_report = models.ForeignKey(GuestReport, on_delete=models.CASCADE, related_name='images', null=True)
@@ -203,6 +295,7 @@ class TicketImage(models.Model):
     uploaded_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
     guest_email = models.EmailField(null=True, blank=True)
     timestamp = models.DateTimeField(default=timezone.now)
+
 
 class TicketResolution(models.Model):
     ticket = models.ForeignKey(Ticket, on_delete=models.CASCADE, related_name='resolutions', null=True)
@@ -216,6 +309,10 @@ class TicketResolution(models.Model):
         if not self.proof_image:
             raise ValidationError('Proof image is required for resolution.')
 
+
+# ======================
+# Ticket Logs & Notifications
+# ======================
 class TicketActionLog(models.Model):
     ACTION_CHOICES = [
         ('Created', 'Created'),
@@ -238,6 +335,7 @@ class TicketActionLog(models.Model):
             return f"{self.action} on Ticket #{self.ticket.id} by {self.performed_by}"
         return f"{self.action} on Guest Report #{self.guest_report.id} by {self.performed_by}"
 
+
 class Notification(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='notifications', null=True)
     ticket = models.ForeignKey(Ticket, on_delete=models.CASCADE, null=True)
@@ -252,6 +350,10 @@ class Notification(models.Model):
             return f"Notification for {self.user.username}: {self.message}"
         return f"Notification for {self.guest_email}: {self.message}"
 
+
+# ======================
+# Audit Log
+# ======================
 class AuditLog(models.Model):
     ACTION_CHOICES = [
         ('User Created', 'User Created'),
@@ -269,3 +371,5 @@ class AuditLog(models.Model):
 
     def __str__(self):
         return f"{self.action} by {self.performed_by} at {self.timestamp}"
+
+

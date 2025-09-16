@@ -114,19 +114,40 @@ REST_FRAMEWORK = {
         'rest_framework_simplejwt.authentication.JWTAuthentication',  # Added for JWT
     ],
     'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.IsAuthenticated',
+        'rest_framework.permissions.AllowAny',  # Change to IsAuthenticated in production
     ],
 }
 
 # JWT settings for authentication
 from datetime import timedelta
+import os
+
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
+    # 🔑 Token lifetimes
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=30),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
+
+    # 🔒 Token settings
+    'ROTATE_REFRESH_TOKENS': False,   # set True if you want refresh tokens to change after use
+    'BLACKLIST_AFTER_ROTATION': True, # blacklist old refresh tokens if rotation is enabled
+
+    # 📌 Auth header
     'AUTH_HEADER_TYPES': ('Bearer',),
     'USER_ID_FIELD': 'id',
     'USER_ID_CLAIM': 'user_id',
-    'SIGNING_KEY': os.environ.get('JWT_SIGNING_KEY'),  # Loaded securely from .env
+
+    # 🔐 Signing key (securely loaded from env)
+    'SIGNING_KEY': os.environ.get('JWT_SIGNING_KEY', 'unsafe-default-key'),  
+    'ALGORITHM': 'HS256',
+
+    # 🔍 Token verification
+    'VERIFYING_KEY': None,
+    'AUDIENCE': None,
+    'ISSUER': None,
+
+    # ⏳ Sliding tokens (optional, usually off)
+    'SLIDING_TOKEN_LIFETIME': timedelta(minutes=30),
+    'SLIDING_TOKEN_REFRESH_LIFETIME': timedelta(days=1),
 }
 
 # Password validation

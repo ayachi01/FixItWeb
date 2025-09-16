@@ -7,14 +7,26 @@ from datetime import timedelta
 from jose import jwt, JWTError
 from pyotp import random_base32, TOTP
 from django.contrib.auth.models import User
-from .models import UserProfile, Invite, Location, Ticket, GuestReport, TicketImage, TicketActionLog, Notification, AuditLog
-from .serializers import UserProfileSerializer, InviteSerializer, TicketSerializer, GuestReportSerializer, NotificationSerializer
+import random
+
+from .models import (
+    StudentRegistration, UserProfile, Invite, Location, Ticket,
+    GuestReport, TicketImage, TicketActionLog, Notification, AuditLog
+)
+
+from .serializers import (
+    UserProfileSerializer, InviteSerializer, TicketSerializer,
+    GuestReportSerializer, NotificationSerializer,
+    StudentRegistrationSerializer
+)
+
 from django.conf import settings
 from .tasks import send_guest_notification, check_escalation
 import uuid
 
 JWT_SECRET = 'your-secret-key'  # Replace with secure key in settings.py
 
+# -------------------- UserViewSet --------------------
 class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all()
     serializer_class = UserProfileSerializer
@@ -30,7 +42,7 @@ class UserViewSet(viewsets.ModelViewSet):
         
         # Validate email domain
         domain = email.split('@')[-1]
-        valid_domains = ['student.university.edu', 'faculty.university.edu', 'admin.university.edu']
+        valid_domains = ['gmail.com', 'student.university.edu', 'faculty.university.edu', 'admin.university.edu']
         if domain not in valid_domains:
             return Response({'error': 'Invalid university email domain'}, status=status.HTTP_400_BAD_REQUEST)
         
@@ -170,6 +182,7 @@ class UserViewSet(viewsets.ModelViewSet):
         except Invite.DoesNotExist:
             return Response({'error': 'Invalid or already used invite'}, status=status.HTTP_404_NOT_FOUND)
 
+# -------------------- TicketViewSet --------------------
 class TicketViewSet(viewsets.ModelViewSet):
     queryset = Ticket.objects.all()
     serializer_class = TicketSerializer
@@ -196,6 +209,7 @@ class TicketViewSet(viewsets.ModelViewSet):
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+# -------------------- GuestReportViewSet --------------------
 class GuestReportViewSet(viewsets.ModelViewSet):
     queryset = GuestReport.objects.all()
     serializer_class = GuestReportSerializer
@@ -215,14 +229,12 @@ class GuestReportViewSet(viewsets.ModelViewSet):
                 performed_by=None
             )
 
-           # Async tasks
-            # Fixed
+            # Async tasks
             send_guest_notification.delay(
                 guest_email=report.guest_email,
                 guest_report_id=report.id,
                 tracking_code=report.tracking_code
-)
-
+            )
 
             return Response({
                 "message": "Guest report created successfully",
@@ -244,6 +256,7 @@ class GuestReportViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_404_NOT_FOUND
             )
 
+# -------------------- NotificationViewSet --------------------
 class NotificationViewSet(viewsets.ModelViewSet):
     queryset = Notification.objects.all()
     serializer_class = NotificationSerializer
@@ -252,3 +265,60 @@ class NotificationViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         """Filter notifications for the authenticated user."""
         return Notification.objects.filter(user=self.request.user)
+
+# -------------------- StudentRegistrationViewSet --------------------
+class StudentRegistrationViewSet(viewsets.ModelViewSet):
+    queryset = StudentRegistration.objects.all()
+    serializer_class = StudentRegistrationSerializer
+    permission_classes = [permissions.AllowAny]
+
+    @action(detail=False, methods=['post'])
+    def register(self, request):
+        """Step 1: Student self-registration (creates inactive user + OTP)"""
+        serializer = self.get_serializer(data=request.data)
+        if serializer.is_valid():
+            registration = serializer.save()
+
+            # Generate a 6-digit OTP
+            otp = str(random.randint(100000, 999999))
+            registration.otp_code = otp
+            registration.expires_at = timezone.now() + timezone.timedelta(minutes=5)
+            registration.save()
+
+            # Send OTP email
+            send_mail(
+                "FixIT OTP Verification",
+                f"Your OTP is {otp}. It expires in 5 minutes.",
+                "fixit@university.edu",
+                [registration.user.email],
+                fail_silently=False,
+            )
+
+            return Response({"message": "OTP sent to email"}, status=status.HTTP_201_CREATED)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=False, methods=['post'])
+    def verify(self, request):
+        """Step 2: Verify OTP and activate account"""
+        email = request.data.get("email")
+        otp = request.data.get("otp")
+
+        try:
+            registration = StudentRegistration.objects.get(user__email=email)
+        except StudentRegistration.DoesNotExist:
+            return Response({"error": "Registration not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        # Check if OTP is still valid
+        if not registration.is_valid():
+            registration.status = "Expired"
+            registration.save()
+            return Response({"error": "OTP expired"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Match OTP
+        if registration.otp_code == otp:
+            registration.status = "Verified"
+            registration.save()
+            return Response({"message": "Email verified. You can now log in."}, status=status.HTTP_200_OK)
+
+        return Response({"error": "Invalid OTP"}, status=status.HTTP_400_BAD_REQUEST)

@@ -1,11 +1,41 @@
 from rest_framework import serializers
-from .models import UserProfile, Invite, Ticket, GuestReport, Notification
+from .models import StudentRegistration, UserProfile, Invite, Ticket, GuestReport, Notification
 from django.contrib.auth.models import User
 
 class UserProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserProfile
         fields = ['user', 'role', 'is_email_verified', 'email_domain']
+
+
+class StudentRegistrationSerializer(serializers.ModelSerializer):
+    email = serializers.EmailField(write_only=True)
+    password = serializers.CharField(write_only=True, min_length=6)
+
+    class Meta:
+        model = StudentRegistration
+        fields = ['email', 'password', 'status', 'created_at']
+        read_only_fields = ['status', 'created_at']
+
+    def create(self, validated_data):
+        """Create user + inactive profile + pending registration"""
+        email = validated_data.pop("email")
+        password = validated_data.pop("password")
+
+        # Create inactive user
+        user = User.objects.create_user(
+            username=email,
+            email=email,
+            password=password,
+            is_active=False  # ✅ inactive until verified
+        )
+
+        # Create registration record
+        registration = StudentRegistration.objects.create(user=user)
+
+        return registration
+    
+
 
 class InviteSerializer(serializers.ModelSerializer):
     class Meta:
