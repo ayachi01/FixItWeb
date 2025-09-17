@@ -1,5 +1,6 @@
-import React, { useState } from "react";
-import type { GuestReportForm } from "../types/GuestReportForm";
+// src/pages/GuestReport.tsx
+import React, { useState, useEffect } from "react";
+import type { GuestReportForm, Location } from "../types/index";
 import axios from "axios";
 
 const GuestReport: React.FC = () => {
@@ -15,6 +16,23 @@ const GuestReport: React.FC = () => {
   });
 
   const [status, setStatus] = useState<string>("");
+  const [locations, setLocations] = useState<Location[]>([]);
+
+  // 🔹 Fetch available locations from backend
+  useEffect(() => {
+    const fetchLocations = async () => {
+      try {
+        const response = await axios.get<Location[]>(
+          "http://127.0.0.1:8000/api/locations/"
+        );
+        setLocations(response.data);
+      } catch (error) {
+        console.error("Failed to load locations:", error);
+      }
+    };
+
+    fetchLocations();
+  }, []);
 
   const handleChange = (
     e: React.ChangeEvent<
@@ -57,6 +75,16 @@ const GuestReport: React.FC = () => {
       );
 
       setStatus("Report submitted successfully!");
+      setFormData({
+        guest_name: "",
+        guest_email: "",
+        guest_contact: "",
+        description: "",
+        category: "Cleaning",
+        urgency: "Standard",
+        location: 0,
+        image: null,
+      });
     } catch (error: any) {
       console.error("Submission failed:", error);
       setStatus("Failed to submit report.");
@@ -69,6 +97,7 @@ const GuestReport: React.FC = () => {
       {status && <p className="mb-4 text-red-500">{status}</p>}
 
       <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Guest Info */}
         <input
           type="text"
           name="guest_name"
@@ -99,6 +128,7 @@ const GuestReport: React.FC = () => {
           required
         />
 
+        {/* Description */}
         <textarea
           name="description"
           placeholder="Issue Description"
@@ -108,6 +138,7 @@ const GuestReport: React.FC = () => {
           required
         />
 
+        {/* Category */}
         <select
           name="category"
           value={formData.category}
@@ -126,6 +157,7 @@ const GuestReport: React.FC = () => {
           <option value="Parking">Parking</option>
         </select>
 
+        {/* Urgency */}
         <select
           name="urgency"
           value={formData.urgency}
@@ -136,16 +168,26 @@ const GuestReport: React.FC = () => {
           <option value="Urgent">Urgent</option>
         </select>
 
-        <input
-          type="number"
+        {/* 🔹 Location Dropdown */}
+        <select
           name="location"
-          placeholder="Location ID (e.g., 3)"
-          value={formData.location}
+          value={formData.location || ""}
           onChange={handleChange}
           className="w-full border p-2 rounded"
           required
-        />
+        >
+          <option value="" disabled>
+            Select Location
+          </option>
+          {locations.map((loc) => (
+            <option key={loc.id} value={loc.id}>
+              {loc.building_name} - Floor {loc.floor_number} -{" "}
+              {loc.room_identifier}
+            </option>
+          ))}
+        </select>
 
+        {/* Optional Image */}
         <input
           type="file"
           name="image"

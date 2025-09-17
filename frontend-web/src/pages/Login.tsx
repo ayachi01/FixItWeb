@@ -70,6 +70,14 @@ function Login() {
             Create one
           </Link>
         </p>
+
+        {/* 👉 Guest Report link */}
+        <p className="mt-2 text-center text-sm text-gray-600">
+          Or{" "}
+          <Link to="/guest-report" className="text-blue-600 hover:underline">
+            Report as Guest
+          </Link>
+        </p>
       </form>
     </div>
   );

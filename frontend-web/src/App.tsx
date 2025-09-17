@@ -25,6 +25,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import VerifyOtp from "./pages/VerifyOtp";
+import GuestReport from "./pages/GuestReport";
 
 function App() {
   return (
@@ -34,6 +35,7 @@ function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/verify-otp" element={<VerifyOtp />} />
+        <Route path="/guest-report" element={<GuestReport />} />
         <Route path="/dashboard" element={<h1>Dashboard (Protected)</h1>} />
       </Routes>
     </BrowserRouter>
