@@ -24,6 +24,7 @@ class UserProfile(models.Model):
         ('HR', 'HR'),
         ('University Admin', 'University Admin'),
     ]
+
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
     role = models.CharField(max_length=50, choices=ROLE_CHOICES)
     can_report = models.BooleanField(default=False)
@@ -33,14 +34,21 @@ class UserProfile(models.Model):
     email_domain = models.CharField(max_length=100, blank=True)
 
     def save(self, *args, **kwargs):
-        if not self.role and self.user.email:
+        if self.user.email:
+            # Always save domain only
             self.email_domain = self.user.email.split('@')[-1]
+
+        # Auto-assign role only if not provided
+        if not self.role:
             if self.email_domain == 'student.university.edu':
                 self.role = 'Student'
             elif self.email_domain == 'faculty.university.edu':
                 self.role = 'Faculty'
             elif self.email_domain == 'admin.university.edu':
                 self.role = 'Admin Staff'
+            else:
+                # Default outsider role
+                self.role = 'Visitor'
 
         # Permissions
         if self.role in ['Student', 'Faculty', 'Admin Staff', 'Visitor',

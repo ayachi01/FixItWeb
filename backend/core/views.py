@@ -8,6 +8,8 @@ from jose import jwt, JWTError
 from pyotp import random_base32, TOTP
 from django.contrib.auth.models import User
 import random
+from .serializers import LocationSerializer
+
 
 from .models import (
     StudentRegistration, UserProfile, Invite, Location, Ticket,
@@ -322,3 +324,13 @@ class StudentRegistrationViewSet(viewsets.ModelViewSet):
             return Response({"message": "Email verified. You can now log in."}, status=status.HTTP_200_OK)
 
         return Response({"error": "Invalid OTP"}, status=status.HTTP_400_BAD_REQUEST)
+    
+
+# core/views.py
+class LocationViewSet(viewsets.ModelViewSet):
+    queryset = Location.objects.all()
+    serializer_class = LocationSerializer
+    permission_classes = [permissions.AllowAny]
+
+
+

@@ -1,6 +1,8 @@
 from rest_framework import serializers
 from .models import StudentRegistration, UserProfile, Invite, Ticket, GuestReport, Notification
 from django.contrib.auth.models import User
+from .models import Location
+
 
 class UserProfileSerializer(serializers.ModelSerializer):
     class Meta:
@@ -80,3 +82,9 @@ class NotificationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Notification
         fields = ['id', 'user', 'guest_email', 'message', 'is_read', 'created_at']
+
+
+class LocationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Location
+        fields = ['id', 'building_name', 'floor_number', 'room_identifier']
