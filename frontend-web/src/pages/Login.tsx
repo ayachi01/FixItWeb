@@ -1,6 +1,16 @@
-// src/pages/Login.tsx
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
+
+// ✅ Functions (runtime)
+import { saveTokens, saveProfile } from "../utils/auth";
+
+// ✅ Type (compile-time only)
+import type { UserProfile } from "../utils/auth";
+
+interface TokenResponse {
+  access: string;
+  refresh: string;
+}
 
 function Login() {
   const [email, setEmail] = useState("");
@@ -11,22 +21,56 @@ function Login() {
     e.preventDefault();
 
     try {
+      // 🔹 Step 1: Request JWT tokens
       const response = await fetch("http://127.0.0.1:8000/api/token/", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: email, password }),
+        body: JSON.stringify({ email, password }),
       });
 
+      const data: TokenResponse | any = await response.json();
+
       if (!response.ok) {
-        throw new Error("Invalid credentials");
+        let message = "Login failed";
+        if (data.detail) {
+          message = data.detail;
+        } else if (data.username) {
+          message = data.username.join(", ");
+        } else if (typeof data === "object") {
+          const firstKey = Object.keys(data)[0];
+          message = Array.isArray(data[firstKey])
+            ? data[firstKey][0]
+            : JSON.stringify(data);
+        }
+        throw new Error(message);
       }
 
-      const data = await response.json();
-      localStorage.setItem("access", data.access);
-      localStorage.setItem("refresh", data.refresh);
+      // 🔹 Save tokens (with utils)
+      saveTokens(data as TokenResponse);
+
+      // 🔹 Step 2: Fetch user profile
+      const profileRes = await fetch("http://127.0.0.1:8000/api/profile/", {
+        headers: {
+          Authorization: `Bearer ${data.access}`,
+        },
+      });
+
+      if (!profileRes.ok) {
+        throw new Error("Failed to fetch profile");
+      }
+
+      const profile: UserProfile = await profileRes.json();
+      saveProfile(profile);
+
+      // 🔹 Step 3: Redirect to dashboard
       navigate("/dashboard");
-    } catch (error) {
-      alert("Login failed. Please check your email/password.");
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        alert(error.message);
+        console.error(error);
+      } else {
+        alert("Login failed. Please check your email/password.");
+      }
     }
   };
 
@@ -63,7 +107,6 @@ function Login() {
           Login
         </button>
 
-        {/* 👉 Register redirect link */}
         <p className="mt-4 text-center text-sm text-gray-600">
           Don’t have an account?{" "}
           <Link to="/register" className="text-blue-600 hover:underline">
@@ -71,7 +114,6 @@ function Login() {
           </Link>
         </p>
 
-        {/* 👉 Guest Report link */}
         <p className="mt-2 text-center text-sm text-gray-600">
           Or{" "}
           <Link to="/guest-report" className="text-blue-600 hover:underline">
