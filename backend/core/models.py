@@ -1,14 +1,64 @@
 from django.db import models
-from django.contrib.auth.models import User
+from django.conf import settings
+from django.contrib.auth.models import AbstractUser, BaseUserManager, PermissionsMixin
 from django.utils import timezone
 from django.core.exceptions import ValidationError
+from django.db.models import Q
 import uuid
-from django.db.models.signals import post_save
-from django.dispatch import receiver
+
+
+# ======================
+# Custom User Manager
+# ======================
+
+class CustomUserManager(BaseUserManager):
+    def create_user(self, email, password=None, **extra_fields):
+        if not email:
+            raise ValueError("The Email field must be set")
+        email = self.normalize_email(email)
+
+        # username is optional
+        username = extra_fields.get("username", "")
+        extra_fields.setdefault("username", username or email.split("@")[0])
+
+        user = self.model(email=email, **extra_fields)
+        user.set_password(password)
+        user.save(using=self._db)
+        return user
+
+    def create_superuser(self, email, password=None, **extra_fields):
+        extra_fields.setdefault("is_staff", True)
+        extra_fields.setdefault("is_superuser", True)
+
+        if extra_fields.get("is_staff") is not True:
+            raise ValueError("Superuser must have is_staff=True.")
+        if extra_fields.get("is_superuser") is not True:
+            raise ValueError("Superuser must have is_superuser=True.")
+
+        return self.create_user(email, password, **extra_fields)
+
+
+# ======================
+# Custom User
+# ======================
+
+class CustomUser(AbstractUser, PermissionsMixin):
+    email = models.EmailField(unique=True)
+    username = models.CharField(max_length=150, blank=True, null=True)  # 👈 optional
+
+    USERNAME_FIELD = "email"   # 👈 login with email only
+    REQUIRED_FIELDS = []       # 👈 no required username on createsuperuser
+
+    objects = CustomUserManager()
+
+    def __str__(self):
+        return self.email
+
 
 # ======================
 # User Profile Extension
 # ======================
+
 class UserProfile(models.Model):
     ROLE_CHOICES = [
         ('Student', 'Student'),
@@ -25,7 +75,7 @@ class UserProfile(models.Model):
         ('University Admin', 'University Admin'),
     ]
 
-    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='profile')
     role = models.CharField(max_length=50, choices=ROLE_CHOICES)
     can_report = models.BooleanField(default=False)
     can_fix = models.BooleanField(default=False)
@@ -35,10 +85,8 @@ class UserProfile(models.Model):
 
     def save(self, *args, **kwargs):
         if self.user.email:
-            # Always save domain only
             self.email_domain = self.user.email.split('@')[-1]
 
-        # Auto-assign role only if not provided
         if not self.role:
             if self.email_domain == 'student.university.edu':
                 self.role = 'Student'
@@ -47,10 +95,8 @@ class UserProfile(models.Model):
             elif self.email_domain == 'admin.university.edu':
                 self.role = 'Admin Staff'
             else:
-                # Default outsider role
                 self.role = 'Visitor'
 
-        # Permissions
         if self.role in ['Student', 'Faculty', 'Admin Staff', 'Visitor',
                          'Janitorial Staff', 'Utility Worker', 'IT Support',
                          'Security Guard', 'Maintenance Officer', 'Registrar',
@@ -64,17 +110,33 @@ class UserProfile(models.Model):
         super().save(*args, **kwargs)
 
     def __str__(self):
-        return f"{self.user.username} - {self.role}"
+        return f"{self.user.email} - {self.role}"
+
+
+# ======================
+# Student Profile (extra info table)
+# ======================
+
+class StudentProfile(models.Model):
+    user_profile = models.OneToOneField(UserProfile, on_delete=models.CASCADE, related_name="student_profile")
+    full_name = models.CharField(max_length=255, blank=True)
+    course = models.CharField(max_length=255, blank=True, null=True)
+    year_level = models.PositiveIntegerField(blank=True, null=True)
+    student_id = models.CharField(max_length=50, blank=True, null=True, unique=True)
+
+    def __str__(self):
+        return f"StudentProfile: {self.full_name or self.user_profile.user.email}"
 
 
 # ======================
 # Invite-based Registration
 # ======================
+
 class Invite(models.Model):
     email = models.EmailField(unique=True)
     token = models.UUIDField(default=uuid.uuid4, editable=False)
     role = models.CharField(max_length=50, choices=UserProfile.ROLE_CHOICES)
-    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='invites_created')
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='invites_created')
     created_at = models.DateTimeField(default=timezone.now)
     expires_at = models.DateTimeField()
     is_used = models.BooleanField(default=False)
@@ -92,9 +154,8 @@ class Invite(models.Model):
 
 
 # ======================
-# Student Self-Service Registration (OTP/Email verification)
+# Student Self-Service Registration
 # ======================
-
 
 class StudentRegistration(models.Model):
     STATUS_CHOICES = [
@@ -104,10 +165,10 @@ class StudentRegistration(models.Model):
     ]
 
     user = models.OneToOneField(
-        User, on_delete=models.CASCADE, related_name="student_registration"
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="student_registration"
     )
-    otp_code = models.CharField(max_length=6)  # 6-digit OTP
-    token = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)  # secure link
+    otp_code = models.CharField(max_length=6)
+    token = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
     created_at = models.DateTimeField(default=timezone.now)
     expires_at = models.DateTimeField()
     status = models.CharField(
@@ -116,9 +177,7 @@ class StudentRegistration(models.Model):
 
     def save(self, *args, **kwargs):
         if not self.expires_at:
-            self.expires_at = timezone.now() + timezone.timedelta(
-                minutes=15
-            )  # OTP valid for 15 mins
+            self.expires_at = timezone.now() + timezone.timedelta(minutes=15)
         super().save(*args, **kwargs)
 
     def is_valid(self):
@@ -128,33 +187,10 @@ class StudentRegistration(models.Model):
         return f"Student Registration - {self.user.email} ({self.status})"
 
 
-@receiver(post_save, sender=StudentRegistration)
-def create_student_profile(sender, instance, created, **kwargs):
-    """
-    When a student verifies registration, ensure they get a UserProfile
-    with the 'Student' role and can log in.
-    """
-    from core.models import UserProfile  # local import to avoid circular import
-
-    user = instance.user
-    if instance.status == "Verified":
-        # Activate the user for login
-        if not user.is_active:
-            user.is_active = True
-            user.save()
-
-        # Ensure UserProfile exists and has the correct role
-        profile, _ = UserProfile.objects.get_or_create(user=user)
-        if profile.role != "Student" or not profile.is_email_verified:
-            profile.role = "Student"
-            profile.is_email_verified = True
-            profile.save()
-
-
-
 # ======================
 # Locations
 # ======================
+
 class Location(models.Model):
     id = models.AutoField(primary_key=True)
     building_name = models.CharField(max_length=100)
@@ -171,6 +207,7 @@ class Location(models.Model):
 # ======================
 # Ticketing System
 # ======================
+
 class Ticket(models.Model):
     STATUS_CHOICES = [
         ('Created', 'Created'),
@@ -203,15 +240,15 @@ class Ticket(models.Model):
         ('Urgent', 'Urgent'),
     ]
 
-    reporter = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='reported_tickets')
+    reporter = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='reported_tickets')
     location = models.ForeignKey(Location, on_delete=models.CASCADE, related_name='tickets')
     description = models.TextField()
     category = models.CharField(max_length=50, choices=CATEGORY_CHOICES)
     urgency = models.CharField(max_length=50, choices=URGENCY_CHOICES, default='Standard')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Created')
     escalation_level = models.CharField(max_length=20, choices=ESCALATION_CHOICES, default='None')
-    assigned_to = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='assigned_tickets')
-    accepted_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='accepted_tickets')
+    assigned_to = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='assigned_tickets')
+    accepted_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='accepted_tickets')
     accepted_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
@@ -242,6 +279,7 @@ class Ticket(models.Model):
 # ======================
 # Guest Report
 # ======================
+
 class GuestReport(models.Model):
     STATUS_CHOICES = [
         ('Created', 'Created'),
@@ -264,13 +302,12 @@ class GuestReport(models.Model):
     urgency = models.CharField(max_length=50, choices=URGENCY_CHOICES, default='Standard')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Created')
     escalation_level = models.CharField(max_length=20, choices=Ticket.ESCALATION_CHOICES, default='None')
-    assigned_to = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='guest_assigned_tickets')
-    accepted_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
+    assigned_to = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='guest_assigned_tickets')
+    accepted_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
     accepted_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
 
-    # ✅ Only one image allowed
     image = models.ImageField(upload_to="guest_reports/", null=True, blank=True)
 
     def clean(self):
@@ -296,19 +333,28 @@ class GuestReport(models.Model):
 # ======================
 # Ticket Attachments & Resolution
 # ======================
+
 class TicketImage(models.Model):
-    ticket = models.ForeignKey(Ticket, on_delete=models.CASCADE, related_name='images', null=True)
-    guest_report = models.ForeignKey(GuestReport, on_delete=models.CASCADE, related_name='images', null=True)
+    ticket = models.ForeignKey(Ticket, on_delete=models.CASCADE, related_name='images', null=True, blank=True)
+    guest_report = models.ForeignKey(GuestReport, on_delete=models.CASCADE, related_name='images', null=True, blank=True)
     image_url = models.ImageField(upload_to='ticket_images/')
-    uploaded_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
+    uploaded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
     guest_email = models.EmailField(null=True, blank=True)
     timestamp = models.DateTimeField(default=timezone.now)
 
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                check=Q(ticket__isnull=False) | Q(guest_report__isnull=False),
+                name="ticketimage_must_have_ticket_or_guestreport"
+            )
+        ]
+
 
 class TicketResolution(models.Model):
-    ticket = models.ForeignKey(Ticket, on_delete=models.CASCADE, related_name='resolutions', null=True)
-    guest_report = models.ForeignKey(GuestReport, on_delete=models.CASCADE, related_name='resolutions', null=True)
-    resolved_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
+    ticket = models.ForeignKey(Ticket, on_delete=models.CASCADE, related_name='resolutions', null=True, blank=True)
+    guest_report = models.ForeignKey(GuestReport, on_delete=models.CASCADE, related_name='resolutions', null=True, blank=True)
+    resolved_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
     proof_image = models.ImageField(upload_to='resolutions/')
     resolution_note = models.TextField()
     timestamp = models.DateTimeField(default=timezone.now)
@@ -317,10 +363,19 @@ class TicketResolution(models.Model):
         if not self.proof_image:
             raise ValidationError('Proof image is required for resolution.')
 
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                check=Q(ticket__isnull=False) | Q(guest_report__isnull=False),
+                name="ticketresolution_must_have_ticket_or_guestreport"
+            )
+        ]
+
 
 # ======================
 # Ticket Logs & Notifications
 # ======================
+
 class TicketActionLog(models.Model):
     ACTION_CHOICES = [
         ('Created', 'Created'),
@@ -332,10 +387,10 @@ class TicketActionLog(models.Model):
         ('Reopened', 'Reopened'),
         ('Escalated', 'Escalated'),
     ]
-    ticket = models.ForeignKey(Ticket, on_delete=models.CASCADE, null=True)
-    guest_report = models.ForeignKey(GuestReport, on_delete=models.CASCADE, null=True)
+    ticket = models.ForeignKey(Ticket, on_delete=models.CASCADE, null=True, blank=True)
+    guest_report = models.ForeignKey(GuestReport, on_delete=models.CASCADE, null=True, blank=True)
     action = models.CharField(max_length=20, choices=ACTION_CHOICES)
-    performed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
+    performed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
     timestamp = models.DateTimeField(default=timezone.now)
 
     def __str__(self):
@@ -345,9 +400,9 @@ class TicketActionLog(models.Model):
 
 
 class Notification(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='notifications', null=True)
-    ticket = models.ForeignKey(Ticket, on_delete=models.CASCADE, null=True)
-    guest_report = models.ForeignKey(GuestReport, on_delete=models.CASCADE, null=True)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='notifications', null=True, blank=True)
+    ticket = models.ForeignKey(Ticket, on_delete=models.CASCADE, null=True, blank=True)
+    guest_report = models.ForeignKey(GuestReport, on_delete=models.CASCADE, null=True, blank=True)
     guest_email = models.EmailField(null=True, blank=True)
     message = models.TextField()
     is_read = models.BooleanField(default=False)
@@ -355,13 +410,14 @@ class Notification(models.Model):
 
     def __str__(self):
         if self.user:
-            return f"Notification for {self.user.username}: {self.message}"
+            return f"Notification for {self.user.email}: {self.message}"
         return f"Notification for {self.guest_email}: {self.message}"
 
 
 # ======================
 # Audit Log
 # ======================
+
 class AuditLog(models.Model):
     ACTION_CHOICES = [
         ('User Created', 'User Created'),
@@ -371,13 +427,11 @@ class AuditLog(models.Model):
         ('Invite Rejected', 'Invite Rejected'),
     ]
     action = models.CharField(max_length=50, choices=ACTION_CHOICES)
-    performed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='audit_logs')
-    target_user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='targeted_audit_logs')
-    target_invite = models.ForeignKey(Invite, on_delete=models.SET_NULL, null=True)
+    performed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='audit_logs')
+    target_user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='targeted_audit_logs')
+    target_invite = models.ForeignKey('Invite', on_delete=models.SET_NULL, null=True, blank=True)
     details = models.TextField()
     timestamp = models.DateTimeField(default=timezone.now)
 
     def __str__(self):
         return f"{self.action} by {self.performed_by} at {self.timestamp}"
-
-

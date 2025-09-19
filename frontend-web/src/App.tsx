@@ -1,31 +1,10 @@
-// import React from "react";
-// import { BrowserRouter, Routes, Route } from "react-router-dom";
-// import Login from "./components/Login";
-// import Register from "./components/Register";
-// import GuestReport from "./components/GuestReport";
-// import Dashboard from "./components/Dashboard";
-
-// const App: React.FC = () => {
-//   return (
-//     <BrowserRouter>
-//       <Routes>
-//         <Route path="/" element={<Login />} />
-//         <Route path="/login" element={<Login />} />
-//         <Route path="/register" element={<Register />} />
-//         <Route path="/guest-report" element={<GuestReport />} />
-//         <Route path="/dashboard" element={<Dashboard />} />
-//       </Routes>
-//     </BrowserRouter>
-//   );
-// };
-
-// export default App;
-
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import VerifyOtp from "./pages/VerifyOtp";
 import GuestReport from "./pages/GuestReport";
+import PrivateRoute from "./components/PrivateRoute";
+import Dashboard from "./pages/Dashboard";
 
 function App() {
   return (
@@ -36,7 +15,14 @@ function App() {
         <Route path="/register" element={<Register />} />
         <Route path="/verify-otp" element={<VerifyOtp />} />
         <Route path="/guest-report" element={<GuestReport />} />
-        <Route path="/dashboard" element={<h1>Dashboard (Protected)</h1>} />
+        <Route
+          path="/dashboard"
+          element={
+            <PrivateRoute>
+              <Dashboard />
+            </PrivateRoute>
+          }
+        />
       </Routes>
     </BrowserRouter>
   );
