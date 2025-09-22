@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-import '/features/reports/presentation/viewmodels/report_viewmodel.dart';
-import 'package:provider/provider.dart';
 
 
 class ScanningScreen extends StatelessWidget {
@@ -8,17 +6,10 @@ class ScanningScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final viewModel = context.watch<ReportViewModel>();
     return Scaffold(
       appBar: AppBar(
         title: const Text('Scan Issue'),
         leading: const BackButton(),
-        actions: [
-          IconButton(
-            icon: Icon(viewModel.isTorchOn ? Icons.flash_on : Icons.flash_off),
-            onPressed: () => viewModel.toggleTorch(),
-          ),
-        ]
       ),
       body: Column(
         children: [

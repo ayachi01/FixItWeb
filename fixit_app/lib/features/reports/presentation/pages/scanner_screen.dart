@@ -8,17 +8,10 @@ class ScannerScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final viewModel = context.watch<ReportViewModel>();
     return Scaffold(
       appBar: AppBar(
         title: const Text('Scan Issue'),
         leading: const BackButton(),
-        actions: [
-          IconButton(
-            icon: Icon(viewModel.isTorchOn ? Icons.flash_on : Icons.flash_off),
-            onPressed: () => viewModel.toggleTorch(),
-          ),
-        ],
       ),
       body: Column(
         children: [
@@ -51,12 +44,7 @@ class ScannerScreen extends StatelessWidget {
             onPressed: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(
-                  builder: (_) => ChangeNotifierProvider.value(
-                    value: context.read<ReportViewModel>(),
-                    child: const ScanningScreen(),
-                  ),
-                ),
+                MaterialPageRoute(builder: (_) => const ScanningScreen()),
               );
             },
           ),
