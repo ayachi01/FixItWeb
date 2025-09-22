@@ -9,15 +9,18 @@ User = get_user_model()
 
 @receiver(post_save, sender=User)
 def create_user_profile(sender, instance, created, **kwargs):
+    """
+    Automatically create a UserProfile when a new CustomUser is created.
+    - Superusers -> "University Admin" role, verified, bypass flag set.
+    - Normal users -> let UserProfile.save() auto-assign role by domain.
+    """
     if created:
-        # Superusers get University Admin
         if instance.is_superuser:
             UserProfile.objects.create(
                 user=instance,
                 role="University Admin",
                 is_email_verified=True,
-                created_by_admin=True  # 🚨 mark as bypass
+                created_by_admin=True,  # 🚨 bypass email verification
             )
         else:
-            # Normal users – let UserProfile.save() decide role by domain
             UserProfile.objects.create(user=instance)

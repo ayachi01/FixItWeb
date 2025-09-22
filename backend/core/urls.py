@@ -4,7 +4,6 @@ from rest_framework.routers import DefaultRouter
 
 from .views import (
     LocationViewSet,
-    StudentRegistrationViewSet,
     UserViewSet,
     TicketViewSet,
     GuestReportViewSet,
@@ -12,7 +11,7 @@ from .views import (
     UserProfileView,
     EmailLoginView,
     CookieTokenRefreshView,   # ✅ custom refresh
-    LogoutView,               # ✅ add this import
+    LogoutView,               # ✅ logout endpoint
 )
 
 # 🔹 Register ViewSets with DRF router
@@ -21,11 +20,11 @@ router.register(r'users', UserViewSet, basename='user')
 router.register(r'tickets', TicketViewSet, basename='ticket')
 router.register(r'guest_reports', GuestReportViewSet, basename='guest_report')
 router.register(r'notifications', NotificationViewSet, basename='notification')
-router.register(r'student', StudentRegistrationViewSet, basename='student')
 router.register(r'locations', LocationViewSet, basename='location')
 
 # 🔹 URL patterns
 urlpatterns = [
+    # ViewSets (users, tickets, etc.)
     path('', include(router.urls)),
 
     # ✅ Authentication (JWT)

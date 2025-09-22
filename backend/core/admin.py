@@ -10,29 +10,6 @@ from .models import (
 # ✅ Always use get_user_model for AUTH_USER_MODEL
 User = get_user_model()
 
-# ---------------------------------
-# Role → Permission mapping (RBAC)
-# ---------------------------------
-ROLE_PERMISSIONS = {
-    "student": {"can_report": True, "can_fix": False, "can_assign": False, "manage_users": False},
-    "faculty": {"can_report": True, "can_fix": False, "can_assign": False, "manage_users": False},
-    "admin staff": {"can_report": True, "can_fix": False, "can_assign": False, "manage_users": False},
-    "visitor": {"can_report": True, "can_fix": False, "can_assign": False, "manage_users": False},
-    "guest": {"can_report": True, "can_fix": False, "can_assign": False, "manage_users": False},
-
-    "janitorial staff": {"can_report": True, "can_fix": True, "can_assign": False, "manage_users": False},
-    "utility worker": {"can_report": True, "can_fix": True, "can_assign": False, "manage_users": False},
-    "it support": {"can_report": True, "can_fix": True, "can_assign": False, "manage_users": False},
-    "security guard": {"can_report": True, "can_fix": True, "can_assign": False, "manage_users": False},
-
-    "maintenance officer": {"can_report": True, "can_fix": False, "can_assign": True, "manage_users": False},
-    "admin": {"can_report": True, "can_fix": False, "can_assign": False, "manage_users": True},
-    "registrar": {"can_report": True, "can_fix": False, "can_assign": False, "manage_users": True},
-    "hr": {"can_report": True, "can_fix": False, "can_assign": False, "manage_users": True},
-
-    "university admin": {"can_report": True, "can_fix": False, "can_assign": True, "manage_users": True},
-}
-
 
 # -----------------------------
 # User Admin (for AUTH_USER_MODEL)
@@ -69,16 +46,7 @@ class UserAdmin(BaseUserAdmin):
 
         # If profile has no role yet, default to Student
         if not profile.role:
-            profile.role = "student"
-
-        # Apply RBAC defaults if role exists in mapping
-        role_key = profile.role.lower()
-        if role_key in ROLE_PERMISSIONS:
-            perms = ROLE_PERMISSIONS[role_key]
-            profile.can_report = perms["can_report"]
-            profile.can_fix = perms["can_fix"]
-            profile.can_assign = perms["can_assign"]
-            # `manage_users` doesn’t exist in model → handled via Django permissions/groups
+            profile.role = "Student"
 
         profile.save()
 
@@ -91,9 +59,33 @@ admin.site.register(User, UserAdmin)
 # -----------------------------
 @admin.register(UserProfile)
 class UserProfileAdmin(admin.ModelAdmin):
-    list_display = ('user', 'role', 'can_report', 'can_fix', 'can_assign', 'is_email_verified', 'email_domain')
+    list_display = (
+        'user', 'role', 'is_email_verified', 'email_domain',
+        'get_can_report', 'get_can_fix', 'get_can_assign', 'get_can_manage_users'
+    )
     search_fields = ('user__email', 'role', 'email_domain')
-    list_filter = ('role', 'can_fix', 'can_assign', 'is_email_verified')
+    list_filter = ('role', 'is_email_verified')
+
+    # Computed permission columns (call model @properties)
+    def get_can_report(self, obj):
+        return obj.can_report
+    get_can_report.short_description = "Can Report"
+    get_can_report.boolean = True
+
+    def get_can_fix(self, obj):
+        return obj.can_fix
+    get_can_fix.short_description = "Can Fix"
+    get_can_fix.boolean = True
+
+    def get_can_assign(self, obj):
+        return obj.can_assign
+    get_can_assign.short_description = "Can Assign"
+    get_can_assign.boolean = True
+
+    def get_can_manage_users(self, obj):
+        return obj.can_manage_users
+    get_can_manage_users.short_description = "Manage Users"
+    get_can_manage_users.boolean = True
 
 
 # -----------------------------
