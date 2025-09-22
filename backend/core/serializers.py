@@ -1,7 +1,8 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model, authenticate
+from django.utils import timezone
 from .models import (
-    StudentRegistration, UserProfile, Invite, Ticket, GuestReport,
+    UserProfile, Invite, Ticket, GuestReport,
     Notification, Location, TicketImage, PasswordResetCode
 )
 
@@ -24,42 +25,91 @@ class UserProfileSerializer(serializers.ModelSerializer):
         fields = ['user', 'role', 'is_email_verified', 'email_domain']
 
 
-# -------------------- Student Registration --------------------
-class StudentRegistrationSerializer(serializers.ModelSerializer):
-    """✅ Creates User + StudentRegistration record"""
-    email = serializers.EmailField(write_only=True)
-    password = serializers.CharField(write_only=True, min_length=6)
-
-    class Meta:
-        model = StudentRegistration
-        fields = ['email', 'password', 'status', 'created_at']
-        read_only_fields = ['status', 'created_at']
-
-    def create(self, validated_data):
-        """Create user as inactive + pending registration"""
-        email = validated_data.pop("email")
-        password = validated_data.pop("password")
-
-        # ❌ Not active yet — must verify OTP first
-        user = User.objects.create_user(
-            email=email,
-            password=password,
-            is_active=False
-        )
-
-        # ✅ Create registration record
-        registration = StudentRegistration.objects.create(user=user)
-        return registration
-
-
 # -------------------- Invites --------------------
 class InviteSerializer(serializers.ModelSerializer):
+    """Read serializer for returning invite details"""
+    status = serializers.SerializerMethodField()
+    approved_by = serializers.SerializerMethodField()
+
     class Meta:
         model = Invite
         fields = [
-            'email', 'role', 'token', 'created_at', 'expires_at',
-            'is_used', 'requires_admin_approval'
+            'email', 'role', 'token',
+            'created_at', 'expires_at',
+            'is_used', 'requires_admin_approval',
+            'is_approved', 'approved_by', 'approved_at',
+            'status'
         ]
+
+    def get_status(self, obj):
+        if obj.is_used:
+            return "used"
+        if obj.expires_at < timezone.now():
+            return "expired"
+        if obj.requires_admin_approval and not obj.is_approved:
+            return "pending_approval"
+        if obj.is_approved:
+            return "approved"
+        return "active"
+
+    def get_approved_by(self, obj):
+        return obj.approved_by.email if obj.approved_by else None
+
+
+class InviteCreateSerializer(serializers.ModelSerializer):
+    """Serializer for creating invites (input only)"""
+    class Meta:
+        model = Invite
+        fields = ['email', 'role']
+
+
+class InviteApproveSerializer(serializers.ModelSerializer):
+    """Serializer used by admins to approve an invite"""
+    class Meta:
+        model = Invite
+        fields = ['is_approved']
+
+    def update(self, instance, validated_data):
+        request = self.context.get("request")
+        instance.is_approved = True
+        instance.approved_at = timezone.now()
+        if request and hasattr(request, "user"):
+            instance.approved_by = request.user
+        instance.save()
+        return instance
+
+
+class InviteAcceptSerializer(serializers.ModelSerializer):
+    """Serializer for accepting an invite (user sets password)"""
+    password = serializers.CharField(write_only=True)
+
+    class Meta:
+        model = Invite
+        fields = ["token", "password"]
+
+    def validate(self, attrs):
+        invite = self.instance
+        if invite.is_used:
+            raise serializers.ValidationError("Invite already used.")
+        if invite.expires_at < timezone.now():
+            raise serializers.ValidationError("Invite has expired.")
+        if invite.requires_admin_approval and not invite.is_approved:
+            raise serializers.ValidationError("This invite still requires admin approval.")
+        return attrs
+
+    def update(self, instance, validated_data):
+        password = validated_data.get("password")
+        email = instance.email
+        role = instance.role
+
+        # ✅ Create user from invite
+        user = User.objects.create_user(email=email, password=password, is_active=True)
+        UserProfile.objects.create(user=user, role=role, is_email_verified=True)
+
+        # ✅ Mark invite as used
+        instance.is_used = True
+        instance.save()
+        return instance
 
 
 # -------------------- Tickets --------------------
@@ -94,8 +144,7 @@ class GuestReportSerializer(serializers.ModelSerializer):
         request = self.context.get("request")
         if request and "image" in request.FILES:
             validated_data["image"] = request.FILES["image"]
-        report = GuestReport.objects.create(**validated_data)
-        return report
+        return GuestReport.objects.create(**validated_data)
 
 
 # -------------------- Notifications --------------------
@@ -124,7 +173,6 @@ class EmailTokenObtainPairSerializer(TokenObtainPairSerializer):
     def validate(self, attrs):
         email = attrs.get("email")
         password = attrs.get("password")
-        print("🔥 EmailTokenObtainPairSerializer received:", attrs)
 
         if not email or not password:
             raise serializers.ValidationError("Email and password required")
@@ -143,6 +191,8 @@ class EmailTokenObtainPairSerializer(TokenObtainPairSerializer):
         # ⚡ Call parent validate with correct credentials
         data = super().validate({"email": user.email, "password": password})
         data["email"] = user.email
+        if hasattr(user, "profile"):
+            data["role"] = user.profile.role
         return data
 
     @classmethod
@@ -163,14 +213,13 @@ class PasswordResetRequestSerializer(serializers.Serializer):
         try:
             user = User.objects.get(email=value)
         except User.DoesNotExist:
-            raise serializers.ValidationError("No user with this email found.")
+            raise serializers.ValidationError("No account found with this email.")
         self.context["user"] = user
         return value
 
     def create(self, validated_data):
         user = self.context["user"]
-        reset_code = PasswordResetCode.objects.create(user=user)
-        return reset_code
+        return PasswordResetCode.objects.create(user=user)
 
 
 class PasswordResetConfirmSerializer(serializers.Serializer):
@@ -186,7 +235,7 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
         try:
             user = User.objects.get(email=email)
         except User.DoesNotExist:
-            raise serializers.ValidationError({"email": "No user with this email."})
+            raise serializers.ValidationError({"email": "No account found with this email."})
 
         try:
             reset_code = PasswordResetCode.objects.filter(
