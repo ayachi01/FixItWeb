@@ -51,6 +51,8 @@ dependencies:
   #Date Format
   intl: ^0.18.1
 
+  #Torch
+  torch_light: ^1.0.0
   
 
 dev_dependencies:

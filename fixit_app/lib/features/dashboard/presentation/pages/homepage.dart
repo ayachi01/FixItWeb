@@ -11,6 +11,7 @@ import '/core/widgets/search_bar.dart';
 import '/core/widgets/bottom_nav_bar.dart';
 import '/core/widgets/ticket_card.dart';
 import '/core/widgets/floating_action_button.dart';
+import '/core/services/torch_service.dart';
 
 class HomePage extends StatefulWidget {
   final TextEditingController? firstNameController;
@@ -166,7 +167,12 @@ class _HomePageState extends State<HomePage> {
         onPressed: () {
           Navigator.push(
             context,
-            MaterialPageRoute(builder: (context) => ScannerScreen()),
+            MaterialPageRoute(
+              builder: (_) => ChangeNotifierProvider(
+                create: (_) => ReportViewModel(ImagePickerService(), TorchService()),
+                child: const ScannerScreen(),
+              ),
+            ),
           );
         },
       ),
@@ -210,11 +216,13 @@ class _HomePageState extends State<HomePage> {
           if (index == 3) {
             Navigator.push(
               context,
-              MaterialPageRoute(builder: (context) => Settings(
-                firstNameController: widget.firstNameController,
-                lastNameController: widget.lastNameController,
-                emailController: widget.emailController,
-              )),
+              MaterialPageRoute(
+                builder: (context) => Settings(
+                  firstNameController: widget.firstNameController,
+                  lastNameController: widget.lastNameController,
+                  emailController: widget.emailController,
+                ),
+              ),
             );
           }
         },

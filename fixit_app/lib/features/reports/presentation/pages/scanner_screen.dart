@@ -1,16 +1,24 @@
 import 'package:flutter/material.dart';
 import 'scanning_screen.dart';
+import '/features/reports/presentation/viewmodels/report_viewmodel.dart';
+import 'package:provider/provider.dart';
 
 class ScannerScreen extends StatelessWidget {
   const ScannerScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final viewModel = context.watch<ReportViewModel>();
     return Scaffold(
       appBar: AppBar(
         title: const Text('Scan Issue'),
         leading: const BackButton(),
-        actions: const [Icon(Icons.volume_off), SizedBox(width: 16)],
+        actions: [
+          IconButton(
+            icon: Icon(viewModel.isTorchOn ? Icons.flash_on : Icons.flash_off),
+            onPressed: () => viewModel.toggleTorch(),
+          ),
+        ],
       ),
       body: Column(
         children: [
@@ -43,7 +51,12 @@ class ScannerScreen extends StatelessWidget {
             onPressed: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => const ScanningScreen()),
+                MaterialPageRoute(
+                  builder: (_) => ChangeNotifierProvider.value(
+                    value: context.read<ReportViewModel>(),
+                    child: const ScanningScreen(),
+                  ),
+                ),
               );
             },
           ),
