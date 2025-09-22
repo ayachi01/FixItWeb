@@ -2,7 +2,7 @@ from rest_framework import serializers
 from django.contrib.auth import get_user_model, authenticate
 from .models import (
     StudentRegistration, UserProfile, Invite, Ticket, GuestReport,
-    Notification, Location, TicketImage
+    Notification, Location, TicketImage, PasswordResetCode
 )
 
 User = get_user_model()  # ✅ Always reference your custom user
@@ -36,15 +36,15 @@ class StudentRegistrationSerializer(serializers.ModelSerializer):
         read_only_fields = ['status', 'created_at']
 
     def create(self, validated_data):
-        """Create user + active profile + pending registration"""
+        """Create user as inactive + pending registration"""
         email = validated_data.pop("email")
         password = validated_data.pop("password")
 
-        # ✅ Create ACTIVE user (so login works right away)
+        # ❌ Not active yet — must verify OTP first
         user = User.objects.create_user(
             email=email,
             password=password,
-            is_active=True  # 🚀 allow login immediately
+            is_active=False
         )
 
         # ✅ Create registration record
@@ -68,15 +68,18 @@ class TicketSerializer(serializers.ModelSerializer):
         model = Ticket
         fields = '__all__'
 
-    def validate(self, data):
+    def create(self, validated_data):
+        request = self.context.get("request")
+        ticket = Ticket.objects.create(**validated_data)
+
         # ✅ Handle image uploads linked to ticket
-        if 'image' in self.context['request'].FILES:
+        if request and "image" in request.FILES:
             TicketImage.objects.create(
-                ticket=data.get('ticket'),
-                image_url=self.context['request'].FILES['image'],
-                uploaded_by=self.context['request'].user
+                ticket=ticket,
+                image_url=request.FILES["image"],
+                uploaded_by=request.user
             )
-        return data
+        return ticket
 
 
 # -------------------- Guest Reports --------------------
@@ -149,3 +152,63 @@ class EmailTokenObtainPairSerializer(TokenObtainPairSerializer):
         if hasattr(user, "profile"):
             token["role"] = user.profile.role
         return token
+
+
+# -------------------- Password Reset --------------------
+class PasswordResetRequestSerializer(serializers.Serializer):
+    """Request a reset code via email"""
+    email = serializers.EmailField()
+
+    def validate_email(self, value):
+        try:
+            user = User.objects.get(email=value)
+        except User.DoesNotExist:
+            raise serializers.ValidationError("No user with this email found.")
+        self.context["user"] = user
+        return value
+
+    def create(self, validated_data):
+        user = self.context["user"]
+        reset_code = PasswordResetCode.objects.create(user=user)
+        return reset_code
+
+
+class PasswordResetConfirmSerializer(serializers.Serializer):
+    """Confirm reset code + set new password"""
+    email = serializers.EmailField()
+    code = serializers.CharField(max_length=6)
+    new_password = serializers.CharField(min_length=6)
+
+    def validate(self, attrs):
+        email = attrs.get("email")
+        code = attrs.get("code")
+
+        try:
+            user = User.objects.get(email=email)
+        except User.DoesNotExist:
+            raise serializers.ValidationError({"email": "No user with this email."})
+
+        try:
+            reset_code = PasswordResetCode.objects.filter(
+                user=user, code=code, is_used=False
+            ).latest("created_at")
+        except PasswordResetCode.DoesNotExist:
+            raise serializers.ValidationError({"code": "Invalid or already used code."})
+
+        if reset_code.is_expired():
+            raise serializers.ValidationError({"code": "This code has expired."})
+
+        attrs["user"] = user
+        attrs["reset_code"] = reset_code
+        return attrs
+
+    def save(self, **kwargs):
+        user = self.validated_data["user"]
+        reset_code = self.validated_data["reset_code"]
+        new_password = self.validated_data["new_password"]
+
+        user.set_password(new_password)
+        user.save()
+
+        reset_code.mark_used()
+        return user

@@ -6,6 +6,7 @@ from .models import UserProfile
 
 User = get_user_model()
 
+
 @receiver(post_save, sender=User)
 def create_user_profile(sender, instance, created, **kwargs):
     if created:
@@ -14,13 +15,9 @@ def create_user_profile(sender, instance, created, **kwargs):
             UserProfile.objects.create(
                 user=instance,
                 role="University Admin",
-                is_email_verified=True
+                is_email_verified=True,
+                created_by_admin=True  # 🚨 mark as bypass
             )
         else:
             # Normal users – let UserProfile.save() decide role by domain
             UserProfile.objects.create(user=instance)
-
-@receiver(post_save, sender=User)
-def save_user_profile(sender, instance, **kwargs):
-    if hasattr(instance, "profile"):
-        instance.profile.save()

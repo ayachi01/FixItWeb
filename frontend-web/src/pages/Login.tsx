@@ -1,76 +1,59 @@
+// src/pages/Login.tsx
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
+import { saveAccessToken, fetchProfileAndSave } from "../utils/auth";
 
-// ✅ Functions (runtime)
-import { saveTokens, saveProfile } from "../utils/auth";
-
-// ✅ Type (compile-time only)
-import type { UserProfile } from "../utils/auth";
-
-interface TokenResponse {
-  access: string;
-  refresh: string;
-}
-
-function Login() {
+export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const { login } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError("");
+    setLoading(true);
 
     try {
-      // 🔹 Step 1: Request JWT tokens
       const response = await fetch("http://127.0.0.1:8000/api/token/", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include", // ✅ receive HttpOnly refresh cookie
         body: JSON.stringify({ email, password }),
       });
 
-      const data: TokenResponse | any = await response.json();
+      const data = await response.json();
 
       if (!response.ok) {
-        let message = "Login failed";
-        if (data.detail) {
-          message = data.detail;
-        } else if (data.username) {
-          message = data.username.join(", ");
-        } else if (typeof data === "object") {
-          const firstKey = Object.keys(data)[0];
-          message = Array.isArray(data[firstKey])
-            ? data[firstKey][0]
-            : JSON.stringify(data);
-        }
-        throw new Error(message);
+        throw new Error(data.detail || data.error || "Invalid credentials");
       }
 
-      // 🔹 Save tokens (with utils)
-      saveTokens(data as TokenResponse);
-
-      // 🔹 Step 2: Fetch user profile
-      const profileRes = await fetch("http://127.0.0.1:8000/api/profile/", {
-        headers: {
-          Authorization: `Bearer ${data.access}`,
-        },
-      });
-
-      if (!profileRes.ok) {
-        throw new Error("Failed to fetch profile");
+      if (!data.access) {
+        throw new Error("No access token received");
       }
 
-      const profile: UserProfile = await profileRes.json();
-      saveProfile(profile);
+      // ✅ Save access token locally
+      saveAccessToken(data.access);
 
-      // 🔹 Step 3: Redirect to dashboard
+      // ✅ Store in context (for components using useAuth)
+      await login(data.access);
+
+      // ✅ Try to fetch & save profile before navigating
+      try {
+        await fetchProfileAndSave();
+      } catch (profileErr) {
+        console.error("Failed to fetch profile:", profileErr);
+        // still allow navigation
+      }
+
       navigate("/dashboard");
-    } catch (error: unknown) {
-      if (error instanceof Error) {
-        alert(error.message);
-        console.error(error);
-      } else {
-        alert("Login failed. Please check your email/password.");
-      }
+    } catch (err: any) {
+      setError(err.message || "Login failed. Please try again.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -81,6 +64,10 @@ function Login() {
         className="bg-white p-6 rounded-2xl shadow-md w-96"
       >
         <h2 className="text-2xl font-bold mb-4 text-center">Login</h2>
+
+        {error && (
+          <p className="text-red-600 text-sm text-center mb-3">{error}</p>
+        )}
 
         <input
           type="email"
@@ -102,9 +89,12 @@ function Login() {
 
         <button
           type="submit"
-          className="w-full bg-blue-600 text-white p-2 rounded hover:bg-blue-700"
+          disabled={loading}
+          className={`w-full bg-blue-600 text-white p-2 rounded hover:bg-blue-700 transition-colors ${
+            loading ? "opacity-50 cursor-not-allowed" : ""
+          }`}
         >
-          Login
+          {loading ? "Logging in..." : "Login"}
         </button>
 
         <p className="mt-4 text-center text-sm text-gray-600">
@@ -124,5 +114,3 @@ function Login() {
     </div>
   );
 }
-
-export default Login;

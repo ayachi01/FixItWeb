@@ -1,24 +1,37 @@
+// src/pages/Register.tsx
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import API from "../api";
+import { useAPI } from "../api/API";
 
 export default function Register() {
+  const API = useAPI();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
+    setLoading(true);
     try {
-      const res = await API.post("/student/register/", {
+      const res = await API.post("/users/register_self_service/", {
         email,
         password,
       });
-      setMessage(res.data.message);
-      navigate("/verify-otp", { state: { email } });
+      setMessage(
+        res.data.message ||
+          "Registration successful! Please check your email for OTP."
+      );
+
+      // ✅ Redirect to Verify OTP with email
+      setTimeout(() => navigate("/verify-otp", { state: { email } }), 1500);
     } catch (err: any) {
-      setMessage("Registration failed. Check your email domain.");
+      setMessage(
+        err.response?.data?.error || "Registration failed. Please try again."
+      );
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -28,27 +41,47 @@ export default function Register() {
         onSubmit={handleRegister}
         className="bg-white p-8 rounded-2xl shadow-md w-96"
       >
-        <h2 className="text-2xl font-bold mb-6">Student Registration</h2>
-        {message && <p className="mb-4">{message}</p>}
+        <h2 className="text-2xl font-bold mb-6 text-center">
+          Student Registration
+        </h2>
+        {message && (
+          <p
+            className={`mb-4 text-center ${
+              message.toLowerCase().includes("success")
+                ? "text-green-600"
+                : "text-red-600"
+            }`}
+          >
+            {message}
+          </p>
+        )}
+
         <input
           type="email"
           placeholder="University Email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           className="w-full border p-2 rounded mb-4"
+          required
         />
+
         <input
           type="password"
           placeholder="Password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           className="w-full border p-2 rounded mb-4"
+          required
         />
+
         <button
           type="submit"
-          className="w-full bg-green-600 text-white p-2 rounded hover:bg-green-700"
+          disabled={loading}
+          className={`w-full bg-green-600 text-white p-2 rounded hover:bg-green-700 ${
+            loading ? "opacity-50 cursor-not-allowed" : ""
+          }`}
         >
-          Register
+          {loading ? "Registering..." : "Register"}
         </button>
       </form>
     </div>

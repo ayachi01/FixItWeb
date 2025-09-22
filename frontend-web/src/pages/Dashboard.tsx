@@ -1,30 +1,28 @@
+// src/pages/Dashboard.tsx
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import {
-  getProfileFromStorage,
-  fetchProfileAndSave,
-  logoutAndClear,
-} from "../utils/auth";
+import { getProfileFromStorage, fetchProfileAndSave } from "../utils/auth";
+import { useAuth } from "../context/AuthContext";
 
 import type { UserProfile } from "../utils/auth";
 
+// ✅ Check specific roles first (order matters!)
 function roleCategory(role: string | undefined) {
   if (!role) return "reporter";
   const r = role.toLowerCase();
 
-  if (
-    ["student", "faculty", "admin staff", "visitor"].some((x) => r.includes(x))
-  )
-    return "reporter";
+  if (r.includes("university admin")) return "superadmin"; // check first
+  if (["registrar", "hr"].some((x) => r.includes(x))) return "admin";
+  if (r.includes("maintenance officer")) return "officer";
   if (
     ["janitorial staff", "utility worker", "it support", "security guard"].some(
       (x) => r.includes(x)
     )
   )
     return "staff";
-  if (r.includes("maintenance officer")) return "officer";
-  if (["registrar", "hr"].some((x) => r.includes(x))) return "admin";
-  if (r.includes("university admin")) return "superadmin";
+  if (
+    ["student", "faculty", "admin staff", "visitor"].some((x) => r.includes(x))
+  )
+    return "reporter";
 
   return "reporter";
 }
@@ -82,41 +80,93 @@ function SmallCard({
   );
 }
 
+function ProfileModal({
+  profile,
+  onClose,
+}: {
+  profile: UserProfile;
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 flex items-center justify-center bg-black/50 z-50">
+      <div className="bg-white rounded-lg shadow-lg p-6 w-96">
+        <h2 className="text-xl font-bold mb-4">Profile</h2>
+        <ul className="space-y-2 text-sm">
+          <li>
+            <strong>Email:</strong> {profile.email}
+          </li>
+          <li>
+            <strong>Role:</strong> {profile.role}
+          </li>
+          <li>
+            <strong>Email Verified:</strong>{" "}
+            {profile.is_email_verified ? "✅ Yes" : "❌ No"}
+          </li>
+          <li>
+            <strong>Domain:</strong> {profile.email_domain}
+          </li>
+          <li>
+            <strong>Permissions:</strong>
+            <ul className="list-disc list-inside ml-3">
+              {profile.can_report && <li>Report Issues</li>}
+              {profile.can_fix && <li>Fix Issues</li>}
+              {profile.can_assign && <li>Assign Tasks</li>}
+            </ul>
+          </li>
+        </ul>
+        <div className="mt-4 flex justify-end">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const [profile, setProfile] = useState<UserProfile | null>(() =>
     getProfileFromStorage()
   );
   const [loadingProfile, setLoadingProfile] = useState(!profile);
-  const navigate = useNavigate();
+  const [showProfile, setShowProfile] = useState(false);
+  const { logout, sessionExpired, setSessionExpired } = useAuth();
 
   useEffect(() => {
     let mounted = true;
     if (!profile) {
+      setLoadingProfile(true);
       fetchProfileAndSave()
         .then((p) => {
           if (mounted) setProfile(p);
         })
-        .catch((e) => console.error(e))
+        .catch((e) => {
+          console.error("Failed to fetch profile:", e);
+          if (mounted) setSessionExpired(true);
+        })
         .finally(() => {
           if (mounted) setLoadingProfile(false);
         });
-    } else {
-      setLoadingProfile(false);
     }
     return () => {
       mounted = false;
     };
-  }, [profile]);
+  }, [profile, setSessionExpired]);
 
   const category = useMemo(() => roleCategory(profile?.role), [profile]);
   const features = FEATURES[category] || FEATURES.reporter;
 
-  const handleLogout = () => {
-    logoutAndClear(); // clear tokens + profile
-    navigate("/login");
-  };
+  if (loadingProfile) {
+    return <div className="p-6">Loading profile...</div>;
+  }
 
-  if (loadingProfile) return <div className="p-6">Loading profile...</div>;
+  // ✅ Let PrivateRoute show the Session Expired UI
+  if (sessionExpired) {
+    return null;
+  }
 
   return (
     <div className="p-6 min-h-screen bg-gray-50">
@@ -129,9 +179,14 @@ export default function Dashboard() {
             </p>
           </div>
           <div>
-            <button className="px-3 py-1 border rounded mr-2">Profile</button>
             <button
-              onClick={handleLogout}
+              onClick={() => setShowProfile(true)}
+              className="px-3 py-1 border rounded mr-2"
+            >
+              Profile
+            </button>
+            <button
+              onClick={logout}
               className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700"
             >
               Logout
@@ -166,6 +221,10 @@ export default function Dashboard() {
           )}
         </section>
       </div>
+
+      {showProfile && profile && (
+        <ProfileModal profile={profile} onClose={() => setShowProfile(false)} />
+      )}
     </div>
   );
 }

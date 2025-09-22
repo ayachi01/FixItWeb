@@ -11,6 +11,21 @@ import uuid
 # Custom User Manager
 # ======================
 
+from django.conf import settings
+from django.contrib.auth.models import AbstractUser, BaseUserManager, PermissionsMixin
+from django.contrib.auth.hashers import make_password, check_password
+from django.core.exceptions import ValidationError
+from django.db import models
+from django.db.models import Q
+from django.utils import timezone
+import uuid
+import random
+
+
+# ======================
+# Custom User Manager
+# ======================
+
 class CustomUserManager(BaseUserManager):
     def create_user(self, email, password=None, **extra_fields):
         if not email:
@@ -46,6 +61,10 @@ class CustomUser(AbstractUser, PermissionsMixin):
     email = models.EmailField(unique=True)
     username = models.CharField(max_length=150, blank=True, null=True)  # 👈 optional
 
+    # OTP fields (hashed, not plain)
+    otp_hash = models.CharField(max_length=128, blank=True, null=True)
+    otp_created_at = models.DateTimeField(blank=True, null=True)
+
     USERNAME_FIELD = "email"   # 👈 login with email only
     REQUIRED_FIELDS = []       # 👈 no required username on createsuperuser
 
@@ -53,6 +72,20 @@ class CustomUser(AbstractUser, PermissionsMixin):
 
     def __str__(self):
         return self.email
+
+    # OTP methods
+    def set_otp(self, raw_otp: str):
+        self.otp_hash = make_password(raw_otp)
+        self.otp_created_at = timezone.now()
+
+    def check_otp(self, raw_otp: str) -> bool:
+        if not self.otp_hash:
+            return False
+        return check_password(raw_otp, self.otp_hash)
+
+    def clear_otp(self):
+        self.otp_hash = None
+        self.otp_created_at = None
 
 
 # ======================
@@ -114,7 +147,7 @@ class UserProfile(models.Model):
 
 
 # ======================
-# Student Profile (extra info table)
+# Student Profile
 # ======================
 
 class StudentProfile(models.Model):
@@ -167,7 +200,7 @@ class StudentRegistration(models.Model):
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="student_registration"
     )
-    otp_code = models.CharField(max_length=6)
+    otp_code = models.CharField(max_length=6)  # ⚠️ optional now, can be migrated to use CustomUser.otp
     token = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
     created_at = models.DateTimeField(default=timezone.now)
     expires_at = models.DateTimeField()
@@ -435,3 +468,40 @@ class AuditLog(models.Model):
 
     def __str__(self):
         return f"{self.action} by {self.performed_by} at {self.timestamp}"
+
+
+# ======================
+# Password Reset (OTP-based)
+# ======================
+
+class PasswordResetCode(models.Model):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="password_reset_codes"
+    )
+    code = models.CharField(max_length=6)  # 6-digit OTP
+    created_at = models.DateTimeField(default=timezone.now)  # ✅ FIXED
+    is_used = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def save(self, *args, **kwargs):
+        # auto-generate code if not provided
+        if not self.code:
+            import random
+            self.code = f"{random.randint(100000, 999999)}"
+        super().save(*args, **kwargs)
+
+    def is_expired(self):
+        """Expire after 15 minutes"""
+        return self.created_at + timezone.timedelta(minutes=15) < timezone.now()
+
+    def mark_used(self):
+        """Mark OTP as used after password reset"""
+        self.is_used = True
+        self.save()
+
+    def __str__(self):
+        return f"PasswordResetCode for {self.user.email} - {self.code} ({'used' if self.is_used else 'active'})"
