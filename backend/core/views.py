@@ -143,7 +143,7 @@ class UserViewSet(viewsets.ModelViewSet):
     # ==================================================
     @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])
     def create_invite(self, request):
-        if not request.user.profile.can_manage_users():
+        if not request.user.profile.can_manage_users:
             return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
 
         email = request.data.get('email')
@@ -163,7 +163,7 @@ class UserViewSet(viewsets.ModelViewSet):
                 return Response({'error': 'Active invite already exists'}, status=status.HTTP_400_BAD_REQUEST)
 
         invite = Invite.objects.create(email=email, role=role, created_by=request.user)
-        invite_link = f"http://127.0.0.1:8000/api/users/accept_invite/{invite.token}/"
+        invite_link = f"http://127.0.0.1:8000/api/users/{invite.token}/accept_invite/"
 
         create_audit("Invite Created", request.user, target_invite=invite, details=f"Invite for {email} ({role})")
 
@@ -174,8 +174,31 @@ class UserViewSet(viewsets.ModelViewSet):
             'requires_admin_approval': invite.requires_admin_approval
         }, status=status.HTTP_201_CREATED)
 
-    @action(detail=False, methods=['post'], permission_classes=[AllowAny])
-    def accept_invite(self, request):
+    # 🔹 Case 1: Accept invite via URL /api/users/{uuid}/accept_invite/
+    @action(detail=True, methods=['post'], permission_classes=[AllowAny], url_path="accept_invite")
+    def accept_invite(self, request, pk=None):
+        token = pk
+        password = request.data.get('password')
+        if not token or not password:
+            return Response({'error': 'Token and password required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            invite = Invite.objects.get(token=token)
+        except Invite.DoesNotExist:
+            return Response({'error': 'Invalid token'}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = InviteAcceptSerializer(
+            invite, data={'password': password}, context={'request': request}, partial=True
+        )
+        serializer.is_valid(raise_exception=True)
+        user = serializer.save()  # ⚡ Now returns a User
+
+        create_audit("Invite Accepted", user, target_invite=invite, details=f"Invite accepted for {invite.email}")
+        return Response({'message': 'Account created successfully'}, status=status.HTTP_201_CREATED)
+
+    # 🔹 Case 2: Accept invite via body /api/users/accept_invite/ { "token": "...", "password": "..." }
+    @action(detail=False, methods=['post'], permission_classes=[AllowAny], url_path="accept_invite")
+    def accept_invite_with_token(self, request):
         token = request.data.get('token')
         password = request.data.get('password')
         if not token or not password:
@@ -186,14 +209,13 @@ class UserViewSet(viewsets.ModelViewSet):
         except Invite.DoesNotExist:
             return Response({'error': 'Invalid token'}, status=status.HTTP_404_NOT_FOUND)
 
-        # ✅ Use serializer for consistency
         serializer = InviteAcceptSerializer(
             invite, data={'password': password}, context={'request': request}, partial=True
         )
         serializer.is_valid(raise_exception=True)
-        serializer.save()
+        user = serializer.save()  # ⚡ Now returns a User
 
-        create_audit("Invite Accepted", invite, target_invite=invite, details=f"Invite accepted for {invite.email}")
+        create_audit("Invite Accepted", user, target_invite=invite, details=f"Invite accepted for {invite.email}")
         return Response({'message': 'Account created successfully'}, status=status.HTTP_201_CREATED)
 
     @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])
@@ -210,7 +232,6 @@ class UserViewSet(viewsets.ModelViewSet):
         except Invite.DoesNotExist:
             return Response({'error': 'Invalid or already processed invite'}, status=status.HTTP_404_NOT_FOUND)
 
-        # ✅ Use serializer to approve
         serializer = InviteApproveSerializer(
             invite, data={'is_approved': True}, partial=True, context={'request': request}
         )
@@ -268,7 +289,6 @@ class UserViewSet(viewsets.ModelViewSet):
 
         create_audit("Password Reset Confirmed", user, user, details=f"Password reset successful for {user.email}")
         return Response({"message": "Password has been reset successfully"}, status=status.HTTP_200_OK)
-
 
 # -------------------- TicketViewSet --------------------
 class TicketViewSet(viewsets.ModelViewSet):
