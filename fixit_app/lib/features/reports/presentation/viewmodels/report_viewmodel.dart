@@ -2,11 +2,9 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '/core/services/image_picker_service.dart';
-import '/core/services/torch_service.dart';
 
 class ReportViewModel extends ChangeNotifier {
   // Services
-  final TorchService? _torchService;
   final ImagePickerService _imagePicker;
 
   // Controllers
@@ -14,7 +12,7 @@ class ReportViewModel extends ChangeNotifier {
   final TextEditingController timeCtrl = TextEditingController();
 
   // Constructor
-  ReportViewModel(this._imagePicker, [this._torchService]);
+  ReportViewModel(this._imagePicker);
 
   // State variables
   DateTime? selectedDate;
@@ -91,12 +89,4 @@ class ReportViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  // Toggle Torch
-  Future<void> toggleTorch() async {
-    if (_torchService == null) return;
-    _isTorchOn = !_isTorchOn;
-    notifyListeners();
-    await _torchService.toggleTorch(_isTorchOn);
-  }
 }
-
