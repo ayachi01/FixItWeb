@@ -4,7 +4,7 @@ from django.utils import timezone
 from .models import (
     UserProfile, Invite, Ticket, GuestReport,
     Notification, Location, TicketImage, PasswordResetCode
-)
+)  
 
 User = get_user_model()  # ✅ Always reference your custom user
 
@@ -102,14 +102,36 @@ class InviteAcceptSerializer(serializers.ModelSerializer):
         email = instance.email
         role = instance.role
 
-        # ✅ Create user from invite
-        user = User.objects.create_user(email=email, password=password, is_active=True)
-        UserProfile.objects.create(user=user, role=role, is_email_verified=True)
+        # ✅ Create user if not exists, otherwise fetch
+        user, created = User.objects.get_or_create(
+            email=email,
+            defaults={"is_active": True}
+        )
+        if created:
+            user.set_password(password)
+            user.save()
+        else:
+            # If user already exists, just update password
+            user.set_password(password)
+            user.is_active = True
+            user.save()
+
+        # ✅ Fix: avoid duplicate profile
+        profile, created = UserProfile.objects.get_or_create(
+            user=user,
+            defaults={"role": role, "is_email_verified": True}
+        )
+        if not created:
+            profile.role = role
+            profile.is_email_verified = True
+            profile.save()
 
         # ✅ Mark invite as used
         instance.is_used = True
         instance.save()
-        return instance
+
+        # ⚡ Return the user instead of invite → so we can audit with correct `performed_by`
+        return user
 
 
 # -------------------- Tickets --------------------
