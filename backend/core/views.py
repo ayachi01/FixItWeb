@@ -23,6 +23,9 @@ from core.serializers import (
     TicketResolutionSerializer
 )
 
+from django.contrib.auth import authenticate
+
+
 # -------------------- Tasks --------------------
 from core.tasks import check_escalation
 
@@ -49,6 +52,50 @@ class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all()
     serializer_class = UserProfileSerializer
     permission_classes = [AllowAny]  # ✅ Allow registration/login
+
+    # ---------- Email Login ----------
+    @action(detail=False, methods=['post'], permission_classes=[AllowAny])
+    def email_login(self, request):
+        email = request.data.get("email")
+        password = request.data.get("password")
+
+        if not email or not password:
+            return Response(
+                {"error": "Email and password required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        user = authenticate(request, email=email, password=password)
+        if not user:
+            create_audit("Login Failed", None, None, details=f"Failed login attempt for {email}")
+            return Response(
+                {"error": "Invalid credentials"},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+
+        if not user.is_active:
+            return Response(
+                {"error": "Account not active. Please verify your email first."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        # ✅ Generate tokens (assuming you use SimpleJWT)
+        from rest_framework_simplejwt.tokens import RefreshToken
+        refresh = RefreshToken.for_user(user)
+
+        profile = user.profile
+        profile_data = UserProfileSerializer(profile).data
+
+        create_audit("Login Success", user, user, details=f"Successful login for {email}")
+
+        return Response(
+            {
+                "access": str(refresh.access_token),
+                "refresh": str(refresh),
+                "profile": profile_data,
+            },
+            status=status.HTTP_200_OK
+        )
 
     # ---------- Self-service Registration (Students Only) ----------
     @action(detail=False, methods=['post'], permission_classes=[AllowAny], throttle_classes=[OTPThrottle])
@@ -98,7 +145,7 @@ class UserViewSet(viewsets.ModelViewSet):
         # ✅ Create StudentProfile
         from core.models import StudentProfile
         StudentProfile.objects.create(
-            profile=profile,
+            user_profile=profile,
             full_name=f"{first_name} {last_name}",
             course=course,
             year_level=year_level,
@@ -468,6 +515,10 @@ from rest_framework.permissions import IsAuthenticated
 from .models import UserProfile
 
 
+# ==================================================
+#                  User Profile
+# ==================================================
+
 class UserProfileView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -479,9 +530,11 @@ class UserProfileView(APIView):
 
         # ✅ Everyone can report
         if profile.can_report:
-            features.append("canReport")
-            features.append("myReports")
-            features.append("notifications")
+            features.extend([
+                "canReport",
+                "myReports",
+                "notifications",
+            ])
 
         # ✅ Fixer roles
         if profile.can_fix:
@@ -514,7 +567,7 @@ class UserProfileView(APIView):
             ])
 
         # ✅ Super / University admins
-        if profile.role.lower() in ["super admin", "university admin"]:
+        if profile.role and profile.role.lower() in ["super admin", "university admin"]:
             features.extend([
                 "systemSettings",
                 "aiReports",
@@ -525,7 +578,7 @@ class UserProfileView(APIView):
 
         # ✅ Student profile details (if exists)
         student_data = None
-        if hasattr(profile, "student_profile"):
+        if hasattr(profile, "student_profile") and profile.student_profile:
             sp = profile.student_profile
             student_data = {
                 "full_name": sp.full_name,
@@ -534,10 +587,11 @@ class UserProfileView(APIView):
                 "student_id": sp.student_id,
             }
 
+        # ✅ Final response
         return Response({
             "id": request.user.id,
             "email": request.user.email,
-            "role": profile.role,  # original case for display
+            "role": profile.role,  # keep original case for display
             "is_email_verified": profile.is_email_verified,
             "features": features,
             "allowed_categories": profile.allowed_categories(),
@@ -549,7 +603,6 @@ class UserProfileView(APIView):
 #                  Auth
 # ==================================================
 
-
 # Try importing create_audit (safe fallback if missing)
 try:
     from .utils import create_audit
@@ -557,6 +610,7 @@ except ImportError:
     def create_audit(*args, **kwargs):
         # fallback no-op if utils.create_audit is not defined
         pass
+
 
 
 
@@ -726,18 +780,17 @@ class LogoutView(APIView):
                 # If blacklist app is not configured, ignore
                 pass
 
-        # ✅ Build responsea
+        # ✅ Build response
         response = Response(
             {"message": "Logged out successfully"},
             status=status.HTTP_200_OK,
         )
 
-        # ✅ Delete refresh cookie
+        # ✅ Delete refresh cookie (only key, path/domain if needed)
         response.delete_cookie(
             "refresh_token",
-            httponly=True,
-            secure=not settings.DEBUG,  # HTTPS only in production
-            samesite="Strict" if not settings.DEBUG else "Lax",
+            path="/",          # match how you set it
+            domain=None,       # set if you used a domain in set_cookie()
         )
 
         # ✅ Audit log

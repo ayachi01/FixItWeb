@@ -6,7 +6,7 @@ from .views import (
     LocationViewSet,
     UserViewSet,
     TicketViewSet,
-    UserProfileView,          # ✅ now returns both profile + features
+    UserProfileView,          # ✅ returns both profile + features
     EmailLoginView,
     CookieTokenRefreshView,   # ✅ custom refresh
     LogoutView,               # ✅ logout endpoint
@@ -21,16 +21,14 @@ router.register(r'locations', LocationViewSet, basename='location')
 
 # 🔹 URL patterns
 urlpatterns = [
-    # ViewSets (users, tickets, etc.)
+    # ViewSets (users, tickets, locations, etc.)
     path('', include(router.urls)),
 
-    # ✅ Authentication (JWT)
-    path("token/", EmailLoginView.as_view(), name="token_obtain_pair"),
-    path("token/refresh/", CookieTokenRefreshView.as_view(), name="token_refresh"),
+    # ✅ Authentication (matches frontend)
+    path("auth/login/", EmailLoginView.as_view(), name="login"),
+    path("auth/refresh/", CookieTokenRefreshView.as_view(), name="token_refresh"),
+    path("auth/logout/", LogoutView.as_view(), name="logout"),
 
     # ✅ User profile (merged with features)
-    path("profile/", UserProfileView.as_view(), name="user_profile"),
-
-    # ✅ Logout
-    path("logout/", LogoutView.as_view(), name="logout"),
+    path("auth/profile/", UserProfileView.as_view(), name="user_profile"),
 ]
