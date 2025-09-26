@@ -31,6 +31,9 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
 
+    # ✅ WebSockets
+    "channels",
+
     # Third-party
     "rest_framework",
     "rest_framework_simplejwt",
@@ -98,7 +101,23 @@ TEMPLATES = [
     },
 ]
 
+# -------------------------------------------------------------------
+# ✅ WSGI + ASGI
+# -------------------------------------------------------------------
 WSGI_APPLICATION = "fixit.wsgi.application"
+ASGI_APPLICATION = "fixit.asgi.application"
+
+# -------------------------------------------------------------------
+# ✅ Channels / Redis
+# -------------------------------------------------------------------
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
+            "hosts": [os.environ.get("REDIS_URL", "redis://127.0.0.1:6379")],
+        },
+    },
+}
 
 # -------------------------------------------------------------------
 # Database
@@ -117,13 +136,26 @@ DATABASES = {
 # -------------------------------------------------------------------
 # Celery
 # -------------------------------------------------------------------
-CELERY_BROKER_URL = "redis://localhost:6379/0"
 CELERY_BROKER_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
 CELERY_RESULT_BACKEND = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = "Asia/Manila"
+
+# ✅ Celery Beat Schedule
+from celery.schedules import crontab
+
+CELERY_BEAT_SCHEDULE = {
+    "check-escalation-every-hour": {
+        "task": "core.tasks.check_escalation",
+        "schedule": crontab(minute=0, hour="*"),  # every hour on the hour
+    },
+    "cleanup-old-audit-logs-daily": {
+        "task": "core.tasks.cleanup_old_audit_logs",
+        "schedule": crontab(minute=0, hour=3),  # every day at 3 AM
+    },
+}
 
 # -------------------------------------------------------------------
 # Media

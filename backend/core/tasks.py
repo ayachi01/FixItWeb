@@ -1,27 +1,39 @@
 from celery import shared_task
+from django.utils import timezone
+from core.models import Ticket, create_audit, AuditLog
 
-@shared_task
-def send_guest_notification(guest_email, guest_report_id, tracking_code):
-    """
-    Simple async task for guest notifications.
-    Just sends an email (or logs for now).
-    """
-    # For now, just log / print. Later you can replace with Django's EmailMessage
-    print(
-        f"[Guest Notification] To: {guest_email} | "
-        f"Report ID: {guest_report_id} | "
-        f"Tracking Code: {tracking_code}"
-    )
 
-    # Example real email (uncomment when ready):
-    # from django.core.mail import send_mail
-    # send_mail(
-    #     subject=f"Guest Report #{guest_report_id} Created",
-    #     message=f"Your report has been received. Track it with code: {tracking_code}",
-    #     from_email="no-reply@fixit.com",
-    #     recipient_list=[guest_email],
-    # )
 @shared_task
 def check_escalation():
-    # Placeholder task for later implementation
-    print("[Check Escalation] Task called")    
+    """
+    Periodic Celery task to check tickets and escalate if needed.
+    Runs every hour (or as configured in Celery beat).
+    """
+    now = timezone.now()
+    count = 0
+
+    # ✅ Only tickets that are still active (not resolved/closed)
+    open_tickets = Ticket.objects.filter(
+        status__in=[
+            Ticket.Status.CREATED,
+            Ticket.Status.ASSIGNED,
+            Ticket.Status.IN_PROGRESS,
+            Ticket.Status.NEEDS_ASSISTANCE,
+        ]
+    )
+
+    for ticket in open_tickets:
+        changed = ticket.auto_escalate(performed_by=None)  # System escalation
+        if changed:
+            # 🔔 Log escalation (system-triggered)
+            create_audit(
+                AuditLog.Action.TICKET_ESCALATED,
+                performed_by=None,  # None = System
+                details=(
+                    f"Ticket #{ticket.id} escalated automatically "
+                    f"to {ticket.escalation_level} at {now:%Y-%m-%d %H:%M}."
+                ),
+            )
+            count += 1
+
+    return f"[Check Escalation] Completed at {now:%Y-%m-%d %H:%M}, escalated {count} tickets."

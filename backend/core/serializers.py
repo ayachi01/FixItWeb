@@ -2,9 +2,14 @@ from rest_framework import serializers
 from django.contrib.auth import get_user_model, authenticate
 from django.utils import timezone
 from .models import (
-    UserProfile, Invite, Ticket, GuestReport,
-    Notification, Location, TicketImage, PasswordResetCode
-)  
+    UserProfile, Invite, Ticket,
+    Location, TicketImage, PasswordResetCode,
+    StudentProfile, TicketResolution,
+    AuditLog
+)
+
+from .models import TicketAssignment
+
 
 User = get_user_model()  # ✅ Always reference your custom user
 
@@ -14,15 +19,139 @@ class UserSerializer(serializers.ModelSerializer):
     """Basic User serializer for returning user data"""
     class Meta:
         model = User
-        fields = ['id', 'email']  # 👈 no "username" since you use email login
+        fields = ['id', 'email', 'first_name', 'last_name']  # include names
+
+
+class StudentProfileSerializer(serializers.ModelSerializer):
+    """Nested student profile serializer"""
+    class Meta:
+        model = StudentProfile
+        fields = [
+            'id', 'full_name', 'student_number',
+            'course', 'year_level', 'section', 'contact_number'
+        ]
 
 
 class UserProfileSerializer(serializers.ModelSerializer):
     user = UserSerializer(read_only=True)
+    student_profile = StudentProfileSerializer(read_only=True)
+    features = serializers.SerializerMethodField()
+    allowed_categories = serializers.SerializerMethodField()
 
     class Meta:
         model = UserProfile
-        fields = ['user', 'role', 'is_email_verified', 'email_domain']
+        fields = [
+            'user', 'role', 'is_email_verified', 'email_domain',
+            'features', 'allowed_categories', 'student_profile'
+        ]
+
+    def get_features(self, obj):
+        """Build features dynamically from role flags"""
+        features = []
+
+        # ✅ Everyone can report
+        if obj.can_report:
+            features.extend(["canReport", "myReports"])
+
+        # ✅ Fixer roles
+        if obj.can_fix:
+            features.extend([
+                "assignedTickets",
+                "uploadProof",
+                "updateStatus",
+                "workHistory",
+            ])
+
+        # ✅ Assignment capability
+        if obj.can_assign:
+            features.extend([
+                "overview",
+                "assignTickets",
+                "reviewProof",
+                "escalate",
+            ])
+
+        # ✅ User management
+        if obj.can_manage_users:
+            features.append("manageUsers")
+
+        # ✅ Admin-level actions
+        if obj.is_admin_level:
+            features.extend([
+                "reportsView",
+                "escalate",
+                "closeTickets",
+            ])
+
+        # ✅ Super / University admins
+        if obj.role and obj.role.lower() in ["super admin", "university admin"]:
+            features.extend([
+                "systemSettings",
+                "aiReports",
+            ])
+
+        # Remove duplicates while keeping order
+        return list(dict.fromkeys(features))
+
+    def get_allowed_categories(self, obj):
+        return obj.allowed_categories()
+
+
+# -------------------- Student Registration --------------------
+class StudentRegisterSerializer(serializers.ModelSerializer):
+    """Serializer for student self-service registration"""
+    confirm_password = serializers.CharField(write_only=True)
+
+    class Meta:
+        model = User
+        fields = ["first_name", "last_name", "email", "password", "confirm_password"]
+        extra_kwargs = {"password": {"write_only": True}}
+
+    def validate(self, attrs):
+        if attrs["password"] != attrs["confirm_password"]:
+            raise serializers.ValidationError({"password": "Passwords do not match."})
+
+        # ✅ Restrict to university emails only
+        if not attrs["email"].endswith(".edu") and "university" not in attrs["email"]:
+            raise serializers.ValidationError({"email": "Must use a valid university email."})
+        return attrs
+
+    def create(self, validated_data):
+        validated_data.pop("confirm_password")
+        user = User.objects.create_user(
+            email=validated_data["email"],
+            password=validated_data["password"],
+            first_name=validated_data["first_name"],
+            last_name=validated_data["last_name"],
+        )
+        UserProfile.objects.filter(user=user).update(
+            role=UserProfile.Role.STUDENT,
+            is_email_verified=False  # will be verified later
+        )
+        return user
+
+
+# -------------------- Staff Registration (via invite/admin) --------------------
+class StaffCreateSerializer(serializers.ModelSerializer):
+    """Serializer for registrar/HR creating staff/faculty accounts"""
+    class Meta:
+        model = User
+        fields = ["first_name", "last_name", "email"]
+
+    def create(self, validated_data):
+        user = User.objects.create_user(
+            email=validated_data["email"],
+            password=None,  # no password yet, will be set on invite acceptance
+            first_name=validated_data.get("first_name", ""),
+            last_name=validated_data.get("last_name", ""),
+            is_active=False,
+        )
+        UserProfile.objects.filter(user=user).update(
+            role=UserProfile.Role.STAFF,
+            is_email_verified=False
+        )
+        # TODO: send invite email with password setup link
+        return user
 
 
 # -------------------- Invites --------------------
@@ -107,14 +236,9 @@ class InviteAcceptSerializer(serializers.ModelSerializer):
             email=email,
             defaults={"is_active": True}
         )
-        if created:
-            user.set_password(password)
-            user.save()
-        else:
-            # If user already exists, just update password
-            user.set_password(password)
-            user.is_active = True
-            user.save()
+        user.set_password(password)
+        user.is_active = True
+        user.save()
 
         # ✅ Fix: avoid duplicate profile
         profile, created = UserProfile.objects.get_or_create(
@@ -130,7 +254,6 @@ class InviteAcceptSerializer(serializers.ModelSerializer):
         instance.is_used = True
         instance.save()
 
-        # ⚡ Return the user instead of invite → so we can audit with correct `performed_by`
         return user
 
 
@@ -152,28 +275,6 @@ class TicketSerializer(serializers.ModelSerializer):
                 uploaded_by=request.user
             )
         return ticket
-
-
-# -------------------- Guest Reports --------------------
-class GuestReportSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = GuestReport
-        fields = '__all__'
-        read_only_fields = ['id', 'tracking_code', 'status', 'created_at', 'updated_at']
-
-    def create(self, validated_data):
-        # ✅ Attach uploaded image if present
-        request = self.context.get("request")
-        if request and "image" in request.FILES:
-            validated_data["image"] = request.FILES["image"]
-        return GuestReport.objects.create(**validated_data)
-
-
-# -------------------- Notifications --------------------
-class NotificationSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Notification
-        fields = ['id', 'user', 'guest_email', 'message', 'is_read', 'created_at']
 
 
 # -------------------- Locations --------------------
@@ -241,7 +342,8 @@ class PasswordResetRequestSerializer(serializers.Serializer):
 
     def create(self, validated_data):
         user = self.context["user"]
-        return PasswordResetCode.objects.create(user=user)
+        # ✅ Use manager to ensure only 1 active reset code
+        return PasswordResetCode.objects.create_for_user(user)
 
 
 class PasswordResetConfirmSerializer(serializers.Serializer):
@@ -283,3 +385,30 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
 
         reset_code.mark_used()
         return user
+
+
+# -------------------- Ticket Images --------------------
+class TicketImageSerializer(serializers.ModelSerializer):
+    uploaded_by = UserSerializer(read_only=True)
+
+    class Meta:
+        model = TicketImage
+        fields = ['id', 'ticket', 'image_url', 'uploaded_by', 'uploaded_at']
+
+
+# -------------------- Ticket Resolution --------------------
+class TicketResolutionSerializer(serializers.ModelSerializer):
+    resolved_by = UserSerializer(read_only=True)
+
+    class Meta:
+        model = TicketResolution
+        fields = ['id', 'ticket', 'resolution_note', 'proof_image', 'resolved_by', 'resolved_at']
+
+
+# -------------------- Audit Log --------------------
+class AuditLogSerializer(serializers.ModelSerializer):
+    performed_by = UserSerializer(read_only=True)
+
+    class Meta:
+        model = AuditLog
+        fields = ['id', 'action', 'performed_by', 'timestamp', 'details']

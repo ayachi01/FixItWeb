@@ -6,9 +6,7 @@ from .views import (
     LocationViewSet,
     UserViewSet,
     TicketViewSet,
-    GuestReportViewSet,
-    NotificationViewSet,
-    UserProfileView,
+    UserProfileView,          # ✅ now returns both profile + features
     EmailLoginView,
     CookieTokenRefreshView,   # ✅ custom refresh
     LogoutView,               # ✅ logout endpoint
@@ -18,8 +16,7 @@ from .views import (
 router = DefaultRouter()
 router.register(r'users', UserViewSet, basename='user')
 router.register(r'tickets', TicketViewSet, basename='ticket')
-router.register(r'guest_reports', GuestReportViewSet, basename='guest_report')
-router.register(r'notifications', NotificationViewSet, basename='notification')
+# router.register(r'notifications', NotificationViewSet, basename='notification')
 router.register(r'locations', LocationViewSet, basename='location')
 
 # 🔹 URL patterns
@@ -31,7 +28,7 @@ urlpatterns = [
     path("token/", EmailLoginView.as_view(), name="token_obtain_pair"),
     path("token/refresh/", CookieTokenRefreshView.as_view(), name="token_refresh"),
 
-    # ✅ User profile
+    # ✅ User profile (merged with features)
     path("profile/", UserProfileView.as_view(), name="user_profile"),
 
     # ✅ Logout
