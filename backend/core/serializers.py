@@ -27,8 +27,8 @@ class StudentProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = StudentProfile
         fields = [
-            'id', 'full_name', 'student_number',
-            'course', 'year_level', 'section', 'contact_number'
+            'id', 'full_name', 'student_id',
+            'course', 'year_level',
         ]
 
 
@@ -133,25 +133,44 @@ class StudentRegisterSerializer(serializers.ModelSerializer):
 
 # -------------------- Staff Registration (via invite/admin) --------------------
 class StaffCreateSerializer(serializers.ModelSerializer):
-    """Serializer for registrar/HR creating staff/faculty accounts"""
+    """
+    Serializer for registrar/HR creating staff/faculty accounts.
+    Lets the creator specify which staff role (e.g., Faculty, Admin Staff, Janitorial Staff).
+    """
+    role = serializers.ChoiceField(choices=UserProfile.Role.choices)
+
     class Meta:
         model = User
-        fields = ["first_name", "last_name", "email"]
+        fields = ["first_name", "last_name", "email", "role"]
 
     def create(self, validated_data):
+        role = validated_data.pop("role")
+
+        # Create the user (no password yet — will be set when invite is accepted)
         user = User.objects.create_user(
             email=validated_data["email"],
-            password=None,  # no password yet, will be set on invite acceptance
+            password=None,
             first_name=validated_data.get("first_name", ""),
             last_name=validated_data.get("last_name", ""),
-            is_active=False,
+            is_active=False,  # inactive until invite accepted
         )
-        UserProfile.objects.filter(user=user).update(
-            role=UserProfile.Role.STAFF,
-            is_email_verified=False
+
+        # Ensure a matching UserProfile exists and assign chosen role
+        profile, created = UserProfile.objects.get_or_create(
+            user=user,
+            defaults={
+                "role": role,
+                "is_email_verified": False
+            }
         )
+        if not created:
+            profile.role = role
+            profile.is_email_verified = False
+            profile.save()
+
         # TODO: send invite email with password setup link
         return user
+
 
 
 # -------------------- Invites --------------------
@@ -159,16 +178,18 @@ class InviteSerializer(serializers.ModelSerializer):
     """Read serializer for returning invite details"""
     status = serializers.SerializerMethodField()
     approved_by = serializers.SerializerMethodField()
+    role = serializers.CharField(source="get_role_display", read_only=True)  # ✅ human-readable role
 
     class Meta:
         model = Invite
         fields = [
-            'email', 'role', 'token',
-            'created_at', 'expires_at',
-            'is_used', 'requires_admin_approval',
-            'is_approved', 'approved_by', 'approved_at',
-            'status'
+            "email", "role", "token",
+            "created_at", "expires_at",
+            "is_used", "requires_admin_approval",
+            "is_approved", "approved_by", "approved_at",
+            "status"
         ]
+        read_only_fields = fields  # ✅ make all read-only for safety
 
     def get_status(self, obj):
         if obj.is_used:
@@ -185,11 +206,40 @@ class InviteSerializer(serializers.ModelSerializer):
         return obj.approved_by.email if obj.approved_by else None
 
 
+
+
+from datetime import timedelta
+
 class InviteCreateSerializer(serializers.ModelSerializer):
     """Serializer for creating invites (input only)"""
+    role = serializers.ChoiceField(choices=UserProfile.Role.choices)
+
     class Meta:
         model = Invite
-        fields = ['email', 'role']
+        fields = ["email", "role"]
+
+    def validate_email(self, value):
+        """Ensure the email is unique for unused/active invites"""
+        email = value.lower().strip()
+        if Invite.objects.filter(email=email, is_used=False, expires_at__gt=timezone.now()).exists():
+            raise serializers.ValidationError("An active invite has already been sent to this email.")
+        if User.objects.filter(email=email).exists():
+            raise serializers.ValidationError("A user with this email already exists.")
+        return email
+
+    def create(self, validated_data):
+        """Create the invite with normalized email and expiry date"""
+        validated_data["email"] = validated_data["email"].lower().strip()
+
+        # ✅ Auto-set expiry (7 days from now if not provided by model defaults)
+        if not validated_data.get("expires_at"):
+            validated_data["expires_at"] = timezone.now() + timedelta(days=7)
+
+        invite = Invite.objects.create(**validated_data)
+        # TODO: send invite email with token link
+        return invite
+
+
 
 
 class InviteApproveSerializer(serializers.ModelSerializer):
@@ -293,6 +343,9 @@ class EmailTokenObtainPairSerializer(TokenObtainPairSerializer):
     email = serializers.EmailField(write_only=True)
     password = serializers.CharField(write_only=True)
 
+    # ✅ tell JWT to use email instead of username
+    username_field = User.EMAIL_FIELD if hasattr(User, "EMAIL_FIELD") else "email"
+
     def validate(self, attrs):
         email = attrs.get("email")
         password = attrs.get("password")
@@ -305,14 +358,24 @@ class EmailTokenObtainPairSerializer(TokenObtainPairSerializer):
         except User.DoesNotExist:
             raise serializers.ValidationError("Invalid email or password")
 
-        user = authenticate(email=user.email, password=password)
+        # ✅ authenticate with email
+        user = authenticate(
+            request=self.context.get("request"),
+            username=user.email,  # Django expects "username", even if USERNAME_FIELD=email
+            password=password,
+        )
         if not user:
             raise serializers.ValidationError("Invalid email or password")
         if not user.is_active:
             raise serializers.ValidationError("Account is inactive. Verify email first.")
 
-        # ⚡ Call parent validate with correct credentials
-        data = super().validate({"email": user.email, "password": password})
+        # ⚡ parent validate (use proper username_field)
+        data = super().validate({
+            self.username_field: getattr(user, self.username_field),
+            "password": password,
+        })
+
+        # add extra fields to response
         data["email"] = user.email
         if hasattr(user, "profile"):
             data["role"] = user.profile.role
@@ -325,6 +388,8 @@ class EmailTokenObtainPairSerializer(TokenObtainPairSerializer):
         if hasattr(user, "profile"):
             token["role"] = user.profile.role
         return token
+
+
 
 
 # -------------------- Password Reset --------------------
@@ -402,7 +467,37 @@ class TicketResolutionSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = TicketResolution
-        fields = ['id', 'ticket', 'resolution_note', 'proof_image', 'resolved_by', 'resolved_at']
+        fields = [
+            "id",
+            "ticket",
+            "resolution_note",
+            "proof_image",
+            "resolved_by",
+            "resolved_at",
+        ]
+
+    def validate(self, attrs):
+        """
+        Enforce proof image if the resolver's role requires it.
+        """
+        request = self.context.get("request")
+        if request and hasattr(request.user, "profile"):
+            profile = request.user.profile
+            if getattr(profile, "requires_proof", False) and not attrs.get("proof_image"):
+                raise serializers.ValidationError({
+                    "proof_image": "This role requires uploading proof when resolving a ticket."
+                })
+        return attrs
+
+    def create(self, validated_data):
+        """
+        Automatically set the resolver as the logged-in user.
+        """
+        request = self.context.get("request")
+        if request and request.user.is_authenticated:
+            validated_data["resolved_by"] = request.user
+        return super().create(validated_data)
+
 
 
 # -------------------- Audit Log --------------------
