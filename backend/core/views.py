@@ -1,64 +1,81 @@
-from rest_framework import viewsets, permissions, status
+# ==================== Imports ====================
+from django.conf import settings
+from django.utils import timezone
+from django.contrib.auth import get_user_model
+
+from rest_framework import viewsets, status
 from rest_framework.response import Response
 from rest_framework.decorators import action
-from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 
-from django.utils import timezone
-from django.contrib.auth import get_user_model
-from django.conf import settings
-
-# ✅ Always use custom user model
-User = get_user_model()
-
 # -------------------- Models --------------------
-from .models import (
-    UserProfile, Invite, Location, Ticket,
-    GuestReport, TicketActionLog, Notification, PasswordResetCode
-)
+from core.models import Ticket, AuditLog, UserProfile, Invite, Location, PasswordResetCode
 
 # -------------------- Serializers --------------------
-from .serializers import (
+from core.serializers import (
     UserProfileSerializer, InviteSerializer, TicketSerializer,
-    GuestReportSerializer, NotificationSerializer,
     EmailTokenObtainPairSerializer, LocationSerializer,
-    InviteAcceptSerializer, InviteApproveSerializer
+    InviteAcceptSerializer, InviteApproveSerializer,
+    TicketResolutionSerializer
 )
 
 # -------------------- Tasks --------------------
-from .tasks import send_guest_notification, check_escalation
+from core.tasks import check_escalation
 
 # -------------------- Throttles --------------------
-from .throttles import OTPThrottle, PasswordResetThrottle
+from core.throttles import OTPThrottle, PasswordResetThrottle
 
 # -------------------- Helpers --------------------
-from .utils.audit import create_audit
-from .utils.email_utils import deliver_code
-from .utils.security import generate_otp
+from core.utils.audit import create_audit
+from core.utils.email_utils import deliver_code
+from core.utils.security import generate_otp
+
+from core.models import TicketAssignment
+
+
+# ✅ Always reference the active User model
+User = get_user_model()
 
 
 
+# ==================================================
+#                  User Management
+# ==================================================
 class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all()
     serializer_class = UserProfileSerializer
-    permission_classes = [AllowAny]   # ✅ Default open for registration/login
+    permission_classes = [AllowAny]  # ✅ Allow registration/login
 
-    # ==================================================
-    # ---- Self-service Registration (Students only) ----
-    # ==================================================
+    # ---------- Self-service Registration (Students Only) ----------
     @action(detail=False, methods=['post'], permission_classes=[AllowAny], throttle_classes=[OTPThrottle])
     def register_self_service(self, request):
+        first_name = request.data.get('first_name')
+        last_name = request.data.get('last_name')
         email = request.data.get('email')
         password = request.data.get('password')
-        if not email or not password:
-            return Response({'error': 'Email and password required'}, status=status.HTTP_400_BAD_REQUEST)
+        confirm_password = request.data.get('confirm_password')
+        course = request.data.get('course')
+        year_level = request.data.get('year_level')
+        student_id = request.data.get('student_id')
 
-        # ✅ Restrict only to student email domains
+        # ✅ Require all fields
+        if not all([first_name, last_name, email, password, confirm_password, course, year_level, student_id]):
+            return Response(
+                {'error': 'All fields are required (first_name, last_name, email, password, confirm_password, course, year_level, student_id)'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # ✅ Password confirmation
+        if password != confirm_password:
+            return Response({'error': 'Passwords do not match'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # ✅ Restrict only to student domains
         domain = email.split('@')[-1]
-        valid_domains = ['student.university.edu']
+        valid_domains = ['student.university.edu']  # adjust for your university
         if domain not in valid_domains:
             return Response({'error': 'Use your official student email'}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -66,10 +83,29 @@ class UserViewSet(viewsets.ModelViewSet):
             return Response({'error': 'Email already registered'}, status=status.HTTP_400_BAD_REQUEST)
 
         # Create inactive user until OTP verified
-        user = User.objects.create_user(email=email, password=password, is_active=False)
-        UserProfile.objects.get_or_create(user=user, defaults={"role": "Student", "is_email_verified": False})
+        user = User.objects.create_user(
+            email=email,
+            password=password,
+            is_active=False,
+            first_name=first_name,
+            last_name=last_name
+        )
+        profile, _ = UserProfile.objects.get_or_create(
+            user=user,
+            defaults={"role": "Student", "is_email_verified": False}
+        )
 
-        # ✅ Generate & store OTP
+        # ✅ Create StudentProfile
+        from core.models import StudentProfile
+        StudentProfile.objects.create(
+            profile=profile,
+            full_name=f"{first_name} {last_name}",
+            course=course,
+            year_level=year_level,
+            student_id=student_id
+        )
+
+        # ✅ Generate & send OTP
         otp_code = generate_otp()
         user.set_otp(otp_code)
         user.save()
@@ -80,6 +116,7 @@ class UserViewSet(viewsets.ModelViewSet):
 
         return Response({'message': 'User created. OTP sent.'}, status=status.HTTP_201_CREATED)
 
+    # ---------- Verify OTP ----------
     @action(detail=False, methods=['post'], permission_classes=[AllowAny], throttle_classes=[OTPThrottle])
     def verify_otp(self, request):
         email = request.data.get('email')
@@ -92,7 +129,7 @@ class UserViewSet(viewsets.ModelViewSet):
         except User.DoesNotExist:
             return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
 
-        # ✅ Check OTP validity (5 min expiry)
+        # ✅ OTP expiry check (5 minutes)
         if not user.otp_created_at or timezone.now() > user.otp_created_at + timezone.timedelta(minutes=5):
             user.clear_otp()
             user.save()
@@ -103,7 +140,7 @@ class UserViewSet(viewsets.ModelViewSet):
             create_audit("OTP Failed", None, user, details=f"Invalid OTP attempt for {email}")
             return Response({'error': 'Invalid OTP'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # ✅ Success → activate user
+        # ✅ Activate user
         user.is_active = True
         user.clear_otp()
         user.save()
@@ -115,6 +152,7 @@ class UserViewSet(viewsets.ModelViewSet):
         create_audit("OTP Verified", user, user, details=f"OTP verified, account activated for {email}")
         return Response({'message': 'Email verified, account activated. You can now log in.'})
 
+    # ---------- Resend OTP ----------
     @action(detail=False, methods=['post'], permission_classes=[AllowAny], throttle_classes=[OTPThrottle])
     def resend_otp(self, request):
         email = request.data.get('email')
@@ -138,9 +176,7 @@ class UserViewSet(viewsets.ModelViewSet):
 
         return Response({'message': 'New OTP resent successfully'}, status=status.HTTP_200_OK)
 
-    # ==================================================
-    # ---- Invite Flow (Controlled Staff Registration) ----
-    # ==================================================
+    # ---------- Invite Flow (Staff Registration) ----------
     @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])
     def create_invite(self, request):
         if not request.user.profile.can_manage_users:
@@ -149,12 +185,12 @@ class UserViewSet(viewsets.ModelViewSet):
         email = request.data.get('email')
         role = request.data.get('role')
 
-        # ✅ Only allow staff-type roles
-        valid_roles = [r[0] for r in UserProfile.ROLE_CHOICES if r[0] not in ['Student', 'Faculty', 'Visitor']]
+        # ✅ Allow only staff-type roles (exclude students, faculty registering themselves)
+        valid_roles = [r[0] for r in UserProfile.ROLE_CHOICES if r[0] not in ['Student']]
         if role not in valid_roles:
             return Response({'error': 'Invalid role'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # ✅ Prevent duplicate active invites
+        # ✅ Prevent duplicate invites
         existing = Invite.objects.filter(email=email, is_used=False).first()
         if existing:
             if existing.expires_at < timezone.now():
@@ -174,7 +210,7 @@ class UserViewSet(viewsets.ModelViewSet):
             'requires_admin_approval': invite.requires_admin_approval
         }, status=status.HTTP_201_CREATED)
 
-    # 🔹 Case 1: Accept invite via URL /api/users/{uuid}/accept_invite/
+    # ---------- Accept Invite ----------
     @action(detail=True, methods=['post'], permission_classes=[AllowAny], url_path="accept_invite")
     def accept_invite(self, request, pk=None):
         token = pk
@@ -187,16 +223,14 @@ class UserViewSet(viewsets.ModelViewSet):
         except Invite.DoesNotExist:
             return Response({'error': 'Invalid token'}, status=status.HTTP_404_NOT_FOUND)
 
-        serializer = InviteAcceptSerializer(
-            invite, data={'password': password}, context={'request': request}, partial=True
-        )
+        serializer = InviteAcceptSerializer(invite, data={'password': password}, context={'request': request}, partial=True)
         serializer.is_valid(raise_exception=True)
-        user = serializer.save()  # ⚡ Now returns a User
+        user = serializer.save()
 
         create_audit("Invite Accepted", user, target_invite=invite, details=f"Invite accepted for {invite.email}")
         return Response({'message': 'Account created successfully'}, status=status.HTTP_201_CREATED)
 
-    # 🔹 Case 2: Accept invite via body /api/users/accept_invite/ { "token": "...", "password": "..." }
+    # ---------- Accept Invite (via body) ----------
     @action(detail=False, methods=['post'], permission_classes=[AllowAny], url_path="accept_invite")
     def accept_invite_with_token(self, request):
         token = request.data.get('token')
@@ -209,15 +243,14 @@ class UserViewSet(viewsets.ModelViewSet):
         except Invite.DoesNotExist:
             return Response({'error': 'Invalid token'}, status=status.HTTP_404_NOT_FOUND)
 
-        serializer = InviteAcceptSerializer(
-            invite, data={'password': password}, context={'request': request}, partial=True
-        )
+        serializer = InviteAcceptSerializer(invite, data={'password': password}, context={'request': request}, partial=True)
         serializer.is_valid(raise_exception=True)
-        user = serializer.save()  # ⚡ Now returns a User
+        user = serializer.save()
 
         create_audit("Invite Accepted", user, target_invite=invite, details=f"Invite accepted for {invite.email}")
         return Response({'message': 'Account created successfully'}, status=status.HTTP_201_CREATED)
 
+    # ---------- Approve Invite ----------
     @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])
     def approve_invite(self, request):
         if request.user.profile.role != 'University Admin':
@@ -232,18 +265,14 @@ class UserViewSet(viewsets.ModelViewSet):
         except Invite.DoesNotExist:
             return Response({'error': 'Invalid or already processed invite'}, status=status.HTTP_404_NOT_FOUND)
 
-        serializer = InviteApproveSerializer(
-            invite, data={'is_approved': True}, partial=True, context={'request': request}
-        )
+        serializer = InviteApproveSerializer(invite, data={'is_approved': True}, partial=True, context={'request': request})
         serializer.is_valid(raise_exception=True)
         serializer.save()
 
         create_audit("Invite Approved", request.user, target_invite=invite, details=f"Invite approved for {invite.email}")
         return Response({'message': 'Invite approved. User may now accept the invite.'}, status=status.HTTP_200_OK)
 
-    # ==================================================
-    # ---- Password Reset ----
-    # ==================================================
+    # ---------- Password Reset (Request) ----------
     @action(detail=False, methods=['post'], permission_classes=[AllowAny], throttle_classes=[PasswordResetThrottle])
     def reset_password_request(self, request):
         email = request.data.get("email")
@@ -255,12 +284,16 @@ class UserViewSet(viewsets.ModelViewSet):
         except User.DoesNotExist:
             return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
 
+        # ✅ Invalidate old codes
+        PasswordResetCode.objects.filter(user=user, is_used=False).update(is_used=True)
+
         reset_code = PasswordResetCode.objects.create(user=user)
         deliver_code(email, "Password Reset Code", f"Your reset code is {reset_code.code}", "Reset Code")
         create_audit("Password Reset Requested", None, user, details=f"Password reset code for {user.email}")
 
         return Response({"message": "Password reset code sent"}, status=status.HTTP_200_OK)
 
+    # ---------- Password Reset (Confirm) ----------
     @action(detail=False, methods=['post'], permission_classes=[AllowAny], throttle_classes=[PasswordResetThrottle])
     def reset_password_confirm(self, request):
         email = request.data.get("email")
@@ -290,15 +323,20 @@ class UserViewSet(viewsets.ModelViewSet):
         create_audit("Password Reset Confirmed", user, user, details=f"Password reset successful for {user.email}")
         return Response({"message": "Password has been reset successfully"}, status=status.HTTP_200_OK)
 
-# -------------------- TicketViewSet --------------------
+# ==================================================
+#                  Ticket Management
+# ==================================================
+
+
 class TicketViewSet(viewsets.ModelViewSet):
     queryset = Ticket.objects.all()
     serializer_class = TicketSerializer
     permission_classes = [IsAuthenticated]
 
+    # -------------------- Create / Report --------------------
     @action(detail=False, methods=['post'])
     def report_issue(self, request):
-        if not request.user.profile.can_report():
+        if not request.user.profile.can_report:
             return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
 
         data = request.data.copy()
@@ -306,14 +344,20 @@ class TicketViewSet(viewsets.ModelViewSet):
         serializer = TicketSerializer(data=data, context={'request': request})
         if serializer.is_valid():
             ticket = serializer.save()
-            TicketActionLog.objects.create(ticket=ticket, action='Created', performed_by=request.user)
+            create_audit(
+                AuditLog.Action.TICKET_CREATED,
+                performed_by=request.user,
+                details=f"Ticket {ticket.id} created"
+            )
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+    # -------------------- Assign --------------------
     @action(detail=True, methods=['post'])
     def assign(self, request, pk=None):
         ticket = self.get_object()
-        if not request.user.profile.can_assign():
+
+        if not request.user.profile.can_assign:
             return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
 
         assignee_id = request.data.get('assignee_id')
@@ -322,89 +366,207 @@ class TicketViewSet(viewsets.ModelViewSet):
         except User.DoesNotExist:
             return Response({'error': 'Invalid assignee'}, status=status.HTTP_400_BAD_REQUEST)
 
-        if not assignee.profile.can_fix() or ticket.category not in assignee.profile.allowed_categories():
+        if not assignee.profile.can_fix or ticket.category not in assignee.profile.allowed_categories():
             return Response({'error': 'User cannot be assigned this ticket'}, status=status.HTTP_400_BAD_REQUEST)
 
-        ticket.assigned_to = assignee
+        # ✅ Create assignment record
+        assignment = TicketAssignment.objects.create(ticket=ticket, user=assignee)
+
         ticket.status = "Assigned"
         ticket.save()
 
-        TicketActionLog.objects.create(ticket=ticket, action='Assigned', performed_by=request.user)
-        return Response({'message': f'Ticket assigned to {assignee.email}'})
+        create_audit(
+            AuditLog.Action.TICKET_ASSIGNED,
+            performed_by=request.user,
+            target_user=assignee,
+            details=f"Ticket {ticket.id} assigned to {assignee.email}"
+        )
 
+        return Response({'message': f'Ticket {ticket.id} assigned to {assignee.email}'})
 
-# -------------------- GuestReportViewSet --------------------
-class GuestReportViewSet(viewsets.ModelViewSet):
-    queryset = GuestReport.objects.all()
-    serializer_class = GuestReportSerializer
-    permission_classes = [AllowAny]
+    # -------------------- Close --------------------
+    @action(detail=True, methods=['post'])
+    def close(self, request, pk=None):
+        ticket = self.get_object()
 
-    @action(detail=False, methods=['post'])
-    def report_issue(self, request):
-        serializer = self.get_serializer(data=request.data, context={'request': request})
+        if not request.user.profile.can_close_tickets:
+            return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
+
+        if ticket.status == "Closed":
+            return Response({'error': 'Ticket already closed'}, status=status.HTTP_400_BAD_REQUEST)
+
+        ticket.status = "Closed"
+        ticket.save()
+
+        create_audit(
+            AuditLog.Action.TICKET_CLOSED,
+            performed_by=request.user,
+            details=f"Ticket {ticket.id} closed"
+        )
+
+        return Response({'message': f'Ticket {ticket.id} has been closed successfully'})
+
+    # -------------------- Resolve --------------------
+    @action(detail=True, methods=['post'])
+    def resolve(self, request, pk=None):
+        ticket = self.get_object()
+
+        if not request.user.profile.can_fix:
+            return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
+
+        serializer = TicketResolutionSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
-            report = serializer.save()
-            TicketActionLog.objects.create(guest_report=report, action="Created", performed_by=None)
-            send_guest_notification.delay(report.guest_email, report.id, report.tracking_code)
-            return Response({"message": "Guest report created", "tracking_code": str(report.tracking_code)}, status=status.HTTP_201_CREATED)
+            resolution = serializer.save(ticket=ticket, resolved_by=request.user)
+            ticket.status = "Resolved"
+            ticket.save()
+
+            create_audit(
+                AuditLog.Action.TICKET_RESOLVED,
+                performed_by=request.user,
+                details=f"Ticket {ticket.id} resolved"
+            )
+
+            return Response(TicketResolutionSerializer(resolution).data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    @action(detail=False, methods=['get'], url_path='track/(?P<tracking_code>[^/.]+)')
-    def track(self, request, tracking_code=None):
-        try:
-            report = GuestReport.objects.get(tracking_code=tracking_code)
-            serializer = self.get_serializer(report)
-            return Response(serializer.data, status=status.HTTP_200_OK)
-        except GuestReport.DoesNotExist:
-            return Response({"error": "Invalid tracking code"}, status=status.HTTP_404_NOT_FOUND)
+    # -------------------- Reopen --------------------
+    @action(detail=True, methods=['post'])
+    def reopen(self, request, pk=None):
+        ticket = self.get_object()
+
+        if ticket.status != "Closed":
+            return Response({'error': 'Only closed tickets can be reopened'}, status=status.HTTP_400_BAD_REQUEST)
+
+        ticket.status = "Reopened"
+        ticket.save()
+
+        create_audit(
+            AuditLog.Action.TICKET_REOPENED,
+            performed_by=request.user,
+            details=f"Ticket {ticket.id} reopened"
+        )
+
+        return Response({'message': f'Ticket {ticket.id} has been reopened'})
 
 
-# -------------------- NotificationViewSet --------------------
-class NotificationViewSet(viewsets.ModelViewSet):
-    queryset = Notification.objects.all()
-    serializer_class = NotificationSerializer
-    permission_classes = [IsAuthenticated]
 
-    def get_queryset(self):
-        return Notification.objects.filter(user=self.request.user)
-
-
-
-# -------------------- LocationViewSet --------------------
+# ==================================================
+#                  Locations
+# ==================================================
 class LocationViewSet(viewsets.ModelViewSet):
     queryset = Location.objects.all()
     serializer_class = LocationSerializer
     permission_classes = [AllowAny]
 
 
-# -------------------- UserProfileView --------------------
+# ==================================================
+#                  User Profile (Dynamic Features + Student Profile)
+# ==================================================
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
+from .models import UserProfile
+
+
 class UserProfileView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
         profile = UserProfile.objects.get(user=request.user)
+
+        # Build features dynamically from RBAC rules in the model
+        features = []
+
+        # ✅ Everyone can report
+        if profile.can_report:
+            features.append("canReport")
+            features.append("myReports")
+            features.append("notifications")
+
+        # ✅ Fixer roles
+        if profile.can_fix:
+            features.extend([
+                "assignedTickets",
+                "uploadProof",
+                "updateStatus",
+                "workHistory",
+            ])
+
+        # ✅ Assignment capability
+        if profile.can_assign:
+            features.extend([
+                "overview",
+                "assignTickets",
+                "reviewProof",
+                "escalate",
+            ])
+
+        # ✅ User management
+        if profile.can_manage_users:
+            features.append("manageUsers")
+
+        # ✅ Admin-level actions
+        if profile.is_admin_level:
+            features.extend([
+                "reportsView",
+                "escalate",
+                "closeTickets",
+            ])
+
+        # ✅ Super / University admins
+        if profile.role.lower() in ["super admin", "university admin"]:
+            features.extend([
+                "systemSettings",
+                "aiReports",
+            ])
+
+        # Remove duplicates while keeping order
+        features = list(dict.fromkeys(features))
+
+        # ✅ Student profile details (if exists)
+        student_data = None
+        if hasattr(profile, "student_profile"):
+            sp = profile.student_profile
+            student_data = {
+                "full_name": sp.full_name,
+                "course": sp.course,
+                "year_level": sp.year_level,
+                "student_id": sp.student_id,
+            }
+
         return Response({
             "id": request.user.id,
-            "username": getattr(request.user, "username", request.user.email),
             "email": request.user.email,
-            "role": profile.role,
-            "can_report": profile.can_report,
-            "can_fix": profile.can_fix,
-            "can_assign": profile.can_assign,
-            "can_manage_users": profile.can_manage_users,
+            "role": profile.role,  # original case for display
             "is_email_verified": profile.is_email_verified,
+            "features": features,
+            "allowed_categories": profile.allowed_categories(),
+            "student_profile": student_data,
         })
 
 
-# -------------------- Email Login --------------------
+# ==================================================
+#                  Auth
+# ==================================================
+
+
+# Try importing create_audit (safe fallback if missing)
+try:
+    from .utils import create_audit
+except ImportError:
+    def create_audit(*args, **kwargs):
+        # fallback no-op if utils.create_audit is not defined
+        pass
+
+
+
+
+
 class EmailLoginView(TokenObtainPairView):
     serializer_class = EmailTokenObtainPairSerializer
     permission_classes = [AllowAny]
 
     def post(self, request, *args, **kwargs):
-        print("🔥 EmailLoginView called with:", request.data)
-
-        # Run SimpleJWT’s built-in authentication
         response = super().post(request, *args, **kwargs)
 
         if response.status_code == 200:
@@ -415,40 +577,51 @@ class EmailLoginView(TokenObtainPairView):
             if not access or not refresh:
                 return Response(
                     {"error": "Authentication failed"},
-                    status=status.HTTP_401_UNAUTHORIZED,
+                    status=status.HTTP_401_UNAUTHORIZED
                 )
 
-            # ✅ Set refresh token in HttpOnly cookie
             cookie_max_age = int(settings.SIMPLE_JWT["REFRESH_TOKEN_LIFETIME"].total_seconds())
-            secure_flag = not settings.DEBUG  # ✅ True in production (HTTPS), False in dev
+            secure_flag = not settings.DEBUG
 
+            # ✅ Reset response so we can control return payload
             response = Response({"access": access}, status=status.HTTP_200_OK)
             response.set_cookie(
                 key="refresh_token",
                 value=refresh,
                 httponly=True,
                 secure=secure_flag,
-                samesite="Strict",  # ✅ same as LogoutView
+                samesite="Strict",
                 max_age=cookie_max_age,
             )
 
-            # ✅ Ensure UserProfile exists
             email = request.data.get("email")
             try:
                 user = User.objects.get(email=email)
                 profile, created = UserProfile.objects.get_or_create(user=user)
 
                 if created:
+                    # ✅ Default roles if missing
                     if user.is_superuser:
                         profile.role = "University Admin"
                         profile.is_email_verified = True
                     else:
                         profile.role = profile.role or "Student"
                     profile.save()
-                    print(f"✅ UserProfile auto-created for {user.email}")
 
-                # 🔐 Audit: record login event
-                create_audit("Login", performed_by=user, target_user=user, details="User logged in")
+                # ✅ Add serialized profile to response
+                serialized_profile = UserProfileSerializer(profile).data
+                response.data = {
+                    "access": access,
+                    "profile": serialized_profile,
+                }
+
+                # ✅ Audit log
+                create_audit(
+                    "Login",
+                    performed_by=user,
+                    target_user=user,
+                    details="User logged in"
+                )
 
             except User.DoesNotExist:
                 pass
@@ -456,20 +629,24 @@ class EmailLoginView(TokenObtainPairView):
         return response
 
 
-# -------------------- Cookie-based Token Refresh --------------------
-from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
+
+
+
+
 
 class CookieTokenRefreshView(TokenRefreshView):
     permission_classes = [AllowAny]
 
     def post(self, request, *args, **kwargs):
+        # 🔹 Get refresh token from HttpOnly cookie
         refresh = request.COOKIES.get("refresh_token")
         if not refresh:
             return Response(
                 {"error": "No refresh token provided"},
-                status=status.HTTP_401_UNAUTHORIZED
+                status=status.HTTP_401_UNAUTHORIZED,
             )
 
+        # Inject refresh into request data for TokenRefreshView
         data = request.data.copy()
         data["refresh"] = refresh
         request._full_data = data
@@ -479,76 +656,100 @@ class CookieTokenRefreshView(TokenRefreshView):
         except (InvalidToken, TokenError):
             return Response(
                 {"error": "Invalid or expired refresh token"},
-                status=status.HTTP_401_UNAUTHORIZED
+                status=status.HTTP_401_UNAUTHORIZED,
             )
 
+        # 🔹 If refresh successful
         if response.status_code == 200 and "access" in response.data:
-            response.data["message"] = "Access token refreshed successfully"
+            new_access = response.data["access"]
 
-            # ✅ If SimpleJWT issued a new refresh token, re-set cookie
+            # Remove refresh from JSON body (security)
+            if "refresh" in response.data:
+                del response.data["refresh"]
+
+            # Set new refresh cookie if rotation is enabled
             new_refresh = response.data.get("refresh")
             if new_refresh:
-                cookie_max_age = int(settings.SIMPLE_JWT["REFRESH_TOKEN_LIFETIME"].total_seconds())
+                cookie_max_age = int(
+                    settings.SIMPLE_JWT["REFRESH_TOKEN_LIFETIME"].total_seconds()
+                )
                 response.set_cookie(
                     key="refresh_token",
                     value=new_refresh,
                     httponly=True,
-                    secure=not settings.DEBUG,  # ✅ HTTPS in production
+                    secure=not settings.DEBUG,  # only HTTPS in production
                     samesite="Strict",
                     max_age=cookie_max_age,
                 )
 
-            # 🔐 Audit: record refresh event
-            if request.user.is_authenticated:
-                create_audit(
-                    "Token Refreshed",
-                    performed_by=request.user,
-                    target_user=request.user,
-                    details="Access token refreshed"
-                )
+            # ✅ Attach profile info (same as login)
+            try:
+                user = request.user
+                if not user or not user.is_authenticated:
+                    # fallback: get user from refresh token's sub
+                    from rest_framework_simplejwt.tokens import RefreshToken
+                    token = RefreshToken(refresh)
+                    user_id = token["user_id"]
+                    user = User.objects.get(id=user_id)
+
+                profile, _ = UserProfile.objects.get_or_create(user=user)
+                serialized_profile = UserProfileSerializer(profile).data
+
+                response.data = {
+                    "access": new_access,
+                    "profile": serialized_profile,
+                    "message": "Access token refreshed successfully",
+                }
+            except Exception:
+                response.data = {
+                    "access": new_access,
+                    "message": "Access token refreshed successfully (no profile found)",
+                }
 
         return response
 
 
-# -------------------- Logout --------------------
 
 class LogoutView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, *args, **kwargs):
+        user = request.user
+        refresh_token = request.COOKIES.get("refresh_token")
+
+        if refresh_token:
+            try:
+                # ✅ Blacklist the refresh token if app has blacklist app enabled
+                token = RefreshToken(refresh_token)
+                token.blacklist()
+            except Exception:
+                # If blacklist app is not configured, ignore
+                pass
+
+        # ✅ Build responsea
+        response = Response(
+            {"message": "Logged out successfully"},
+            status=status.HTTP_200_OK,
+        )
+
+        # ✅ Delete refresh cookie
+        response.delete_cookie(
+            "refresh_token",
+            httponly=True,
+            secure=not settings.DEBUG,  # HTTPS only in production
+            samesite="Strict" if not settings.DEBUG else "Lax",
+        )
+
+        # ✅ Audit log
         try:
-            user = request.user  # capture before logout
-
-            # 🚨 Blacklist refresh token if token blacklisting is enabled
-            refresh_token = request.COOKIES.get("refresh_token")
-            if refresh_token:
-                try:
-                    token = RefreshToken(refresh_token)
-                    token.blacklist()  # requires SIMPLE_JWT["BLACKLIST_AFTER_ROTATION"] = True
-                except Exception:
-                    # If blacklist app not enabled, just ignore
-                    pass
-
-            # ✅ Clear cookie on client (secure + strict in production)
-            response = Response(
-                {"message": "Logged out successfully"},
-                status=status.HTTP_200_OK
+            create_audit(
+                "Logout",
+                performed_by=user,
+                target_user=user,
+                details="User logged out",
             )
-            response.delete_cookie(
-                "refresh_token",
-                httponly=True,
-                secure=not settings.DEBUG,  # ✅ HTTPS in production
-                samesite="Strict",          # ✅ stronger CSRF protection
-            )
+        except Exception:
+            # Audit logging shouldn’t crash logout
+            pass
 
-            # 🔐 Audit: record logout event
-            create_audit("Logout", performed_by=user, target_user=user, details="User logged out")
-
-            return response
-
-        except Exception as e:
-            return Response(
-                {"error": str(e)},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
+        return response

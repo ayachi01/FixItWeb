@@ -1,230 +1,273 @@
 // src/pages/Dashboard.tsx
-import { useEffect, useMemo, useState } from "react";
-import { getProfileFromStorage, fetchProfileAndSave } from "../utils/auth";
+import { useState, useEffect, lazy, Suspense } from "react";
 import { useAuth } from "../context/AuthContext";
+import { fetchProfileAndSave, type UserProfile } from "../utils/auth";
+import {
+  User,
+  LogOut,
+  Bell,
+  FileText,
+  ClipboardList,
+  Camera,
+  Settings,
+  Users,
+  BarChart2,
+  AlertTriangle,
+  Clock,
+  ClipboardCheck,
+  CheckCircle,
+} from "lucide-react";
+import type { ReactNode, FC } from "react";
 
-import type { UserProfile } from "../utils/auth";
-
-// ✅ Check specific roles first (order matters!)
-function roleCategory(role: string | undefined) {
-  if (!role) return "reporter";
-  const r = role.toLowerCase();
-
-  if (r.includes("university admin")) return "superadmin"; // check first
-  if (["registrar", "hr"].some((x) => r.includes(x))) return "admin";
-  if (r.includes("maintenance officer")) return "officer";
-  if (
-    ["janitorial staff", "utility worker", "it support", "security guard"].some(
-      (x) => r.includes(x)
-    )
-  )
-    return "staff";
-  if (
-    ["student", "faculty", "admin staff", "visitor"].some((x) => r.includes(x))
-  )
-    return "reporter";
-
-  return "reporter";
-}
-
-const FEATURES: Record<
+// ------------------- Feature Registry -------------------
+const FEATURE_REGISTRY: Record<
   string,
   {
-    canReport?: boolean;
-    canViewReports?: boolean;
-    canUploadProof?: boolean;
-    canAssign?: boolean;
-    overview?: boolean;
-    manageUsers?: boolean;
-    systemSettings?: boolean;
-    aiReports?: boolean;
+    component: React.LazyExoticComponent<FC<any>>;
+    label: string;
+    icon: ReactNode;
   }
 > = {
-  reporter: { canReport: true, canViewReports: true },
-  staff: { canViewReports: true, canUploadProof: true },
-  officer: {
-    canReport: true,
-    canViewReports: true,
-    canUploadProof: true,
-    canAssign: true,
-    overview: true,
+  report: {
+    component: lazy(() => import("./features/ReportPage")),
+    label: "Report Issue",
+    icon: <FileText size={18} />,
   },
-  admin: {
-    canViewReports: true,
-    canAssign: true,
-    overview: true,
-    manageUsers: true,
+  myReports: {
+    component: lazy(() => import("./features/MyReportsPage")),
+    label: "My Reports",
+    icon: <ClipboardList size={18} />,
   },
-  superadmin: {
-    canViewReports: true,
-    canAssign: true,
-    overview: true,
-    manageUsers: true,
-    systemSettings: true,
-    aiReports: true,
+  notifications: {
+    component: lazy(() => import("./features/NotificationsPage")),
+    label: "Notifications",
+    icon: <Bell size={18} />,
+  },
+  assigned: {
+    component: lazy(() => import("./features/AssignedPage")),
+    label: "Assigned Tickets",
+    icon: <ClipboardCheck size={18} />,
+  },
+  upload: {
+    component: lazy(() => import("./features/UploadPage")),
+    label: "Upload Proof",
+    icon: <Camera size={18} />,
+  },
+  status: {
+    component: lazy(() => import("./features/StatusPage")),
+    label: "Update Status",
+    icon: <Clock size={18} />,
+  },
+  history: {
+    component: lazy(() => import("./features/HistoryPage")),
+    label: "Work History",
+    icon: <Clock size={18} />,
+  },
+  overview: {
+    component: lazy(() => import("./features/OverviewPage")),
+    label: "Overview",
+    icon: <BarChart2 size={18} />,
+  },
+  assign: {
+    component: lazy(() => import("./features/AssignPage")),
+    label: "Assign Tickets",
+    icon: <ClipboardList size={18} />,
+  },
+  review: {
+    component: lazy(() => import("./features/ReviewPage")),
+    label: "Review Proof",
+    icon: <Camera size={18} />,
+  },
+  escalate: {
+    component: lazy(() => import("./features/EscalatePage")),
+    label: "Escalations",
+    icon: <AlertTriangle size={18} />,
+  },
+  users: {
+    component: lazy(() => import("./features/UsersPage")),
+    label: "User Management",
+    icon: <Users size={18} />,
+  },
+  reports: {
+    component: lazy(() => import("./features/ReportsPage")),
+    label: "Reports",
+    icon: <BarChart2 size={18} />,
+  },
+  settings: {
+    component: lazy(() => import("./features/SettingsPage")),
+    label: "System Settings",
+    icon: <Settings size={18} />,
+  },
+  ai: {
+    component: lazy(() => import("./features/AIReportsPage")),
+    label: "AI Reports",
+    icon: <BarChart2 size={18} />,
+  },
+  close: {
+    component: lazy(() => import("./features/ClosePage")),
+    label: "Close Tickets",
+    icon: <CheckCircle size={18} />,
+  },
+  profile: {
+    component: lazy(() => import("./features/ProfilePage")),
+    label: "Profile",
+    icon: <User size={18} />,
   },
 };
 
-function SmallCard({
-  title,
-  children,
+// ------------------- Sidebar -------------------
+function Sidebar({
+  features,
+  active,
+  setActive,
+  onLogout,
 }: {
-  title: string;
-  children: React.ReactNode;
+  features: string[];
+  active: string;
+  setActive: (v: string) => void;
+  onLogout: () => void;
 }) {
   return (
-    <div className="bg-white p-4 rounded-md shadow-sm border">
-      <h3 className="font-semibold mb-2">{title}</h3>
-      <div>{children}</div>
+    <aside className="bg-white shadow-lg h-screen w-64 p-5 flex flex-col border-r">
+      <h2 className="text-2xl font-bold mb-8 text-blue-600">FixIt Dashboard</h2>
+      <nav className="flex-1 space-y-1 overflow-y-auto custom-scrollbar">
+        {features.map((key) => {
+          const feature = FEATURE_REGISTRY[key];
+          if (!feature) return null;
+          return (
+            <SidebarItem
+              key={key}
+              active={active === key}
+              onClick={() => setActive(key)}
+              icon={feature.icon}
+              label={feature.label}
+            />
+          );
+        })}
+      </nav>
+
+      <div className="mt-auto space-y-2 border-t pt-4">
+        <button
+          onClick={() => setActive("profile")}
+          className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-md hover:bg-blue-50 transition text-gray-700"
+        >
+          <User size={18} /> Profile
+        </button>
+        <button
+          onClick={onLogout}
+          className="flex items-center gap-2 w-full px-3 py-2 text-sm text-red-600 rounded-md hover:bg-red-50 transition"
+        >
+          <LogOut size={18} /> Logout
+        </button>
+      </div>
+    </aside>
+  );
+}
+
+function SidebarItem({
+  active,
+  onClick,
+  icon,
+  label,
+}: {
+  active: boolean;
+  onClick: () => void;
+  icon: ReactNode;
+  label: string;
+}) {
+  return (
+    <div
+      onClick={onClick}
+      className={`flex items-center gap-3 px-3 py-2 text-sm rounded-lg cursor-pointer transition-all ${
+        active
+          ? "bg-blue-100 text-blue-600 font-semibold shadow-sm"
+          : "text-gray-700 hover:bg-gray-100"
+      }`}
+    >
+      {icon}
+      <span>{label}</span>
     </div>
   );
 }
 
-function ProfileModal({
-  profile,
-  onClose,
-}: {
-  profile: UserProfile;
-  onClose: () => void;
-}) {
-  return (
-    <div className="fixed inset-0 flex items-center justify-center bg-black/50 z-50">
-      <div className="bg-white rounded-lg shadow-lg p-6 w-96">
-        <h2 className="text-xl font-bold mb-4">Profile</h2>
-        <ul className="space-y-2 text-sm">
-          <li>
-            <strong>Email:</strong> {profile.email}
-          </li>
-          <li>
-            <strong>Role:</strong> {profile.role}
-          </li>
-          <li>
-            <strong>Email Verified:</strong>{" "}
-            {profile.is_email_verified ? "✅ Yes" : "❌ No"}
-          </li>
-          <li>
-            <strong>Domain:</strong> {profile.email_domain}
-          </li>
-          <li>
-            <strong>Permissions:</strong>
-            <ul className="list-disc list-inside ml-3">
-              {profile.can_report && <li>Report Issues</li>}
-              {profile.can_fix && <li>Fix Issues</li>}
-              {profile.can_assign && <li>Assign Tasks</li>}
-            </ul>
-          </li>
-        </ul>
-        <div className="mt-4 flex justify-end">
-          <button
-            onClick={onClose}
+// ------------------- Dashboard -------------------
+export default function Dashboard() {
+  const [active, setActive] = useState("overview");
+  const { profile, logout, sessionExpired, login } = useAuth();
+
+  // ✅ Auto-fetch profile on mount if missing
+  useEffect(() => {
+    async function loadProfile() {
+      try {
+        if (!profile) {
+          const freshProfile: UserProfile | null = await fetchProfileAndSave();
+          if (freshProfile) {
+            await login(
+              localStorage.getItem("access_token") || "",
+              freshProfile
+            );
+          } else {
+            // 🚪 If no profile returned, logout
+            await logout();
+          }
+        }
+      } catch (err) {
+        console.error("❌ Failed to load profile:", err);
+        await logout(); // 🔑 ensure user is kicked out if invalid session
+      }
+    }
+    loadProfile();
+  }, [profile, login, logout]);
+
+  if (sessionExpired) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-gray-50">
+        <div className="bg-white p-6 rounded shadow-md text-center">
+          <h2 className="text-xl font-semibold mb-2">⚠️ Session Expired</h2>
+          <p className="text-gray-600 mb-4">
+            Your session has expired. Please log in again to continue.
+          </p>
+          <a
+            href="/login"
             className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
           >
-            Close
-          </button>
+            Re-Login
+          </a>
         </div>
       </div>
-    </div>
-  );
-}
-
-export default function Dashboard() {
-  const [profile, setProfile] = useState<UserProfile | null>(() =>
-    getProfileFromStorage()
-  );
-  const [loadingProfile, setLoadingProfile] = useState(!profile);
-  const [showProfile, setShowProfile] = useState(false);
-  const { logout, sessionExpired, setSessionExpired } = useAuth();
-
-  useEffect(() => {
-    let mounted = true;
-    if (!profile) {
-      setLoadingProfile(true);
-      fetchProfileAndSave()
-        .then((p) => {
-          if (mounted) setProfile(p);
-        })
-        .catch((e) => {
-          console.error("Failed to fetch profile:", e);
-          if (mounted) setSessionExpired(true);
-        })
-        .finally(() => {
-          if (mounted) setLoadingProfile(false);
-        });
-    }
-    return () => {
-      mounted = false;
-    };
-  }, [profile, setSessionExpired]);
-
-  const category = useMemo(() => roleCategory(profile?.role), [profile]);
-  const features = FEATURES[category] || FEATURES.reporter;
-
-  if (loadingProfile) {
-    return <div className="p-6">Loading profile...</div>;
+    );
   }
 
-  // ✅ Let PrivateRoute show the Session Expired UI
-  if (sessionExpired) {
-    return null;
-  }
+  if (!profile) return <div className="p-6">Loading profile...</div>;
+
+  const availableFeatures = profile.features.filter((f) => FEATURE_REGISTRY[f]);
+  const ActiveComponent =
+    FEATURE_REGISTRY[active]?.component ||
+    FEATURE_REGISTRY["overview"].component;
 
   return (
-    <div className="p-6 min-h-screen bg-gray-50">
-      <div className="max-w-6xl mx-auto">
-        <header className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-2xl font-bold">Dashboard</h1>
-            <p className="text-sm text-gray-600">
-              Welcome, {profile?.email} • Role: {profile?.role}
-            </p>
-          </div>
-          <div>
-            <button
-              onClick={() => setShowProfile(true)}
-              className="px-3 py-1 border rounded mr-2"
-            >
-              Profile
-            </button>
-            <button
-              onClick={logout}
-              className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700"
-            >
-              Logout
-            </button>
-          </div>
+    <div className="flex bg-gray-50 min-h-screen">
+      <Sidebar
+        features={availableFeatures}
+        active={active}
+        setActive={setActive}
+        onLogout={logout}
+      />
+
+      <main className="flex-1 p-8">
+        <header className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-800">Welcome back 👋</h1>
+          <p className="text-sm text-gray-600 mt-1">
+            {profile.email} • <span className="capitalize">{profile.role}</span>
+          </p>
         </header>
 
-        <section className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {features.canReport && (
-            <SmallCard title="➕ Report Issue">Form / quick link</SmallCard>
-          )}
-          {features.canViewReports && (
-            <SmallCard title="📌 My Reports">List of tickets</SmallCard>
-          )}
-          {features.canUploadProof && (
-            <SmallCard title="📷 Upload Proof">Upload photo/video</SmallCard>
-          )}
-          {features.canAssign && (
-            <SmallCard title="📝 Assign Tickets">Assign tickets</SmallCard>
-          )}
-          {features.overview && (
-            <SmallCard title="📊 Overview">Charts here</SmallCard>
-          )}
-          {features.manageUsers && (
-            <SmallCard title="👥 User Management">Manage accounts</SmallCard>
-          )}
-          {features.systemSettings && (
-            <SmallCard title="⚙️ System Settings">Settings UI</SmallCard>
-          )}
-          {features.aiReports && (
-            <SmallCard title="🤖 AI Reports">Weekly reports</SmallCard>
-          )}
+        <section>
+          <Suspense fallback={<div>Loading section...</div>}>
+            <ActiveComponent />
+          </Suspense>
         </section>
-      </div>
-
-      {showProfile && profile && (
-        <ProfileModal profile={profile} onClose={() => setShowProfile(false)} />
-      )}
+      </main>
     </div>
   );
 }

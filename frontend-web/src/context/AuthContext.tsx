@@ -7,78 +7,82 @@ import {
   saveTokens,
   logoutAndClear,
   refreshAccessToken as refreshHelper,
+  type UserProfile,
 } from "../utils/auth";
 
-interface AuthContextType {
+export interface AuthContextType {
   accessToken: string | null;
-  login: (token: string) => Promise<void>;
+  profile: UserProfile | null;
+  login: (token: string, profile?: UserProfile) => Promise<void>;
   logout: () => Promise<void>;
   refreshAccessToken: () => Promise<void>;
   sessionExpired: boolean;
-  setSessionExpired: (expired: boolean) => void;
+  setSessionExpired: (expired: boolean) => void; // ✅ expose setter
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+export const AuthContext = createContext<AuthContextType | undefined>(
+  undefined
+);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [accessToken, setAccessToken] = useState<string | null>(
-    () => localStorage.getItem(ACCESS_KEY) // ✅ restore from localStorage
+  const [accessToken, setAccessToken] = useState<string | null>(() =>
+    localStorage.getItem(ACCESS_KEY)
   );
+  const [profile, setProfile] = useState<UserProfile | null>(() => {
+    const raw = localStorage.getItem(PROFILE_KEY);
+    return raw ? (JSON.parse(raw) as UserProfile) : null;
+  });
   const [sessionExpired, setSessionExpired] = useState(false);
 
-  // 🔹 Login → save access token (backend sets refresh cookie)
-  const login = async (token: string) => {
+  const login = async (token: string, userProfile?: UserProfile) => {
     setAccessToken(token);
     saveTokens({ access: token });
-    setSessionExpired(false); // reset on login
+    if (userProfile) {
+      setProfile(userProfile);
+      localStorage.setItem(PROFILE_KEY, JSON.stringify(userProfile));
+    }
+    setSessionExpired(false);
   };
 
-  // 🔹 Logout → clear local + server refresh cookie
   const logout = async () => {
     setAccessToken(null);
-    localStorage.removeItem(PROFILE_KEY); // ✅ clear profile explicitly
+    setProfile(null);
+    localStorage.removeItem(PROFILE_KEY);
     await logoutAndClear();
+    setSessionExpired(true);
   };
 
-  // 🔹 Refresh access token using cookie (delegates to utils/auth.ts)
   const refreshAccessToken = async () => {
-    try {
-      const newAccess = await refreshHelper();
-      if (newAccess) {
-        setAccessToken(newAccess);
-        saveTokens({ access: newAccess });
-        setSessionExpired(false);
-      } else {
-        throw new Error("No access token returned");
-      }
-    } catch (err: any) {
-      console.error("Token refresh error", err);
-      setSessionExpired(true); // ✅ mark expired
-      await logout(); // force logout if refresh fails
-      throw err;
+    const newAccess = await refreshHelper();
+    if (newAccess) {
+      setAccessToken(newAccess);
+      saveTokens({ access: newAccess });
+      setSessionExpired(false);
+    } else {
+      await logout();
     }
   };
 
-  // 🔹 Auto-refresh token every 25 minutes (before expiry)
+  // 🔄 Auto-refresh every 25 minutes
   useEffect(() => {
     const interval = setInterval(refreshAccessToken, 25 * 60 * 1000);
     return () => clearInterval(interval);
   }, []);
 
-  // 🔹 Listen for logout/session-expiry across tabs
+  // 🪝 Sync across browser tabs
   useEffect(() => {
-    function handleStorage(event: StorageEvent) {
-      if (
-        event.key === ACCESS_KEY ||
-        event.key === PROFILE_KEY ||
-        event.key === null // clear all storage
-      ) {
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === ACCESS_KEY || e.key === PROFILE_KEY || e.key === null) {
         if (!localStorage.getItem(ACCESS_KEY)) {
           setAccessToken(null);
+          setProfile(null);
           setSessionExpired(true);
+        } else {
+          const raw = localStorage.getItem(PROFILE_KEY);
+          setProfile(raw ? (JSON.parse(raw) as UserProfile) : null);
         }
       }
-    }
+    };
     window.addEventListener("storage", handleStorage);
     return () => window.removeEventListener("storage", handleStorage);
   }, []);
@@ -87,11 +91,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <AuthContext.Provider
       value={{
         accessToken,
+        profile,
         login,
         logout,
         refreshAccessToken,
         sessionExpired,
-        setSessionExpired,
+        setSessionExpired, // ✅ now available
       }}
     >
       {children}
@@ -101,8 +106,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 export function useAuth() {
   const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error("useAuth must be used within AuthProvider");
-  }
+  if (!context) throw new Error("useAuth must be used within AuthProvider");
   return context;
 }

@@ -2,9 +2,8 @@ from django.contrib import admin
 from django.contrib.auth import get_user_model
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from .models import (
-    UserProfile, Invite, Location, Ticket, GuestReport,
-    TicketImage, TicketResolution, TicketActionLog,
-    Notification, AuditLog
+    UserProfile, Invite, Location, Ticket,
+    TicketImage, TicketResolution , AuditLog
 )
 
 # ✅ Always use get_user_model for AUTH_USER_MODEL
@@ -41,12 +40,12 @@ class UserAdmin(BaseUserAdmin):
         # Create profile if not exists
         profile, created = UserProfile.objects.get_or_create(user=obj)
 
-        # 🚨 Mark that this profile was created/edited in Admin (bypass domain logic)
+        # 🚨 Mark that this profile was created/edited in Admin
         profile.created_by_admin = True
 
         # If profile has no role yet, default to Student
         if not profile.role:
-            profile.role = "Student"
+            profile.role = UserProfile.Roles.STUDENT
 
         profile.save()
 
@@ -66,7 +65,7 @@ class UserProfileAdmin(admin.ModelAdmin):
     search_fields = ('user__email', 'role', 'email_domain')
     list_filter = ('role', 'is_email_verified')
 
-    # Computed permission columns (call model @properties)
+    # Computed permission columns
     def get_can_report(self, obj):
         return obj.can_report
     get_can_report.short_description = "Can Report"
@@ -109,35 +108,25 @@ class TicketAdmin(admin.ModelAdmin):
     search_fields = ('description', 'category')
     list_filter = ('status', 'urgency', 'escalation_level')
 
-
-@admin.register(GuestReport)
-class GuestReportAdmin(admin.ModelAdmin):
-    list_display = ('id', 'guest_name', 'guest_email', 'status', 'category', 'urgency', 'escalation_level', 'created_at')
-    search_fields = ('guest_name', 'guest_email', 'description')
+    def assigned_to(self, obj):
+        """Show all assigned users (via TicketAssignment)."""
+        return ", ".join([u.email for u in obj.assignees.all()])
+    assigned_to.short_description = "Assigned To"
 
 
 @admin.register(TicketImage)
 class TicketImageAdmin(admin.ModelAdmin):
-    list_display = ('ticket', 'guest_report', 'timestamp')
-    search_fields = ('ticket__id', 'guest_report__id')
+    list_display = ('ticket', 'timestamp')
+    search_fields = ('ticket__id',)
 
 
 @admin.register(TicketResolution)
 class TicketResolutionAdmin(admin.ModelAdmin):
-    list_display = ('ticket', 'guest_report', 'resolved_by', 'timestamp')
-    search_fields = ('ticket__id', 'guest_report__id')
+    list_display = ('ticket', 'resolved_by', 'timestamp')
+    search_fields = ('ticket__id',)
 
 
-@admin.register(TicketActionLog)
-class TicketActionLogAdmin(admin.ModelAdmin):
-    list_display = ('action', 'ticket', 'guest_report', 'performed_by', 'timestamp')
-    list_filter = ('action',)
 
-
-@admin.register(Notification)
-class NotificationAdmin(admin.ModelAdmin):
-    list_display = ('user', 'guest_email', 'message', 'is_read', 'created_at')
-    search_fields = ('message', 'user__email', 'guest_email')
 
 
 @admin.register(AuditLog)
