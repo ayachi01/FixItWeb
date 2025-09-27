@@ -1,3 +1,4 @@
+// src/store/authStore.ts
 import { create } from "zustand";
 import {
   login as loginApi,
@@ -6,7 +7,7 @@ import {
 } from "../api/auth";
 
 // 🔹 Full User type based on backend UserProfileView response
-interface User {
+export interface User {
   id: number;
   email: string;
   role: string;
@@ -23,7 +24,7 @@ interface User {
 
 interface AuthState {
   user: User | null;
-  access: string | null;
+  access: string | null; // JWT token
   loading: boolean;
   error: string | null;
 

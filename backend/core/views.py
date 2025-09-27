@@ -44,7 +44,6 @@ from core.models import TicketAssignment
 User = get_user_model()
 
 
-
 # ==================================================
 #                  User Management
 # ==================================================
@@ -375,6 +374,11 @@ class UserViewSet(viewsets.ModelViewSet):
 # ==================================================
 
 
+# ==================================================
+#                  Ticket Management
+# ==================================================
+
+
 class TicketViewSet(viewsets.ModelViewSet):
     queryset = Ticket.objects.all()
     serializer_class = TicketSerializer
@@ -386,11 +390,11 @@ class TicketViewSet(viewsets.ModelViewSet):
         if not request.user.profile.can_report:
             return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
 
-        data = request.data.copy()
-        data['reporter'] = request.user.id
-        serializer = TicketSerializer(data=data, context={'request': request})
+        serializer = TicketSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
+            # Reporter is now automatically assigned by the serializer
             ticket = serializer.save()
+
             create_audit(
                 AuditLog.Action.TICKET_CREATED,
                 performed_by=request.user,
@@ -494,6 +498,7 @@ class TicketViewSet(viewsets.ModelViewSet):
         )
 
         return Response({'message': f'Ticket {ticket.id} has been reopened'})
+
 
 
 
