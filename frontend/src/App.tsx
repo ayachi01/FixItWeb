@@ -1,3 +1,4 @@
+// src/App.tsx
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
@@ -6,6 +7,8 @@ import Layout from "./components/Layout";
 import { useAuthStore } from "./store/authStore";
 
 // Pages
+import ReportTicketPage from "./pages/ReportTicketPage";
+
 function StudentDashboard() {
   return <h1>🎓 Student Dashboard (Report Ticket)</h1>;
 }
@@ -24,10 +27,17 @@ function UsersPage() {
 function SettingsPage() {
   return <h1>⚙️ System Settings</h1>;
 }
+function AssignedTicketsOverview() {
+  return <h1>📊 Assigned Tickets Overview</h1>;
+}
+function AssignTicketsPage() {
+  return <h1>🛠️ Assign Tickets Page</h1>;
+}
 
 export default function App() {
   const { user } = useAuthStore();
 
+  // 🔹 Determine which dashboard to show by role
   const getDashboard = () => {
     if (!user) return <Navigate to="/login" replace />;
     switch (user.role.toLowerCase()) {
@@ -50,7 +60,7 @@ export default function App() {
       }}
     >
       <Routes>
-        {/* redirect / → /dashboard if logged in, else → /login */}
+        {/* Redirect / → /dashboard if logged in, else → /login */}
         <Route
           path="/"
           element={
@@ -66,19 +76,26 @@ export default function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
 
-        {/* Protected + Sidebar Layout */}
+        {/* Protected routes with layout */}
         <Route
           path="/"
           element={
             <ProtectedRoute>
-              <Layout>
-                <></>
-              </Layout>
+              <Layout />
             </ProtectedRoute>
           }
         >
           <Route path="dashboard" element={getDashboard()} />
           <Route path="tickets" element={<TicketsPage />} />
+          <Route path="report-ticket" element={<ReportTicketPage />} />
+          <Route
+            path="assigned-tickets/overview"
+            element={<AssignedTicketsOverview />}
+          />
+          <Route
+            path="assigned-tickets/assign"
+            element={<AssignTicketsPage />}
+          />
           <Route path="users" element={<UsersPage />} />
           <Route path="settings" element={<SettingsPage />} />
         </Route>

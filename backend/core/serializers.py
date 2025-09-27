@@ -307,7 +307,8 @@ class InviteAcceptSerializer(serializers.ModelSerializer):
         return user
 
 
-# -------------------- Tickets --------------------
+
+
 class TicketSerializer(serializers.ModelSerializer):
     class Meta:
         model = Ticket
@@ -315,6 +316,10 @@ class TicketSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         request = self.context.get("request")
+        # 🔹 Automatically assign logged-in user as reporter
+        if request and request.user.is_authenticated:
+            validated_data['reporter'] = request.user
+
         ticket = Ticket.objects.create(**validated_data)
 
         # ✅ Handle image uploads linked to ticket
@@ -325,6 +330,7 @@ class TicketSerializer(serializers.ModelSerializer):
                 uploaded_by=request.user
             )
         return ticket
+
 
 
 # -------------------- Locations --------------------
