@@ -1,7 +1,7 @@
 // src/pages/ReportTicketPage.tsx
 import { useState, useEffect } from "react";
 import { useAuthStore } from "../store/authStore";
-import api from "../api/client";
+import { api } from "../api/client"; // 🔹 named import
 
 interface Location {
   id: number;
@@ -39,15 +39,14 @@ export default function ReportTicketPage() {
       if (!access) return;
       try {
         const res = await api.get("/locations/", {
-          headers: {
-            Authorization: `Bearer ${access}`,
-          },
+          headers: { Authorization: `Bearer ${access}` },
         });
-        // Map locations to include a name field for dropdown display
+
         const formatted = res.data.map((loc: any) => ({
           id: loc.id,
           name: `${loc.building_name} - Floor ${loc.floor_number} - ${loc.room_identifier}`,
         }));
+
         setLocations(formatted);
         setLocation(formatted[0]?.id || null);
       } catch (err) {
@@ -68,17 +67,8 @@ export default function ReportTicketPage() {
     try {
       await api.post(
         "/tickets/",
-        {
-          description,
-          category,
-          urgency,
-          location,
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${access}`,
-          },
-        }
+        { description, category, urgency, location },
+        { headers: { Authorization: `Bearer ${access}` } }
       );
 
       setMessage("✅ Ticket submitted successfully!");

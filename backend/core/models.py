@@ -193,6 +193,14 @@ class UserProfile(models.Model):
     def allowed_categories(self):
         return self.CATEGORY_MAP.get(self.role, [])
 
+    # 🔑 NEW: Find fixers eligible for a given category
+    @classmethod
+    def fixers_for_category(cls, category):
+        eligible_roles = [
+            role for role, cats in cls.CATEGORY_MAP.items() if category in cats
+        ]
+        return cls.objects.filter(role__in=eligible_roles)
+
     def __str__(self):
         return f"{self.user.email} - {self.role or 'No Role'}"
 

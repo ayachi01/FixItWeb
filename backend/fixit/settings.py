@@ -168,7 +168,7 @@ MEDIA_ROOT = BASE_DIR / "media"
 # -------------------------------------------------------------------
 DEBUG_OTP = os.environ.get("DEBUG_OTP", "True") == "True"
 
-if DEBUG_OTP:
+if DEBUG_OTP or DEBUG:
     EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 else:
     EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
@@ -179,6 +179,7 @@ else:
     EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD")
 
 DEFAULT_FROM_EMAIL = "fixit@university.edu"
+FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:5173")
 
 # -------------------------------------------------------------------
 # ✅ REST Framework (JWT + throttling)
@@ -193,8 +194,8 @@ REST_FRAMEWORK = {
     "DEFAULT_THROTTLE_CLASSES": [
         "rest_framework.throttling.AnonRateThrottle",
         "rest_framework.throttling.UserRateThrottle",
-        "core.throttles.OTPThrottle",            # ✅ fixed import path
-        "core.throttles.PasswordResetThrottle",  # ✅ fixed import path
+        "core.throttles.OTPThrottle",
+        "core.throttles.PasswordResetThrottle",
     ],
     "DEFAULT_THROTTLE_RATES": {
         "anon": "20/hour",
@@ -208,7 +209,7 @@ REST_FRAMEWORK = {
 # ✅ JWT settings (short-lived access, cookie refresh)
 # -------------------------------------------------------------------
 SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=15),   # short-lived access
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=15),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
     "ROTATE_REFRESH_TOKENS": True,
     "BLACKLIST_AFTER_ROTATION": True,
