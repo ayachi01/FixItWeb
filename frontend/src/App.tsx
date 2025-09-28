@@ -1,13 +1,23 @@
 // src/App.tsx
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { useAuthStore } from "./store/authStore";
+
+// Auth Pages
 import Login from "./pages/Login";
 import Register from "./pages/Register";
+import ForgotPasswordChoice from "./pages/ForgotPasswordChoice"; // ✅ choice page
+import ForgotPassword from "./pages/ForgotPassword"; // ✅ email link flow
+import ResetPassword from "./pages/ResetPassword"; // ✅ email link reset
+import ForgotPasswordOTP from "./pages/ForgotPasswordOTP"; // ✅ OTP flow
+import VerifyEmailPage from "./pages/VerifyEmailPage";
+
+// Protected
 import ProtectedRoute from "./components/ProtectedRoute";
 import Layout from "./components/Layout";
-import { useAuthStore } from "./store/authStore";
 
 // Pages
 import ReportTicketPage from "./pages/ReportTicketPage";
+import AssignedTicketsPage from "./pages/AssignedTicketsPage";
 
 function StudentDashboard() {
   return <h1>🎓 Student Dashboard (Report Ticket)</h1>;
@@ -29,9 +39,6 @@ function SettingsPage() {
 }
 function AssignedTicketsOverview() {
   return <h1>📊 Assigned Tickets Overview</h1>;
-}
-function AssignTicketsPage() {
-  return <h1>🛠️ Assign Tickets Page</h1>;
 }
 
 export default function App() {
@@ -76,6 +83,21 @@ export default function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
 
+        {/* 🔹 Forgot password flows */}
+        <Route path="/forgot-password" element={<ForgotPasswordChoice />} />
+        <Route path="/forgot-password/email" element={<ForgotPassword />} />
+        <Route path="/forgot-password/otp" element={<ForgotPasswordOTP />} />
+        <Route
+          path="/reset-password/:uidb64/:token"
+          element={<ResetPassword />}
+        />
+
+        {/* ✅ Email verification */}
+        <Route
+          path="/verify-email/:uidb64/:token"
+          element={<VerifyEmailPage />}
+        />
+
         {/* Protected routes with layout */}
         <Route
           path="/"
@@ -94,7 +116,7 @@ export default function App() {
           />
           <Route
             path="assigned-tickets/assign"
-            element={<AssignTicketsPage />}
+            element={<AssignedTicketsPage />}
           />
           <Route path="users" element={<UsersPage />} />
           <Route path="settings" element={<SettingsPage />} />

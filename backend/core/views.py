@@ -1,19 +1,32 @@
-# ==================== Imports ====================
+# ==================================================
+#                   Imports
+# ==================================================
 from django.conf import settings
 from django.utils import timezone
-from django.contrib.auth import get_user_model
+from django.contrib.auth import get_user_model, authenticate
+from django.core.mail import send_mail
+from django.utils.encoding import force_str, force_bytes
+from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
+from django.contrib.auth.tokens import default_token_generator
+from django.contrib.auth.hashers import make_password
+from django.db import IntegrityError
 
-from rest_framework import viewsets, status
+
+
+from rest_framework import viewsets, status, generics
+from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated, AllowAny
-from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 
 # -------------------- Models --------------------
-from core.models import Ticket, AuditLog, UserProfile, Invite, Location, PasswordResetCode
+from core.models import (
+    Ticket, AuditLog, UserProfile, Invite, Location,
+    PasswordResetCode, TicketAssignment
+)
 
 # -------------------- Serializers --------------------
 from core.serializers import (
@@ -23,9 +36,6 @@ from core.serializers import (
     TicketResolutionSerializer
 )
 
-from django.contrib.auth import authenticate
-
-
 # -------------------- Tasks --------------------
 from core.tasks import check_escalation
 
@@ -33,11 +43,11 @@ from core.tasks import check_escalation
 from core.throttles import OTPThrottle, PasswordResetThrottle
 
 # -------------------- Helpers --------------------
+# -------------------- Helpers --------------------
 from core.utils.audit import create_audit
-from core.utils.email_utils import deliver_code
+from core.utils.email_utils import deliver_code, send_verification_email
 from core.utils.security import generate_otp
 
-from core.models import TicketAssignment
 
 
 # ✅ Always reference the active User model
@@ -48,52 +58,68 @@ User = get_user_model()
 #                  User Management
 # ==================================================
 class UserViewSet(viewsets.ModelViewSet):
-    queryset = User.objects.all()
+    queryset = UserProfile.objects.select_related("user").all()
     serializer_class = UserProfileSerializer
-    permission_classes = [AllowAny]  # ✅ Allow registration/login
+    permission_classes = [AllowAny]  # allow registration/login
+
+    def get_queryset(self):
+        """
+        Supports filters:
+          ?can_fix=true, ?can_assign=true, ?role=Maintenance Officer
+        Always returns UserProfile objects.
+        """
+        qs = UserProfile.objects.select_related("user").all()
+
+        can_fix = self.request.query_params.get("can_fix")
+        can_assign = self.request.query_params.get("can_assign")
+        role = self.request.query_params.get("role")
+
+        if can_fix is not None:
+            if can_fix.lower() == "true":
+                qs = [p for p in qs if p.can_fix]
+            elif can_fix.lower() == "false":
+                qs = [p for p in qs if not p.can_fix]
+
+        if can_assign is not None:
+            if can_assign.lower() == "true":
+                qs = [p for p in qs if p.can_assign]
+            elif can_assign.lower() == "false":
+                qs = [p for p in qs if not p.can_assign]
+
+        if role:
+            qs = [p for p in qs if p.role.lower() == role.lower()]
+
+        if isinstance(qs, list):  # convert back to queryset
+            ids = [p.id for p in qs]
+            qs = UserProfile.objects.filter(id__in=ids).select_related("user")
+
+        return qs
 
     # ---------- Email Login ----------
-    @action(detail=False, methods=['post'], permission_classes=[AllowAny])
+    @action(detail=False, methods=["post"], permission_classes=[AllowAny])
     def email_login(self, request):
         email = request.data.get("email")
         password = request.data.get("password")
 
         if not email or not password:
-            return Response(
-                {"error": "Email and password required"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({"error": "Email and password required"}, status=400)
 
         user = authenticate(request, email=email, password=password)
         if not user:
             create_audit("Login Failed", None, None, details=f"Failed login attempt for {email}")
-            return Response(
-                {"error": "Invalid credentials"},
-                status=status.HTTP_401_UNAUTHORIZED
-            )
+            return Response({"error": "Invalid credentials"}, status=401)
 
         if not user.is_active:
-            return Response(
-                {"error": "Account not active. Please verify your email first."},
-                status=status.HTTP_403_FORBIDDEN
-            )
+            return Response({"error": "Account not active"}, status=403)
 
-        # ✅ Generate tokens (assuming you use SimpleJWT)
-        from rest_framework_simplejwt.tokens import RefreshToken
         refresh = RefreshToken.for_user(user)
-
-        profile = user.profile
-        profile_data = UserProfileSerializer(profile).data
+        profile_data = UserProfileSerializer(user.profile).data
 
         create_audit("Login Success", user, user, details=f"Successful login for {email}")
 
         return Response(
-            {
-                "access": str(refresh.access_token),
-                "refresh": str(refresh),
-                "profile": profile_data,
-            },
-            status=status.HTTP_200_OK
+            {"access": str(refresh.access_token), "refresh": str(refresh), "profile": profile_data},
+            status=200
         )
 
     # ---------- Self-service Registration (Students Only) ----------
@@ -108,27 +134,23 @@ class UserViewSet(viewsets.ModelViewSet):
         year_level = request.data.get('year_level')
         student_id = request.data.get('student_id')
 
-        # ✅ Require all fields
         if not all([first_name, last_name, email, password, confirm_password, course, year_level, student_id]):
             return Response(
                 {'error': 'All fields are required (first_name, last_name, email, password, confirm_password, course, year_level, student_id)'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # ✅ Password confirmation
         if password != confirm_password:
             return Response({'error': 'Passwords do not match'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # ✅ Restrict only to student domains
         domain = email.split('@')[-1]
-        valid_domains = ['student.university.edu']  # adjust for your university
+        valid_domains = ['student.university.edu']
         if domain not in valid_domains:
             return Response({'error': 'Use your official student email'}, status=status.HTTP_400_BAD_REQUEST)
 
         if User.objects.filter(email=email).exists():
             return Response({'error': 'Email already registered'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Create inactive user until OTP verified
         user = User.objects.create_user(
             email=email,
             password=password,
@@ -141,7 +163,6 @@ class UserViewSet(viewsets.ModelViewSet):
             defaults={"role": "Student", "is_email_verified": False}
         )
 
-        # ✅ Create StudentProfile
         from core.models import StudentProfile
         StudentProfile.objects.create(
             user_profile=profile,
@@ -151,7 +172,6 @@ class UserViewSet(viewsets.ModelViewSet):
             student_id=student_id
         )
 
-        # ✅ Generate & send OTP
         otp_code = generate_otp()
         user.set_otp(otp_code)
         user.save()
@@ -175,7 +195,6 @@ class UserViewSet(viewsets.ModelViewSet):
         except User.DoesNotExist:
             return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
 
-        # ✅ OTP expiry check (5 minutes)
         if not user.otp_created_at or timezone.now() > user.otp_created_at + timezone.timedelta(minutes=5):
             user.clear_otp()
             user.save()
@@ -186,7 +205,6 @@ class UserViewSet(viewsets.ModelViewSet):
             create_audit("OTP Failed", None, user, details=f"Invalid OTP attempt for {email}")
             return Response({'error': 'Invalid OTP'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # ✅ Activate user
         user.is_active = True
         user.clear_otp()
         user.save()
@@ -231,12 +249,10 @@ class UserViewSet(viewsets.ModelViewSet):
         email = request.data.get('email')
         role = request.data.get('role')
 
-        # ✅ Allow only staff-type roles (exclude students, faculty registering themselves)
-        valid_roles = [r[0] for r in UserProfile.ROLE_CHOICES if r[0] not in ['Student']]
+        valid_roles = [r[0] for r in UserProfile.Role.choices if r[0] not in ['Student']]
         if role not in valid_roles:
             return Response({'error': 'Invalid role'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # ✅ Prevent duplicate invites
         existing = Invite.objects.filter(email=email, is_used=False).first()
         if existing:
             if existing.expires_at < timezone.now():
@@ -318,8 +334,13 @@ class UserViewSet(viewsets.ModelViewSet):
         create_audit("Invite Approved", request.user, target_invite=invite, details=f"Invite approved for {invite.email}")
         return Response({'message': 'Invite approved. User may now accept the invite.'}, status=status.HTTP_200_OK)
 
-    # ---------- Password Reset (Request) ----------
-    @action(detail=False, methods=['post'], permission_classes=[AllowAny], throttle_classes=[PasswordResetThrottle])
+        # ---------- Password Reset (Request) ----------
+    @action(
+        detail=False,
+        methods=['post'],
+        permission_classes=[AllowAny],
+        throttle_classes=[PasswordResetThrottle]
+    )
     def reset_password_request(self, request):
         email = request.data.get("email")
         if not email:
@@ -330,24 +351,48 @@ class UserViewSet(viewsets.ModelViewSet):
         except User.DoesNotExist:
             return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
 
-        # ✅ Invalidate old codes
+        # Invalidate old codes
         PasswordResetCode.objects.filter(user=user, is_used=False).update(is_used=True)
 
+        # Create a fresh code
         reset_code = PasswordResetCode.objects.create(user=user)
-        deliver_code(email, "Password Reset Code", f"Your reset code is {reset_code.code}", "Reset Code")
-        create_audit("Password Reset Requested", None, user, details=f"Password reset code for {user.email}")
+
+        # Deliver via email
+        deliver_code(
+            email,
+            "Password Reset Code",
+            f"Your reset code is {reset_code.code}",
+            "Reset Code"
+        )
+
+        # Log audit
+        create_audit(
+            "Password Reset Requested",
+            performed_by=None,
+            target_user=user,
+            details=f"Password reset code for {user.email}"
+        )
 
         return Response({"message": "Password reset code sent"}, status=status.HTTP_200_OK)
 
-    # ---------- Password Reset (Confirm) ----------
-    @action(detail=False, methods=['post'], permission_classes=[AllowAny], throttle_classes=[PasswordResetThrottle])
+
+    # ---------- Password Reset (Confirm via Code) ----------
+    @action(
+        detail=False,
+        methods=['post'],
+        permission_classes=[AllowAny],
+        throttle_classes=[PasswordResetThrottle]
+    )
     def reset_password_confirm(self, request):
         email = request.data.get("email")
-        code = request.data.get("code")
-        new_password = request.data.get("new_password")
+        code = request.data.get("code")                # ✅ use "code" instead of "otp"
+        new_password = request.data.get("new_password")  # ✅ use "new_password" instead of "password"
 
         if not email or not code or not new_password:
-            return Response({"error": "Email, code, and new_password are required"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": "Email, code, and new_password are required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
         try:
             user = User.objects.get(email=email)
@@ -360,41 +405,56 @@ class UserViewSet(viewsets.ModelViewSet):
 
         reset_code = reset_qs.first()
         if reset_code.is_expired():
-            return Response({"error": "Reset code expired"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": "Code expired"}, status=status.HTTP_400_BAD_REQUEST)
 
+        # Set new password
         user.set_password(new_password)
         user.save()
         reset_code.mark_used()
 
-        create_audit("Password Reset Confirmed", user, user, details=f"Password reset successful for {user.email}")
+        create_audit(
+            "Password Reset Confirmed",
+            performed_by=user,
+            target_user=user,
+            details=f"Password reset successful for {user.email}"
+        )
+
         return Response({"message": "Password has been reset successfully"}, status=status.HTTP_200_OK)
 
-# ==================================================
-#                  Ticket Management
-# ==================================================
-
 
 # ==================================================
 #                  Ticket Management
 # ==================================================
-
 
 class TicketViewSet(viewsets.ModelViewSet):
     queryset = Ticket.objects.all()
     serializer_class = TicketSerializer
     permission_classes = [IsAuthenticated]
 
-    # -------------------- Create / Report --------------------
+    # -------------------- Assigned Tickets --------------------
+    @action(detail=False, methods=['get'])
+    def assigned(self, request):
+        user = request.user
+        tickets = Ticket.objects.filter(assignments__user=user)
+        serializer = self.get_serializer(tickets, many=True)
+        return Response(serializer.data)
+
+    # -------------------- Unassigned Tickets --------------------
+    @action(detail=False, methods=['get'])
+    def unassigned(self, request):
+        tickets = Ticket.objects.filter(assignments__isnull=True)
+        serializer = self.get_serializer(tickets, many=True)
+        return Response(serializer.data)
+
+    # -------------------- Report Ticket --------------------
     @action(detail=False, methods=['post'])
     def report_issue(self, request):
         if not request.user.profile.can_report:
             return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
 
-        serializer = TicketSerializer(data=request.data, context={'request': request})
+        serializer = self.get_serializer(data=request.data, context={'request': request})
         if serializer.is_valid():
-            # Reporter is now automatically assigned by the serializer
             ticket = serializer.save()
-
             create_audit(
                 AuditLog.Action.TICKET_CREATED,
                 performed_by=request.user,
@@ -407,7 +467,6 @@ class TicketViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def assign(self, request, pk=None):
         ticket = self.get_object()
-
         if not request.user.profile.can_assign:
             return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
 
@@ -417,14 +476,16 @@ class TicketViewSet(viewsets.ModelViewSet):
         except User.DoesNotExist:
             return Response({'error': 'Invalid assignee'}, status=status.HTTP_400_BAD_REQUEST)
 
-        if not assignee.profile.can_fix or ticket.category not in assignee.profile.allowed_categories():
-            return Response({'error': 'User cannot be assigned this ticket'}, status=status.HTTP_400_BAD_REQUEST)
+        profile = getattr(assignee, "profile", None)
+        if not profile or not profile.can_fix:
+            return Response({'error': 'User cannot be assigned tickets'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # ✅ Create assignment record
-        assignment = TicketAssignment.objects.create(ticket=ticket, user=assignee)
+        if ticket.category not in profile.allowed_categories():
+            return Response({'error': f'User cannot fix {ticket.category} tickets'}, status=status.HTTP_400_BAD_REQUEST)
 
-        ticket.status = "Assigned"
-        ticket.save()
+        TicketAssignment.objects.get_or_create(ticket=ticket, user=assignee)
+        ticket.status = Ticket.Status.ASSIGNED
+        ticket.save(update_fields=["status", "updated_at"])
 
         create_audit(
             AuditLog.Action.TICKET_ASSIGNED,
@@ -432,74 +493,87 @@ class TicketViewSet(viewsets.ModelViewSet):
             target_user=assignee,
             details=f"Ticket {ticket.id} assigned to {assignee.email}"
         )
-
         return Response({'message': f'Ticket {ticket.id} assigned to {assignee.email}'})
+
+    # -------------------- Eligible Fixers --------------------
+    @action(detail=True, methods=['get'])
+    def eligible_fixers(self, request, pk=None):
+        """Return only staff eligible to fix this ticket based on its category"""
+        ticket = self.get_object()
+        from .models import UserProfile  # avoid circular import
+
+        # ✅ Use the helper method (defined in UserProfile model)
+        fixers = UserProfile.fixers_for_category(ticket.category)
+
+        data = [
+            {
+                "id": f.user.id,
+                "email": f.user.email,
+                "full_name": f.user.get_full_name() or f.user.username,
+                "role": f.role,
+            }
+            for f in fixers
+        ]
+        return Response(data)
 
     # -------------------- Close --------------------
     @action(detail=True, methods=['post'])
     def close(self, request, pk=None):
         ticket = self.get_object()
-
         if not request.user.profile.can_close_tickets:
             return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
 
-        if ticket.status == "Closed":
+        if ticket.status == Ticket.Status.CLOSED:
             return Response({'error': 'Ticket already closed'}, status=status.HTTP_400_BAD_REQUEST)
 
-        ticket.status = "Closed"
-        ticket.save()
+        ticket.status = Ticket.Status.CLOSED
+        ticket.save(update_fields=["status", "updated_at"])
 
         create_audit(
             AuditLog.Action.TICKET_CLOSED,
             performed_by=request.user,
             details=f"Ticket {ticket.id} closed"
         )
-
         return Response({'message': f'Ticket {ticket.id} has been closed successfully'})
 
     # -------------------- Resolve --------------------
     @action(detail=True, methods=['post'])
     def resolve(self, request, pk=None):
         ticket = self.get_object()
-
         if not request.user.profile.can_fix:
             return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
 
         serializer = TicketResolutionSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
-            resolution = serializer.save(ticket=ticket, resolved_by=request.user)
-            ticket.status = "Resolved"
-            ticket.save()
+            resolution = serializer.save(ticket=ticket)
+            ticket.status = Ticket.Status.RESOLVED
+            ticket.save(update_fields=["status", "updated_at"])
 
             create_audit(
                 AuditLog.Action.TICKET_RESOLVED,
                 performed_by=request.user,
                 details=f"Ticket {ticket.id} resolved"
             )
-
             return Response(TicketResolutionSerializer(resolution).data, status=status.HTTP_200_OK)
+
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     # -------------------- Reopen --------------------
     @action(detail=True, methods=['post'])
     def reopen(self, request, pk=None):
         ticket = self.get_object()
-
-        if ticket.status != "Closed":
+        if ticket.status != Ticket.Status.CLOSED:
             return Response({'error': 'Only closed tickets can be reopened'}, status=status.HTTP_400_BAD_REQUEST)
 
-        ticket.status = "Reopened"
-        ticket.save()
+        ticket.status = Ticket.Status.REOPENED
+        ticket.save(update_fields=["status", "updated_at"])
 
         create_audit(
             AuditLog.Action.TICKET_REOPENED,
             performed_by=request.user,
             details=f"Ticket {ticket.id} reopened"
         )
-
         return Response({'message': f'Ticket {ticket.id} has been reopened'})
-
-
 
 
 # ==================================================
@@ -512,78 +586,32 @@ class LocationViewSet(viewsets.ModelViewSet):
 
 
 # ==================================================
-#                  User Profile (Dynamic Features + Student Profile)
-# ==================================================
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
-from .models import UserProfile
-
-
-# ==================================================
 #                  User Profile
 # ==================================================
-
 class UserProfileView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        profile = UserProfile.objects.get(user=request.user)
-
-        # Build features dynamically from RBAC rules in the model
+        profile = UserProfile.objects.select_related("user").get(user=request.user)
         features = []
 
-        # ✅ Everyone can report
         if profile.can_report:
-            features.extend([
-                "canReport",
-                "myReports",
-                "notifications",
-            ])
-
-        # ✅ Fixer roles
+            features.extend(["canReport", "myReports", "notifications"])
         if profile.can_fix:
-            features.extend([
-                "assignedTickets",
-                "uploadProof",
-                "updateStatus",
-                "workHistory",
-            ])
-
-        # ✅ Assignment capability
+            features.extend(["assignedTickets", "uploadProof", "updateStatus", "workHistory"])
         if profile.can_assign:
-            features.extend([
-                "overview",
-                "assignTickets",
-                "reviewProof",
-                "escalate",
-            ])
-
-        # ✅ User management
+            features.extend(["overview", "assignTickets", "reviewProof", "escalate"])
         if profile.can_manage_users:
             features.append("manageUsers")
-
-        # ✅ Admin-level actions
         if profile.is_admin_level:
-            features.extend([
-                "reportsView",
-                "escalate",
-                "closeTickets",
-            ])
-
-        # ✅ Super / University admins
+            features.extend(["reportsView", "escalate", "closeTickets"])
         if profile.role and profile.role.lower() in ["super admin", "university admin"]:
-            features.extend([
-                "systemSettings",
-                "aiReports",
-            ])
+            features.extend(["systemSettings", "aiReports"])
 
-        # Remove duplicates while keeping order
-        features = list(dict.fromkeys(features))
+        features = list(dict.fromkeys(features))  # remove duplicates
 
-        # ✅ Student profile details (if exists)
         student_data = None
-        if hasattr(profile, "student_profile") and profile.student_profile:
+        if getattr(profile, "student_profile", None):
             sp = profile.student_profile
             student_data = {
                 "full_name": sp.full_name,
@@ -592,33 +620,23 @@ class UserProfileView(APIView):
                 "student_id": sp.student_id,
             }
 
-        # ✅ Final response
         return Response({
             "id": request.user.id,
             "email": request.user.email,
-            "role": profile.role,  # keep original case for display
+            "role": profile.role,
             "is_email_verified": profile.is_email_verified,
+            "can_fix": profile.can_fix,
+            "can_assign": profile.can_assign,
+            "can_manage_users": profile.can_manage_users,
+            "is_admin_level": profile.is_admin_level,
             "features": features,
             "allowed_categories": profile.allowed_categories(),
             "student_profile": student_data,
         })
 
-
 # ==================================================
 #                  Auth
 # ==================================================
-
-# Try importing create_audit (safe fallback if missing)
-try:
-    from .utils import create_audit
-except ImportError:
-    def create_audit(*args, **kwargs):
-        # fallback no-op if utils.create_audit is not defined
-        pass
-
-
-
-
 
 
 class EmailLoginView(TokenObtainPairView):
@@ -686,10 +704,6 @@ class EmailLoginView(TokenObtainPairView):
                 pass
 
         return response
-
-
-
-
 
 
 
@@ -767,6 +781,241 @@ class CookieTokenRefreshView(TokenRefreshView):
 
         return response
 
+
+# ==================================================
+#                  Register
+# ==================================================
+
+class RegisterView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        first_name = request.data.get("first_name", "").strip()
+        last_name = request.data.get("last_name", "").strip()
+        email = request.data.get("email")
+        password = request.data.get("password")
+        confirm_password = request.data.get("confirm_password")
+
+        # === Validation ===
+        if not all([first_name, last_name, email, password, confirm_password]):
+            return Response(
+                {"error": "All fields are required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if password != confirm_password:
+            return Response(
+                {"error": "Passwords do not match"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if User.objects.filter(email=email).exists():
+            return Response(
+                {"error": "User with this email already exists"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            # === Create user (inactive until email verification) ===
+            user = User.objects.create_user(
+                username=email,
+                email=email,
+                password=password,
+                first_name=first_name,
+                last_name=last_name,
+                is_active=False  # must verify email before login
+            )
+
+            # === Create profile safely ===
+            profile, created = UserProfile.objects.get_or_create(
+                user=user,
+                defaults={
+                    "role": "Student" if not user.is_superuser else "University Admin",
+                    "is_email_verified": False,
+                },
+            )
+
+            # === Audit log ===
+            create_audit(
+                "Register",
+                performed_by=user,
+                target_user=user,
+                details="User registered"
+            )
+
+            # === Send email verification ===
+            send_verification_email(user)
+
+            return Response(
+                {
+                    "message": "User registered successfully. Please check your email to verify your account.",
+                    "profile": UserProfileSerializer(profile).data
+                },
+                status=status.HTTP_201_CREATED
+            )
+
+        except IntegrityError:
+            return Response(
+                {"error": "A database error occurred. Please try again."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+
+
+class VerifyEmailView(APIView):
+    """
+    Endpoint to verify user email via GET link:
+    Frontend URL: /verify-email/<uidb64>/<token>
+    """
+    permission_classes = []
+
+    def get(self, request, uidb64, token):
+        if not uidb64 or not token:
+            return Response(
+                {"error": "Invalid verification link."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            uid_decoded = urlsafe_base64_decode(uidb64).decode()
+            user = User.objects.get(pk=uid_decoded)
+        except (User.DoesNotExist, ValueError, TypeError, OverflowError):
+            return Response(
+                {"error": "Invalid verification link."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Check token validity
+        if not default_token_generator.check_token(user, token):
+            return Response(
+                {"error": "Verification link is invalid or expired."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # ✅ Activate user and mark email as verified
+        user.is_active = True
+        user.save()
+
+        # Create profile if missing
+        profile, _ = UserProfile.objects.get_or_create(user=user)
+        profile.is_email_verified = True
+        profile.save()
+
+        # ✅ Audit log
+        create_audit(
+            "Email Verification",
+            performed_by=user,
+            target_user=user,
+            details="User verified their email"
+        )
+
+        return Response(
+            {
+                "message": "Email verified successfully.",
+                "profile": UserProfileSerializer(profile).data
+            },
+            status=status.HTTP_200_OK
+        )
+
+
+# ==================================================
+#             Forgot Password (send email)
+# ==================================================
+class ForgotPasswordView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        email = request.data.get("email")
+        if not email:
+            return Response(
+                {"error": "Email required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            user = User.objects.get(email=email)
+        except User.DoesNotExist:
+            # Don't reveal if email exists
+            return Response(
+                {"message": "If account exists, a reset email will be sent."},
+                status=status.HTTP_200_OK
+            )
+
+        # Encode user ID
+        uid = urlsafe_base64_encode(force_bytes(user.pk))
+        # Generate password reset token
+        token = default_token_generator.make_token(user)
+        # Construct reset link pointing to frontend
+        reset_link = f"{settings.FRONTEND_URL}/reset-password/{uid}/{token}/"
+
+        # Send password reset email
+        send_mail(
+            subject="Password Reset",
+            message=f"Click the link to reset your password:\n{reset_link}",
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[email],
+        )
+
+        return Response(
+            {"message": "If account exists, a reset email will be sent."},
+            status=status.HTTP_200_OK
+        )
+
+
+
+
+# ==================================================
+#                  Reset Password
+# ==================================================
+class ResetPasswordView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request, uidb64, token):
+        try:
+            # Decode user ID from URL
+            uid = force_str(urlsafe_base64_decode(uidb64))
+            user = User.objects.get(pk=uid)
+        except (TypeError, ValueError, OverflowError, User.DoesNotExist):
+            return Response(
+                {"error": "Invalid reset link"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Check token validity
+        if not default_token_generator.check_token(user, token):
+            return Response(
+                {"error": "Invalid or expired reset link"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        new_password = request.data.get("password")
+        if not new_password:
+            return Response(
+                {"error": "Password required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # ✅ Set the new password securely
+        user.set_password(new_password)
+        user.save()
+
+        # Optional: log event if you have auditing in place
+        try:
+            create_audit(
+                "Password Reset",
+                performed_by=user,
+                target_user=user,
+                details="Password reset successfully"
+            )
+        except NameError:
+            # Skip if create_audit isn't defined
+            pass
+
+        return Response(
+            {"message": "Password has been reset successfully"},
+            status=status.HTTP_200_OK
+        )
 
 
 class LogoutView(APIView):

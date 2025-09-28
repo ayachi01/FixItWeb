@@ -1,4 +1,5 @@
-import { api } from "./index";
+// src/api/auth.ts
+import { api } from "./client";
 
 // 🔹 Login → POST /api/auth/login/
 export async function login(email: string, password: string) {
@@ -7,10 +8,22 @@ export async function login(email: string, password: string) {
   return res.data;
 }
 
-// 🔹 Register (optional: if you add a view for it)
-export async function register(email: string, password: string, role: string) {
-  return api.post("/users/", { email, password, role });
-  // ✅ using DRF /users/ endpoint for now
+// 🔹 Register → POST /api/auth/register/
+export async function register(
+  first_name: string,
+  last_name: string,
+  email: string,
+  password: string,
+  confirm_password: string
+) {
+  const res = await api.post("/auth/register/", {
+    first_name,
+    last_name,
+    email,
+    password,
+    confirm_password,
+  });
+  return res.data;
 }
 
 // 🔹 Profile → GET /api/auth/profile/
