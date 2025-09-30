@@ -29,7 +29,10 @@ export default function AssignTicketsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const isStaff = user?.role.toLowerCase() === "staff";
+  // 🔹 Use normalized roleName from store
+  const roleName = user?.roleName || "";
+
+  const isStaff = roleName === "staff";
 
   // Users who can assign tickets
   const canAssign = [
@@ -37,7 +40,7 @@ export default function AssignTicketsPage() {
     "super admin",
     "university admin",
     "maintenance officer",
-  ].includes(user?.role.toLowerCase() || "");
+  ].includes(roleName);
 
   useEffect(() => {
     const fetchData = async () => {

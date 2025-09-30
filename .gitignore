@@ -20,4 +20,4 @@ dist/
 local_settings.py
 
 # Media (uploads, should not be committed)
-backend/media/guest_reports/
+backend/media/ticket_images/

@@ -1,3 +1,4 @@
+// 📂 src/store/authStore.ts
 import { create } from "zustand";
 import {
   login as loginApi,
@@ -5,12 +6,19 @@ import {
   getProfile,
 } from "../api/auth";
 
+// 🔹 Role type from backend
+export interface Role {
+  id: number | null;
+  name: string | null;
+  description: string | null;
+}
+
 // 🔹 Full User type based on backend UserProfileView response
 export interface User {
   id: number;
   email: string;
-  role: string;
-  is_email_verified: boolean; // ✅ use this for login verification
+  role: Role; // ✅ always normalized to Role object
+  is_email_verified: boolean;
   features: string[];
   allowed_categories: string[];
   student_profile?: {
@@ -19,6 +27,7 @@ export interface User {
     year_level: number;
     student_id: string;
   } | null;
+  roleName?: string; // ✅ normalized string for convenience
 }
 
 interface AuthState {
@@ -69,7 +78,24 @@ export const useAuthStore = create<AuthState>((set) => ({
   fetchProfile: async () => {
     try {
       const profile = await getProfile();
-      set({ user: profile });
+
+      // ✅ Normalize role: ensure it's always a Role object
+      const normalizedRole: Role =
+        typeof profile.role === "string"
+          ? {
+              id: null,
+              name: profile.role,
+              description: null,
+            }
+          : profile.role;
+
+      const normalizedProfile: User = {
+        ...profile,
+        role: normalizedRole,
+        roleName: normalizedRole?.name?.toLowerCase() || "", // ✅ convenience string
+      };
+
+      set({ user: normalizedProfile });
     } catch {
       // If fetch fails, clear session
       localStorage.removeItem("access_token");

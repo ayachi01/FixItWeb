@@ -1,7 +1,7 @@
 // src/pages/ReportTicketPage.tsx
 import { useState, useEffect } from "react";
 import { useAuthStore } from "../store/authStore";
-import { api } from "../api/client"; // 🔹 named import
+import { api } from "../api/client";
 
 interface Location {
   id: number;
@@ -24,16 +24,27 @@ const CATEGORY_OPTIONS = [
 const URGENCY_OPTIONS = ["Standard", "Urgent"];
 
 export default function ReportTicketPage() {
-  const { access } = useAuthStore(); // Use access token from auth store
+  const { access } = useAuthStore();
+  const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState(CATEGORY_OPTIONS[0]);
   const [urgency, setUrgency] = useState(URGENCY_OPTIONS[0]);
   const [location, setLocation] = useState<number | null>(null);
   const [locations, setLocations] = useState<Location[]>([]);
+  const [images, setImages] = useState<File[]>([]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
 
-  // 🔹 Fetch locations from API
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files) return;
+    const files = Array.from(e.target.files);
+    if (files.length > 3) {
+      alert("You can upload up to 3 images only.");
+      return;
+    }
+    setImages(files);
+  };
+
   useEffect(() => {
     const fetchLocations = async () => {
       if (!access) return;
@@ -61,23 +72,58 @@ export default function ReportTicketPage() {
     e.preventDefault();
     if (!access || !location) return;
 
+    if (!title.trim()) {
+      setMessage("❌ Title is required.");
+      return;
+    }
+
+    if (images.length < 1) {
+      setMessage("❌ Please upload at least 1 image.");
+      return;
+    }
+
     setLoading(true);
     setMessage("");
 
     try {
-      await api.post(
-        "/tickets/",
-        { description, category, urgency, location },
-        { headers: { Authorization: `Bearer ${access}` } }
-      );
+      const formData = new FormData();
+      formData.append("title", title);
+      formData.append("description", description);
+      formData.append("category", category);
+      formData.append("urgency", urgency);
+      formData.append("location", location.toString());
+
+      // 🔹 Corrected field name for DRF: use "image" (singular)
+      images.forEach((file) => formData.append("image", file));
+
+      // 🔹 Debug: log FormData contents
+      console.log("Submitting FormData:");
+      for (const pair of formData.entries()) {
+        console.log(pair[0], pair[1]);
+      }
+
+      await api.post("/tickets/", formData, {
+        headers: {
+          Authorization: `Bearer ${access}`,
+          "Content-Type": "multipart/form-data",
+        },
+      });
 
       setMessage("✅ Ticket submitted successfully!");
+      setTitle("");
       setDescription("");
       setCategory(CATEGORY_OPTIONS[0]);
       setUrgency(URGENCY_OPTIONS[0]);
       setLocation(locations[0]?.id || null);
+      setImages([]);
     } catch (err: any) {
-      setMessage(err.response?.data?.detail || "❌ Failed to submit ticket");
+      console.error("Axios Response error:", err.response);
+      console.log("Full error response data:", err.response?.data);
+      setMessage(
+        err.response?.data?.detail ||
+          (err.response?.data?.image ? err.response.data.image[0] : null) ||
+          "❌ Failed to submit ticket"
+      );
     } finally {
       setLoading(false);
     }
@@ -100,6 +146,15 @@ export default function ReportTicketPage() {
       )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
+        <input
+          type="text"
+          placeholder="Title"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          className="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
+          required
+        />
+
         <select
           value={location || ""}
           onChange={(e) => setLocation(Number(e.target.value))}
@@ -150,6 +205,24 @@ export default function ReportTicketPage() {
           rows={5}
           required
         />
+
+        <input
+          type="file"
+          accept="image/*"
+          multiple
+          onChange={handleFileChange}
+          className="w-full p-3 border rounded-lg"
+          required
+        />
+        {images.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {images.map((img, idx) => (
+              <p key={idx} className="text-sm text-gray-600">
+                📷 {img.name}
+              </p>
+            ))}
+          </div>
+        )}
 
         <button
           type="submit"

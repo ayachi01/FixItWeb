@@ -152,10 +152,25 @@ CELERY_BEAT_SCHEDULE = {
         "schedule": crontab(minute=0, hour="*"),  # every hour on the hour
     },
     "cleanup-old-audit-logs-daily": {
-        "task": "core.tasks.cleanup_old_audit_logs",
+        "task": "core.tasks.cleanup_audit_logs",
         "schedule": crontab(minute=0, hour=3),  # every day at 3 AM
     },
+    "cleanup-password-reset-codes-daily": {
+        "task": "core.tasks.cleanup_password_reset_codes",
+        "schedule": crontab(minute=30, hour=3),  # every day at 3:30 AM
+    },
 }
+
+# -------------------------------------------------------------------
+# Audit Log retention settings
+# -------------------------------------------------------------------
+AUDIT_LOG_RETENTION_DAYS = 90  # normal logs retention
+AUDIT_LOG_RETENTION_HIGH_SENSITIVITY_DAYS = 180  # critical logs retention
+AUDIT_LOG_HIGH_SENS_ACTIONS = [
+    "Ticket Escalated",
+    "Ticket Closed",
+    "Password Reset Confirmed",
+]
 
 # -------------------------------------------------------------------
 # Media
@@ -229,6 +244,11 @@ AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
+
+# -------------------------------------------------------------------
+# ✅ Password reset link timeout (in seconds)
+# -------------------------------------------------------------------
+PASSWORD_RESET_TIMEOUT = 900  # 15 minutes
 
 # -------------------------------------------------------------------
 # Internationalization

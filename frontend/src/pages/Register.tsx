@@ -1,6 +1,7 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
-import { register as apiRegister } from "../api"; // use the API helper
+// src/pages/Register.tsx
+import { useState, useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { register as apiRegister } from "../api"; // ✅ your API helper
 
 export default function Register() {
   const [firstName, setFirstName] = useState("");
@@ -11,6 +12,7 @@ export default function Register() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
+  const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,19 +33,31 @@ export default function Register() {
         password,
         confirmPassword
       );
-      console.log("Register success:", res);
-      // Show message instead of redirecting
+
+      console.group("🔍 Registration Debug");
+      console.log("✅ Raw response from backend:", res);
+      console.log("📩 Email used (frontend):", email);
+      console.log("🧩 Role from backend response:", res?.profile?.role);
+      console.groupEnd();
+
       setSuccessMessage(
-        "Registration successful! Please check your email to verify your account before logging in."
+        "🎉 Registration successful! Please check your email to verify your account."
       );
+
       // Clear form fields
       setFirstName("");
       setLastName("");
       setEmail("");
       setPassword("");
       setConfirmPassword("");
+
+      // Redirect after 2 seconds
+      setTimeout(() => {
+        navigate("/login");
+      }, 2000);
     } catch (err: any) {
-      console.error(err);
+      console.error("❌ Registration error:", err);
+      console.error("🔍 Error response:", err.response?.data);
       setError(err.response?.data?.error || "Registration failed");
     } finally {
       setLoading(false);

@@ -11,8 +11,6 @@ from django.contrib.auth.tokens import default_token_generator
 from django.contrib.auth.hashers import make_password
 from django.db import IntegrityError
 
-
-
 from rest_framework import viewsets, status, generics
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -24,16 +22,31 @@ from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 
 # -------------------- Models --------------------
 from core.models import (
-    Ticket, AuditLog, UserProfile, Invite, Location,
-    PasswordResetCode, TicketAssignment
+    Ticket,
+    AuditLog,
+    UserProfile,
+    Invite,
+    Location,
+    PasswordResetCode,
+    TicketAssignment,
+    StudentProfile,
+    Role,
+    DomainRoleMapping,   # ✅ Added here so Pylance recognizes it
 )
+
+# ✅ Always reference the active User model
+User = get_user_model()
 
 # -------------------- Serializers --------------------
 from core.serializers import (
-    UserProfileSerializer, InviteSerializer, TicketSerializer,
-    EmailTokenObtainPairSerializer, LocationSerializer,
-    InviteAcceptSerializer, InviteApproveSerializer,
-    TicketResolutionSerializer
+    UserProfileSerializer,
+    InviteSerializer,
+    TicketSerializer,
+    EmailTokenObtainPairSerializer,
+    LocationSerializer,
+    InviteAcceptSerializer,
+    InviteApproveSerializer,
+    TicketResolutionSerializer,
 )
 
 # -------------------- Tasks --------------------
@@ -43,15 +56,12 @@ from core.tasks import check_escalation
 from core.throttles import OTPThrottle, PasswordResetThrottle
 
 # -------------------- Helpers --------------------
-# -------------------- Helpers --------------------
 from core.utils.audit import create_audit
 from core.utils.email_utils import deliver_code, send_verification_email
 from core.utils.security import generate_otp
 
+from django.contrib.auth.models import update_last_login
 
-
-# ✅ Always reference the active User model
-User = get_user_model()
 
 
 # ==================================================
@@ -112,6 +122,10 @@ class UserViewSet(viewsets.ModelViewSet):
         if not user.is_active:
             return Response({"error": "Account not active"}, status=403)
 
+        # ✅ Update last_login field when user logs in
+        from django.contrib.auth.models import update_last_login
+        update_last_login(None, user)
+
         refresh = RefreshToken.for_user(user)
         profile_data = UserProfileSerializer(user.profile).data
 
@@ -122,65 +136,141 @@ class UserViewSet(viewsets.ModelViewSet):
             status=200
         )
 
-    # ---------- Self-service Registration (Students Only) ----------
-    @action(detail=False, methods=['post'], permission_classes=[AllowAny], throttle_classes=[OTPThrottle])
+
+    # ---------- Unified Self-service Registration (Students + Faculty + Staff + Visitors) ----------
+    @action(detail=False, methods=['post'], permission_classes=[AllowAny])
     def register_self_service(self, request):
         first_name = request.data.get('first_name')
         last_name = request.data.get('last_name')
         email = request.data.get('email')
         password = request.data.get('password')
         confirm_password = request.data.get('confirm_password')
-        course = request.data.get('course')
-        year_level = request.data.get('year_level')
-        student_id = request.data.get('student_id')
 
-        if not all([first_name, last_name, email, password, confirm_password, course, year_level, student_id]):
+        print("📩 Incoming registration request:", request.data)  # DEBUG
+
+        # === Validation: basic fields ===
+        if not all([first_name, last_name, email, password, confirm_password]):
             return Response(
-                {'error': 'All fields are required (first_name, last_name, email, password, confirm_password, course, year_level, student_id)'},
+                {'error': 'All fields are required (first_name, last_name, email, password, confirm_password)'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
         if password != confirm_password:
             return Response({'error': 'Passwords do not match'}, status=status.HTTP_400_BAD_REQUEST)
 
-        domain = email.split('@')[-1]
-        valid_domains = ['student.university.edu']
-        if domain not in valid_domains:
-            return Response({'error': 'Use your official student email'}, status=status.HTTP_400_BAD_REQUEST)
+        # === Normalize and extract domain ===
+        domain = email.split('@')[-1].strip().lower()
+        print(f"🌐 Extracted normalized domain: {domain}")  # DEBUG
 
+        # === Role assignment via DomainRoleMapping ===
+        mapping = DomainRoleMapping.objects.filter(domain__iexact=domain).first()
+        if mapping:
+            role = mapping.role
+            print(f"✅ Domain mapping found: {domain} → Role = {role.name} (id={role.id})")  # DEBUG
+        else:
+            role, _ = Role.objects.get_or_create(
+                name="Visitor",
+                defaults={"description": "Unmapped domain"}
+            )
+            print(f"⚠️ No mapping found for {domain}. Defaulting to Visitor (id={role.id})")  # DEBUG
+
+        # === Extra validation if Student ===
+        if role.name == "Student":
+            course = request.data.get('course')
+            year_level = request.data.get('year_level')
+            student_id = request.data.get('student_id')
+
+            print("🎓 Student registration detected")  # DEBUG
+            print(f"   course={course}, year_level={year_level}, student_id={student_id}")  # DEBUG
+
+            if not all([course, year_level, student_id]):
+                return Response(
+                    {'error': 'Students must provide course, year_level, and student_id'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+        # === Check for duplicate email ===
         if User.objects.filter(email=email).exists():
+            print(f"⛔ Email already registered: {email}")  # DEBUG
             return Response({'error': 'Email already registered'}, status=status.HTTP_400_BAD_REQUEST)
 
+        # === Create user (inactive until email verified) ===
         user = User.objects.create_user(
             email=email,
             password=password,
-            is_active=False,
+            is_active=False,  # 🚫 user cannot log in yet
             first_name=first_name,
             last_name=last_name
         )
-        profile, _ = UserProfile.objects.get_or_create(
+        print(f"👤 User created: {user.email} (id={user.id})")  # DEBUG
+
+        # === Create or update user profile ===
+        profile, created = UserProfile.objects.get_or_create(
             user=user,
-            defaults={"role": "Student", "is_email_verified": False}
+            defaults={"role": role, "is_email_verified": False}  # 🚫 always false until verification
         )
+        if created:
+            print(f"🆕 UserProfile created with role={role.name} (id={role.id})")  # DEBUG
+        else:
+            print(f"♻️ UserProfile already exists. Updating role to {role.name} (id={role.id})")  # DEBUG
+            profile.role = role
+            profile.is_email_verified = False  # 🚫 force false on re-register
+            profile.save()
 
-        from core.models import StudentProfile
-        StudentProfile.objects.create(
-            user_profile=profile,
-            full_name=f"{first_name} {last_name}",
-            course=course,
-            year_level=year_level,
-            student_id=student_id
+        # === If student, create student profile record ===
+        if role.name == "Student":
+            student_profile = StudentProfile.objects.create(
+                user_profile=profile,
+                student_id=student_id,
+                course_code=course,
+                year_level=year_level
+            )
+            print(f"🎓 StudentProfile created for {user.email} (student_id={student_profile.student_id})")  # DEBUG
+
+        # === Generate verification link ===
+        uidb64 = urlsafe_base64_encode(force_bytes(user.pk))
+        token = default_token_generator.make_token(user)
+        verify_url = f"http://localhost:5173/verify-email/{uidb64}/{token}/"
+        print(f"🔗 Verification link generated for {user.email}: {verify_url}")  # DEBUG
+
+        deliver_code(
+            email,
+            "Verify your account",
+            f"Click the link to verify your email: {verify_url}",
+            "LINK"
         )
+        print(f"📧 Verification link sent to {email}")  # DEBUG
 
-        otp_code = generate_otp()
-        user.set_otp(otp_code)
-        user.save()
-
-        deliver_code(email, "Your OTP Code", f"Your OTP is {otp_code}", "OTP")
+        # === Audit logs ===
         create_audit("User Created", None, user, details=f"Self-service registration for {email}")
-        create_audit("OTP Sent", None, user, details=f"OTP sent to {email}")
+        create_audit("Verification Link Sent", None, user, details=f"Link sent to {email}")
 
-        return Response({'message': 'User created. OTP sent.'}, status=status.HTTP_201_CREATED)
+        # === Explicit Response with Role ===
+        return Response({
+            "message": "User registered successfully. Please check your email to verify your account.",
+            "verification_link": verify_url,
+            "profile": {
+                "id": profile.id,
+                "email": user.email,
+                "first_name": user.first_name,
+                "last_name": user.last_name,
+                "full_name": f"{user.first_name} {user.last_name}",
+                "role": {
+                    "id": role.id,
+                    "name": role.name,
+                    "description": role.description
+                },
+                "is_email_verified": False,  # 🚫 always false until verified
+                "email_domain": domain,
+                "can_fix": profile.can_fix,
+                "can_assign": profile.can_assign,
+                "can_manage_users": profile.can_manage_users,
+                "is_admin_level": profile.is_admin_level,
+                "allowed_categories": [],
+                "student_profile": getattr(profile, "student_profile", None)
+            }
+        }, status=status.HTTP_201_CREATED)
+
 
     # ---------- Verify OTP ----------
     @action(detail=False, methods=['post'], permission_classes=[AllowAny], throttle_classes=[OTPThrottle])
@@ -509,8 +599,10 @@ class TicketViewSet(viewsets.ModelViewSet):
             {
                 "id": f.user.id,
                 "email": f.user.email,
+                "first_name": f.user.first_name,
+                "last_name": f.user.last_name,
                 "full_name": f.user.get_full_name() or f.user.username,
-                "role": f.role,
+                "role": f.role.name if f.role else None,  # ✅ safe serialization
             }
             for f in fixers
         ]
@@ -592,7 +684,7 @@ class UserProfileView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        profile = UserProfile.objects.select_related("user").get(user=request.user)
+        profile = UserProfile.objects.select_related("user", "role").get(user=request.user)
         features = []
 
         if profile.can_report:
@@ -605,10 +697,13 @@ class UserProfileView(APIView):
             features.append("manageUsers")
         if profile.is_admin_level:
             features.extend(["reportsView", "escalate", "closeTickets"])
-        if profile.role and profile.role.lower() in ["super admin", "university admin"]:
+
+        # ✅ Fix: Access role.name instead of role directly
+        if profile.role and profile.role.name.lower() in ["super admin", "university admin"]:
             features.extend(["systemSettings", "aiReports"])
 
-        features = list(dict.fromkeys(features))  # remove duplicates
+        # remove duplicates while preserving order
+        features = list(dict.fromkeys(features))
 
         student_data = None
         if getattr(profile, "student_profile", None):
@@ -623,7 +718,14 @@ class UserProfileView(APIView):
         return Response({
             "id": request.user.id,
             "email": request.user.email,
-            "role": profile.role,
+            "first_name": request.user.first_name,
+            "last_name": request.user.last_name,
+            "full_name": f"{request.user.first_name} {request.user.last_name}".strip(),
+            "role": {
+                "id": profile.role.id if profile.role else None,
+                "name": profile.role.name if profile.role else None,
+                "description": profile.role.description if profile.role else None,
+            },
             "is_email_verified": profile.is_email_verified,
             "can_fix": profile.can_fix,
             "can_assign": profile.can_assign,
@@ -633,6 +735,7 @@ class UserProfileView(APIView):
             "allowed_categories": profile.allowed_categories(),
             "student_profile": student_data,
         })
+
 
 # ==================================================
 #                  Auth
@@ -644,6 +747,7 @@ class EmailLoginView(TokenObtainPairView):
     permission_classes = [AllowAny]
 
     def post(self, request, *args, **kwargs):
+        # Call parent JWT view first
         response = super().post(request, *args, **kwargs)
 
         if response.status_code == 200:
@@ -654,57 +758,64 @@ class EmailLoginView(TokenObtainPairView):
             if not access or not refresh:
                 return Response(
                     {"error": "Authentication failed"},
-                    status=status.HTTP_401_UNAUTHORIZED
+                    status=status.HTTP_401_UNAUTHORIZED,
                 )
 
             cookie_max_age = int(settings.SIMPLE_JWT["REFRESH_TOKEN_LIFETIME"].total_seconds())
             secure_flag = not settings.DEBUG
 
-            # ✅ Reset response so we can control return payload
-            response = Response({"access": access}, status=status.HTTP_200_OK)
-            response.set_cookie(
-                key="refresh_token",
-                value=refresh,
-                httponly=True,
-                secure=secure_flag,
-                samesite="Strict",
-                max_age=cookie_max_age,
-            )
-
             email = request.data.get("email")
             try:
                 user = User.objects.get(email=email)
+
+                # ✅ Update last_login on successful JWT login
+                update_last_login(None, user)
+
                 profile, created = UserProfile.objects.get_or_create(user=user)
 
                 if created:
-                    # ✅ Default roles if missing
+                    # ✅ Assign default role
                     if user.is_superuser:
-                        profile.role = "University Admin"
+                        profile.role, _ = Role.objects.get_or_create(name="University Admin")
                         profile.is_email_verified = True
                     else:
-                        profile.role = profile.role or "Student"
+                        default_role, _ = Role.objects.get_or_create(name="Student")
+                        profile.role = profile.role or default_role
                     profile.save()
 
-                # ✅ Add serialized profile to response
                 serialized_profile = UserProfileSerializer(profile).data
-                response.data = {
-                    "access": access,
-                    "profile": serialized_profile,
-                }
+
+                response = Response(
+                    {
+                        "access": access,
+                        "profile": serialized_profile,
+                    },
+                    status=status.HTTP_200_OK,
+                )
+                response.set_cookie(
+                    key="refresh_token",
+                    value=refresh,
+                    httponly=True,
+                    secure=secure_flag,
+                    samesite="Strict",
+                    max_age=cookie_max_age,
+                )
 
                 # ✅ Audit log
                 create_audit(
                     "Login",
                     performed_by=user,
                     target_user=user,
-                    details="User logged in"
+                    details="User logged in",
                 )
 
             except User.DoesNotExist:
-                pass
+                return Response(
+                    {"error": "User not found"},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
 
         return response
-
 
 
 class CookieTokenRefreshView(TokenRefreshView):
@@ -755,111 +866,31 @@ class CookieTokenRefreshView(TokenRefreshView):
                     max_age=cookie_max_age,
                 )
 
-            # ✅ Attach profile info (same as login)
+            # ✅ Attach profile info (safe serialization)
             try:
                 user = request.user
                 if not user or not user.is_authenticated:
-                    # fallback: get user from refresh token's sub
+                    # fallback: extract user_id from refresh token
                     from rest_framework_simplejwt.tokens import RefreshToken
                     token = RefreshToken(refresh)
                     user_id = token["user_id"]
                     user = User.objects.get(id=user_id)
 
                 profile, _ = UserProfile.objects.get_or_create(user=user)
-                serialized_profile = UserProfileSerializer(profile).data
+                serialized_profile = UserProfileSerializer(profile).data  # ✅ Role safely nested
 
                 response.data = {
                     "access": new_access,
                     "profile": serialized_profile,
                     "message": "Access token refreshed successfully",
                 }
-            except Exception:
+            except Exception as e:
                 response.data = {
                     "access": new_access,
-                    "message": "Access token refreshed successfully (no profile found)",
+                    "message": f"Access token refreshed successfully (profile error: {str(e)})",
                 }
 
         return response
-
-
-# ==================================================
-#                  Register
-# ==================================================
-
-class RegisterView(APIView):
-    permission_classes = [AllowAny]
-
-    def post(self, request):
-        first_name = request.data.get("first_name", "").strip()
-        last_name = request.data.get("last_name", "").strip()
-        email = request.data.get("email")
-        password = request.data.get("password")
-        confirm_password = request.data.get("confirm_password")
-
-        # === Validation ===
-        if not all([first_name, last_name, email, password, confirm_password]):
-            return Response(
-                {"error": "All fields are required"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        if password != confirm_password:
-            return Response(
-                {"error": "Passwords do not match"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        if User.objects.filter(email=email).exists():
-            return Response(
-                {"error": "User with this email already exists"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        try:
-            # === Create user (inactive until email verification) ===
-            user = User.objects.create_user(
-                username=email,
-                email=email,
-                password=password,
-                first_name=first_name,
-                last_name=last_name,
-                is_active=False  # must verify email before login
-            )
-
-            # === Create profile safely ===
-            profile, created = UserProfile.objects.get_or_create(
-                user=user,
-                defaults={
-                    "role": "Student" if not user.is_superuser else "University Admin",
-                    "is_email_verified": False,
-                },
-            )
-
-            # === Audit log ===
-            create_audit(
-                "Register",
-                performed_by=user,
-                target_user=user,
-                details="User registered"
-            )
-
-            # === Send email verification ===
-            send_verification_email(user)
-
-            return Response(
-                {
-                    "message": "User registered successfully. Please check your email to verify your account.",
-                    "profile": UserProfileSerializer(profile).data
-                },
-                status=status.HTTP_201_CREATED
-            )
-
-        except IntegrityError:
-            return Response(
-                {"error": "A database error occurred. Please try again."},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
-
 
 
 
@@ -868,7 +899,7 @@ class VerifyEmailView(APIView):
     Endpoint to verify user email via GET link:
     Frontend URL: /verify-email/<uidb64>/<token>
     """
-    permission_classes = []
+    permission_classes = []  # public
 
     def get(self, request, uidb64, token):
         if not uidb64 or not token:
@@ -886,38 +917,41 @@ class VerifyEmailView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Check token validity
+        # ✅ Check token validity
         if not default_token_generator.check_token(user, token):
             return Response(
                 {"error": "Verification link is invalid or expired."},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # ✅ Activate user and mark email as verified
+        # ✅ Activate account and mark email verified
         user.is_active = True
         user.save()
 
-        # Create profile if missing
-        profile, _ = UserProfile.objects.get_or_create(user=user)
-        profile.is_email_verified = True
-        profile.save()
+        # ✅ Update or create user profile
+        profile, created = UserProfile.objects.get_or_create(user=user)
+        if not profile.is_email_verified:
+            profile.is_email_verified = True
+            profile.save()
 
         # ✅ Audit log
         create_audit(
-            "Email Verification",
+            action="Email Verification",
             performed_by=user,
             target_user=user,
             details="User verified their email"
         )
 
+        # ✅ Return full serialized profile
+        profile_data = UserProfileSerializer(profile).data
+
         return Response(
             {
                 "message": "Email verified successfully.",
-                "profile": UserProfileSerializer(profile).data
+                "profile": profile_data
             },
             status=status.HTTP_200_OK
         )
-
 
 # ==================================================
 #             Forgot Password (send email)
@@ -1059,4 +1093,4 @@ class LogoutView(APIView):
             # Audit logging shouldn’t crash logout
             pass
 
-        return response
+        return response 

@@ -3,9 +3,10 @@ from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
 from django.contrib.auth import get_user_model
 from django.contrib.auth.signals import user_logged_in, user_logged_out, user_login_failed
+from django.contrib.auth.models import update_last_login
 
 # ✅ Import models directly without circular import
-from core.models import Ticket, TicketAssignment, TicketResolution, UserProfile, AuditLog
+from core.models import Ticket, TicketAssignment, TicketResolution, UserProfile, AuditLog, Role
 from core.utils.audit import create_audit
 
 User = get_user_model()
@@ -113,20 +114,30 @@ def create_user_profile(sender, instance, created, **kwargs):
     """Automatically create a UserProfile for each new user"""
     if created:
         if instance.is_superuser:
+            # ✅ Get or create the University Admin role
+            default_role, _ = Role.objects.get_or_create(
+                name="University Admin",
+                defaults={"description": "Full administrative privileges"},
+            )
             profile = UserProfile.objects.create(
                 user=instance,
-                role=UserProfile.Role.UNIVERSITY_ADMIN,
+                role=default_role,
                 is_email_verified=True,
                 created_by_admin=True,  # 🚨 bypass email verification
             )
         else:
-            profile = UserProfile.objects.create(user=instance)
+            # ✅ Default fallback role for normal users
+            default_role, _ = Role.objects.get_or_create(
+                name="Student",
+                defaults={"description": "Default role for students"},
+            )
+            profile = UserProfile.objects.create(user=instance, role=default_role)
 
         create_audit(
-        AuditLog.Action.USER_PROFILE_CREATED,
+            AuditLog.Action.USER_PROFILE_CREATED,
             performed_by=instance,
             target_user=instance,
-            details=f"UserProfile created for {instance.email} with role {profile.role}.",
+            details=f"UserProfile created for {instance.email} with role {profile.role.name}.",
         )
 
 
@@ -135,6 +146,11 @@ def create_user_profile(sender, instance, created, **kwargs):
 # =====================================================
 @receiver(user_logged_in)
 def log_user_login(sender, request, user, **kwargs):
+    """Log login and update last_login field"""
+    # ✅ Update last_login timestamp
+    update_last_login(sender, user)
+
+    # ✅ Audit logging
     create_audit(
         AuditLog.Action.LOGIN,
         performed_by=user,
