@@ -47,7 +47,11 @@ export default function App() {
   // 🔹 Determine which dashboard to show by role
   const getDashboard = () => {
     if (!user) return <Navigate to="/login" replace />;
-    switch (user.role.toLowerCase()) {
+
+    // ✅ role is always a Role object now
+    const roleName = user.role.name?.toLowerCase();
+
+    switch (roleName) {
       case "admin":
       case "super admin":
       case "university admin":

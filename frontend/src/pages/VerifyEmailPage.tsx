@@ -1,5 +1,5 @@
 // src/pages/VerifyEmailPage.tsx
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useParams, Link } from "react-router-dom";
 import { api } from "../api/client"; // ✅ use your Axios instance
 
@@ -7,8 +7,12 @@ export default function VerifyEmailPage() {
   const { uidb64, token } = useParams<{ uidb64: string; token: string }>();
   const [message, setMessage] = useState("Verifying...");
   const [error, setError] = useState("");
+  const hasRun = useRef(false); // 🔹 prevents duplicate requests in StrictMode
 
   useEffect(() => {
+    if (hasRun.current) return; // ✅ block second execution
+    hasRun.current = true;
+
     async function verify() {
       console.log("🔹 Starting email verification...");
       console.log("Params received:", { uidb64, token });
@@ -24,11 +28,9 @@ export default function VerifyEmailPage() {
         const url = `/auth/verify-email/${uidb64}/${token}/`;
         console.log("🔹 Full GET request URL:", url);
 
-        // ✅ Use Axios instance so baseURL is included
         const response = await api.get(url);
         console.log("✅ Response from backend:", response.data);
 
-        // 🔹 Handle backend response
         if (response.data?.message) {
           setMessage("🎉 Email verified successfully! You can now log in.");
           setError("");

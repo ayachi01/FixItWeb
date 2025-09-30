@@ -1,5 +1,6 @@
 # ==================== Imports ====================
 from datetime import timedelta
+import re
 
 from django.contrib.auth import get_user_model, authenticate
 from django.utils import timezone
@@ -7,19 +8,58 @@ from django.utils import timezone
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
-from .models import (
-    UserProfile, StudentProfile,
-    Invite, Ticket, TicketImage, TicketResolution,
-    Location, PasswordResetCode,
-    AuditLog, TicketAssignment,
+from core.models import (
+    UserProfile, StudentProfile, Role, Invite,
+    Ticket, TicketImage, TicketResolution,
+    Location, PasswordResetCode, AuditLog,
+    TicketAssignment,
 )
-
 
 # ✅ Always reference your custom user
 User = get_user_model()
 
 
-# ==================== User & Profile ====================
+# ==================== Serializers ====================
+import re
+from rest_framework import serializers
+from django.contrib.auth import get_user_model
+from core.models import StudentProfile, UserProfile, Role
+
+User = get_user_model()
+
+# ✅ Move this ABOVE UserProfileSerializer
+class StudentProfileSerializer(serializers.ModelSerializer):
+    """Serializer for student academic details (writable for students)"""
+    first_name = serializers.CharField(source="user_profile.user.first_name", read_only=True)
+    last_name = serializers.CharField(source="user_profile.user.last_name", read_only=True)
+    email = serializers.EmailField(source="user_profile.user.email", read_only=True)
+
+    class Meta:
+        model = StudentProfile
+        fields = [
+            "id", "student_id",
+            "first_name", "last_name", "email",
+            "course_code", "course_name",
+            "year_level", "section",
+            "college", "enrollment_year",
+        ]
+        read_only_fields = ["id", "first_name", "last_name", "email"]
+
+    def validate_student_id(self, value):
+        pattern = r"^\d{2}-\d{4}-\d{6}$"
+        if not re.match(pattern, value):
+            raise serializers.ValidationError(
+                "Student ID must be in the format NN-NNNN-NNNNNN (e.g., 09-3456-348946)."
+            )
+        return value
+
+    def update(self, instance, validated_data):
+        if "student_id" in validated_data and instance.student_id:
+            validated_data.pop("student_id")
+        return super().update(instance, validated_data)
+
+
+
 class UserSerializer(serializers.ModelSerializer):
     """Basic User serializer for returning user data"""
     full_name = serializers.SerializerMethodField()
@@ -32,22 +72,25 @@ class UserSerializer(serializers.ModelSerializer):
         return f"{obj.first_name} {obj.last_name}".strip()
 
 
-class StudentProfileSerializer(serializers.ModelSerializer):
-    """Nested student profile serializer"""
+
+class RoleSerializer(serializers.ModelSerializer):
+    """Serializer for Role model (ensures JSON safe response)"""
     class Meta:
-        model = StudentProfile
-        fields = ["id", "full_name", "student_id", "course", "year_level"]
+        model = Role
+        fields = ["id", "name", "description"]
 
 
 class UserProfileSerializer(serializers.ModelSerializer):
-    # Flattened user info
+    """
+    Extended profile serializer with role, flags, features, and nested student info.
+    """
     id = serializers.SerializerMethodField()
     email = serializers.SerializerMethodField()
     first_name = serializers.SerializerMethodField()
     last_name = serializers.SerializerMethodField()
     full_name = serializers.SerializerMethodField()
 
-    # ✅ Expose role-based flags directly
+    # Permission flags (read-only, derived from UserProfile properties)
     can_fix = serializers.BooleanField(read_only=True)
     can_assign = serializers.BooleanField(read_only=True)
     can_manage_users = serializers.BooleanField(read_only=True)
@@ -55,75 +98,83 @@ class UserProfileSerializer(serializers.ModelSerializer):
 
     features = serializers.SerializerMethodField()
     allowed_categories = serializers.SerializerMethodField()
-    student_profile = StudentProfileSerializer(read_only=True)
+    student_profile = StudentProfileSerializer(required=False)
+
+    # ✅ Role is nested via RoleSerializer (not a raw model object)
+    role = RoleSerializer(read_only=True)
 
     class Meta:
         model = UserProfile
         fields = [
             "id", "email", "first_name", "last_name", "full_name",
             "role", "is_email_verified", "email_domain",
-            "can_fix", "can_assign", "can_manage_users", "is_admin_level",  # 👈 now exposed
+            "can_fix", "can_assign", "can_manage_users", "is_admin_level",
             "features", "allowed_categories", "student_profile",
         ]
 
+    # ---------- Identity ----------
     def get_id(self, obj):
-        if isinstance(obj, User):
-            return obj.id
-        return getattr(obj.user, "id", None)
+        return obj.user.id if hasattr(obj, "user") else None
 
     def get_email(self, obj):
-        if isinstance(obj, User):
-            return obj.email
-        return getattr(obj.user, "email", None)
+        return obj.user.email if hasattr(obj, "user") else None
 
     def get_first_name(self, obj):
-        if isinstance(obj, User):
-            return obj.first_name
-        return getattr(obj.user, "first_name", None)
+        return obj.user.first_name if hasattr(obj, "user") else None
 
     def get_last_name(self, obj):
-        if isinstance(obj, User):
-            return obj.last_name
-        return getattr(obj.user, "last_name", None)
+        return obj.user.last_name if hasattr(obj, "user") else None
 
     def get_full_name(self, obj):
-        if isinstance(obj, User):
-            return f"{obj.first_name} {obj.last_name}".strip()
-        if getattr(obj, "user", None):
+        if hasattr(obj, "user"):
             return f"{obj.user.first_name} {obj.user.last_name}".strip()
-        if getattr(obj, "student_profile", None):
-            return obj.student_profile.full_name
         return ""
 
+    # ---------- Features ----------
     def get_features(self, obj):
         """Build features dynamically from profile flags"""
         features = []
-
         if getattr(obj, "can_report", False):
             features.extend(["canReport", "myReports"])
         if getattr(obj, "can_fix", False):
-            features.extend([
-                "assignedTickets", "uploadProof",
-                "updateStatus", "workHistory",
-            ])
+            features.extend(["assignedTickets", "uploadProof", "updateStatus", "workHistory"])
         if getattr(obj, "can_assign", False):
-            features.extend([
-                "overview", "assignTickets",
-                "reviewProof", "escalate",
-            ])
+            features.extend(["overview", "assignTickets", "reviewProof", "escalate"])
         if getattr(obj, "can_manage_users", False):
             features.append("manageUsers")
         if getattr(obj, "is_admin_level", False):
-            features.extend([
-                "reportsView", "escalate", "closeTickets",
-            ])
-        if getattr(obj, "role", "").lower() in ["super admin", "university admin"]:
+            features.extend(["reportsView", "escalate", "closeTickets"])
+        if getattr(obj, "role", None) and obj.role.name.lower() in ["super admin", "university admin"]:
             features.extend(["systemSettings", "aiReports"])
-
-        return list(dict.fromkeys(features))
+        return list(dict.fromkeys(features))  # deduplicate
 
     def get_allowed_categories(self, obj):
         return obj.allowed_categories() if hasattr(obj, "allowed_categories") else []
+
+    # ---------- Update ----------
+    def update(self, instance, validated_data):
+        """
+        Update user profile and nested student profile.
+        Only backend-managed fields are updated here (not frontend overwriting).
+        """
+        student_data = validated_data.pop("student_profile", None)
+
+        # ✅ Update backend-controlled UserProfile fields
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+
+        # ✅ Handle StudentProfile safely
+        if student_data is not None:
+            student_profile, _ = StudentProfile.objects.get_or_create(user_profile=instance)
+            for attr, value in student_data.items():
+                if attr == "student_id" and student_profile.student_id:
+                    continue  # 🔒 don’t overwrite existing student_id
+                setattr(student_profile, attr, value)
+            student_profile.save()
+
+        return instance
+
 
 # ==================== Registration ====================
 class StudentRegisterSerializer(serializers.ModelSerializer):
@@ -138,7 +189,6 @@ class StudentRegisterSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         if attrs["password"] != attrs["confirm_password"]:
             raise serializers.ValidationError({"password": "Passwords do not match."})
-
         if not attrs["email"].endswith(".edu") and "university" not in attrs["email"]:
             raise serializers.ValidationError({"email": "Must use a valid university email."})
         return attrs
@@ -151,16 +201,16 @@ class StudentRegisterSerializer(serializers.ModelSerializer):
             first_name=validated_data["first_name"],
             last_name=validated_data["last_name"],
         )
+        student_role, _ = Role.objects.get_or_create(name="Student")
         UserProfile.objects.filter(user=user).update(
-            role=UserProfile.Role.STUDENT,
-            is_email_verified=False,
+            role=student_role, is_email_verified=False
         )
         return user
 
 
 class StaffCreateSerializer(serializers.ModelSerializer):
     """Registrar/HR creating staff/faculty accounts"""
-    role = serializers.ChoiceField(choices=UserProfile.Role.choices)
+    role = serializers.SlugRelatedField(queryset=Role.objects.all(), slug_field="name")
 
     class Meta:
         model = User
@@ -185,13 +235,12 @@ class StaffCreateSerializer(serializers.ModelSerializer):
             profile.save()
         return user
 
-
 # ==================== Invites ====================
 class InviteSerializer(serializers.ModelSerializer):
     """Read serializer for returning invite details"""
     status = serializers.SerializerMethodField()
     approved_by = serializers.SerializerMethodField()
-    role = serializers.CharField(source="get_role_display", read_only=True)
+    role = serializers.CharField(source="role.name", read_only=True)
 
     class Meta:
         model = Invite
@@ -207,7 +256,7 @@ class InviteSerializer(serializers.ModelSerializer):
     def get_status(self, obj):
         if obj.is_used:
             return "used"
-        if obj.expires_at < timezone.now():
+        if obj.is_expired:
             return "expired"
         if obj.requires_admin_approval and not obj.is_approved:
             return "pending_approval"
@@ -221,7 +270,7 @@ class InviteSerializer(serializers.ModelSerializer):
 
 class InviteCreateSerializer(serializers.ModelSerializer):
     """Serializer for creating invites"""
-    role = serializers.ChoiceField(choices=UserProfile.Role.choices)
+    role = serializers.SlugRelatedField(queryset=Role.objects.all(), slug_field="name")
 
     class Meta:
         model = Invite
@@ -229,7 +278,11 @@ class InviteCreateSerializer(serializers.ModelSerializer):
 
     def validate_email(self, value):
         email = value.lower().strip()
-        if Invite.objects.filter(email=email, is_used=False, expires_at__gt=timezone.now()).exists():
+        if Invite.objects.filter(
+            email=email,
+            is_used=False,
+            expires_at__gt=timezone.now()
+        ).exists():
             raise serializers.ValidationError("An active invite already exists for this email.")
         if User.objects.filter(email=email).exists():
             raise serializers.ValidationError("A user with this email already exists.")
@@ -237,9 +290,7 @@ class InviteCreateSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         validated_data["email"] = validated_data["email"].lower().strip()
-        if not validated_data.get("expires_at"):
-            validated_data["expires_at"] = timezone.now() + timedelta(days=7)
-        return Invite.objects.create(**validated_data)
+        return Invite.objects.create(**validated_data)  # expiry handled in Invite.save()
 
 
 class InviteApproveSerializer(serializers.ModelSerializer):
@@ -268,12 +319,10 @@ class InviteAcceptSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         invite = self.instance
-        if invite.is_used:
-            raise serializers.ValidationError("Invite already used.")
-        if invite.expires_at < timezone.now():
-            raise serializers.ValidationError("Invite has expired.")
-        if invite.requires_admin_approval and not invite.is_approved:
-            raise serializers.ValidationError("This invite requires admin approval.")
+        if not invite.can_be_used():
+            raise serializers.ValidationError(
+                "This invite cannot be used (expired, already used, or not approved)."
+            )
         return attrs
 
     def update(self, instance, validated_data):
@@ -295,10 +344,8 @@ class InviteAcceptSerializer(serializers.ModelSerializer):
             profile.is_email_verified = True
             profile.save()
 
-        instance.is_used = True
-        instance.save()
+        instance.mark_used(user=user)  # model enforces rules
         return user
-
 
 
 # ==================== Tickets ====================
@@ -310,20 +357,27 @@ class TicketSerializer(serializers.ModelSerializer):
         fields = "__all__"
 
     def get_location_name(self, obj):
-        # Use __str__() of Location to return a readable string
         return str(obj.location) if obj.location else None
 
     def create(self, validated_data):
         request = self.context.get("request")
         if request and request.user.is_authenticated:
             validated_data["reporter"] = request.user
+
+        # ---------- Image validation ----------
+        if not request or "image" not in request.FILES:
+            raise serializers.ValidationError({"image": "At least one image is required."})
+
+        images = request.FILES.getlist("image")
+        if len(images) < 1:
+            raise serializers.ValidationError({"image": "At least one image is required."})
+        if len(images) > 3:
+            raise serializers.ValidationError({"image": "A maximum of 3 images are allowed."})
+
         ticket = Ticket.objects.create(**validated_data)
-        if request and "image" in request.FILES:
-            TicketImage.objects.create(
-                ticket=ticket,
-                image_url=request.FILES["image"],
-                uploaded_by=request.user,
-            )
+
+        for img in images:
+            TicketImage.objects.create(ticket=ticket, image_url=img, uploaded_by=request.user)
         return ticket
 
 
@@ -340,10 +394,7 @@ class TicketResolutionSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = TicketResolution
-        fields = [
-            "id", "ticket", "resolution_note",
-            "proof_image", "resolved_by", "timestamp",
-        ]
+        fields = ["id", "ticket", "resolution_note", "proof_image", "resolved_by", "timestamp"]
 
     def validate(self, attrs):
         request = self.context.get("request")
@@ -397,21 +448,40 @@ class EmailTokenObtainPairSerializer(TokenObtainPairSerializer):
         if not user.is_active:
             raise serializers.ValidationError("Account is inactive. Verify email first.")
 
+        # Call parent validation
         data = super().validate({
             self.username_field: getattr(user, self.username_field),
             "password": password,
         })
+
+        # ✅ Add safe user info
         data["email"] = user.email
-        if hasattr(user, "profile"):
-            data["role"] = user.profile.role
+        if hasattr(user, "profile") and user.profile:
+            data["role"] = (
+                user.profile.role.name if user.profile.role else None
+            )  # always string or None
+            data["is_email_verified"] = user.profile.is_email_verified
+        else:
+            data["role"] = None
+            data["is_email_verified"] = False
+
         return data
 
     @classmethod
     def get_token(cls, user):
         token = super().get_token(user)
         token["email"] = user.email
-        if hasattr(user, "profile"):
-            token["role"] = user.profile.role
+
+        # ✅ Store only safe fields inside JWT
+        if hasattr(user, "profile") and user.profile:
+            token["role"] = (
+                user.profile.role.name if user.profile.role else None
+            )  # always string or None
+            token["is_email_verified"] = user.profile.is_email_verified
+        else:
+            token["role"] = None
+            token["is_email_verified"] = False
+
         return token
 
 
@@ -440,7 +510,6 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
 
     def validate(self, attrs):
         email, code = attrs["email"], attrs["code"]
-
         try:
             user = User.objects.get(email=email)
         except User.DoesNotExist:

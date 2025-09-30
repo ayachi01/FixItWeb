@@ -6,6 +6,7 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
+from django.core.validators import RegexValidator
 from django.db import models, transaction
 from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
@@ -14,24 +15,30 @@ from django.contrib.auth.hashers import make_password, check_password
 from django.contrib.auth.models import AbstractUser, BaseUserManager, PermissionsMixin
 from django.contrib.auth.signals import user_logged_in, user_logged_out, user_login_failed
 
+
+
+
 # Validators
 from core.validators import validate_file_size, validate_image_extension
 
 
 logger = logging.getLogger(__name__)
 
-
-
 # ======================
 # 1. USER & AUTHENTICATION
 # ======================
 
+# =====================================================
+# Custom User Manager
+# =====================================================
 class CustomUserManager(BaseUserManager):
     def create_user(self, email, password=None, **extra_fields):
+        """Create and return a regular user with email login."""
         if not email:
             raise ValueError("The Email field must be set")
         email = self.normalize_email(email)
 
+        # Default username from email (optional)
         extra_fields.setdefault("username", email.split("@")[0])
 
         user = self.model(email=email, **extra_fields)
@@ -41,6 +48,7 @@ class CustomUserManager(BaseUserManager):
         return user
 
     def create_superuser(self, email, password=None, **extra_fields):
+        """Create and return a superuser."""
         extra_fields.setdefault("is_staff", True)
         extra_fields.setdefault("is_superuser", True)
 
@@ -52,78 +60,90 @@ class CustomUserManager(BaseUserManager):
         return self.create_user(email, password, **extra_fields)
 
 
+# =====================================================
+# Custom User Model
+# =====================================================
 class CustomUser(AbstractUser, PermissionsMixin):
     email = models.EmailField(unique=True, db_index=True)
 
-    # Remove username requirement
+    # Username is optional, since login uses email
     username = models.CharField(max_length=150, blank=True, null=True)
 
-    otp_hash = models.CharField(max_length=128, blank=True, null=True)
-    otp_created_at = models.DateTimeField(blank=True, null=True)
+    # Remove OTP fields (handled by PasswordResetCode)
+    # otp_hash = models.CharField(max_length=128, blank=True, null=True)
+    # otp_created_at = models.DateTimeField(blank=True, null=True)
 
     USERNAME_FIELD = "email"
-    REQUIRED_FIELDS = []
+    REQUIRED_FIELDS = []  # No username required
 
     objects = CustomUserManager()
 
     def __str__(self):
         return self.email
 
-    def set_otp(self, raw_otp: str):
-        self.otp_hash = make_password(raw_otp)
-        self.otp_created_at = timezone.now()
-        self.save(update_fields=["otp_hash", "otp_created_at"])
-
-    def check_otp(self, raw_otp: str) -> bool:
-        if not self.otp_hash or not self.otp_created_at:
-            return False
-        if self.otp_created_at + timedelta(minutes=15) < timezone.now():
-            return False
-        return check_password(raw_otp, self.otp_hash)
-
-    def clear_otp(self):
-        self.otp_hash = None
-        self.otp_created_at = None
-        self.save(update_fields=["otp_hash", "otp_created_at"])
-
 
 # ======================
 # 1b. UserProfile & RBAC
 # ======================
+class Role(models.Model):
+    """
+    Defines user roles (e.g., Student, Faculty, Janitorial, etc.)
+    DB-driven instead of hardcoding inside the model.
+    """
+    name = models.CharField(max_length=50, unique=True, db_index=True)
+    description = models.TextField(blank=True)
+
+    def __str__(self):
+        return self.name
+
+
+class Permission(models.Model):
+    """
+    Defines permissions and allowed ticket categories per role.
+    """
+    role = models.OneToOneField(Role, on_delete=models.CASCADE, related_name="permissions")
+    can_report = models.BooleanField(default=False)
+    can_fix = models.BooleanField(default=False)
+    can_assign = models.BooleanField(default=False)
+    can_manage_users = models.BooleanField(default=False)
+    is_admin_level = models.BooleanField(default=False)
+
+    # Allowed ticket categories for fixers (stored as JSON for flexibility)
+    allowed_categories = models.JSONField(default=list, blank=True)
+
+    def __str__(self):
+        return f"Permissions for {self.role.name}"
+
+
+class DomainRoleMapping(models.Model):
+    """
+    Maps an email domain to a default role.
+    Example: "student.university.edu" → "Student"
+    """
+    domain = models.CharField(max_length=100, unique=True, db_index=True)
+    role = models.ForeignKey(Role, on_delete=models.CASCADE, related_name="domain_mappings")
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Domain → Role Mapping"
+        verbose_name_plural = "Domain → Role Mappings"
+
+    def __str__(self):
+        return f"{self.domain} → {self.role.name}"
+
 
 class UserProfile(models.Model):
-    class Role(models.TextChoices):
-        STUDENT = "Student", "Student"
-        FACULTY = "Faculty", "Faculty"
-        ADMIN_STAFF = "Admin Staff", "Admin Staff"
-        VISITOR = "Visitor", "Visitor"
-        JANITORIAL = "Janitorial Staff", "Janitorial Staff"
-        UTILITY = "Utility Worker", "Utility Worker"
-        IT_SUPPORT = "IT Support", "IT Support"
-        SECURITY_GUARD = "Security Guard", "Security Guard"
-        MAINTENANCE_OFFICER = "Maintenance Officer", "Maintenance Officer"
-        REGISTRAR = "Registrar", "Registrar"
-        HR = "HR", "HR"
-        UNIVERSITY_ADMIN = "University Admin", "University Admin"
-
-    # 🔒 Centralized role–permission matrix
-    ROLE_PERMISSION_MAP = {
-        Role.STUDENT:          {"can_report": True,  "can_fix": False, "can_assign": False, "can_manage_users": False, "is_admin_level": False},
-        Role.FACULTY:          {"can_report": True,  "can_fix": False, "can_assign": False, "can_manage_users": False, "is_admin_level": False},
-        Role.ADMIN_STAFF:      {"can_report": True,  "can_fix": False, "can_assign": False, "can_manage_users": False, "is_admin_level": False},
-        Role.VISITOR:          {"can_report": True,  "can_fix": False, "can_assign": False, "can_manage_users": False, "is_admin_level": False},
-        Role.JANITORIAL:       {"can_report": True,  "can_fix": True,  "can_assign": False, "can_manage_users": False, "is_admin_level": False},
-        Role.UTILITY:          {"can_report": True,  "can_fix": True,  "can_assign": False, "can_manage_users": False, "is_admin_level": False},
-        Role.IT_SUPPORT:       {"can_report": True,  "can_fix": True,  "can_assign": False, "can_manage_users": False, "is_admin_level": False},
-        Role.SECURITY_GUARD:   {"can_report": True,  "can_fix": True,  "can_assign": False, "can_manage_users": False, "is_admin_level": False},
-        Role.MAINTENANCE_OFFICER: {"can_report": True, "can_fix": False, "can_assign": True, "can_manage_users": False, "is_admin_level": False},
-        Role.REGISTRAR:        {"can_report": True,  "can_fix": False, "can_assign": False, "can_manage_users": True,  "is_admin_level": True},
-        Role.HR:               {"can_report": True,  "can_fix": False, "can_assign": False, "can_manage_users": True,  "is_admin_level": True},
-        Role.UNIVERSITY_ADMIN: {"can_report": True,  "can_fix": False, "can_assign": True,  "can_manage_users": True,  "is_admin_level": True},
-    }
-
-    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="profile")
-    role = models.CharField(max_length=50, choices=Role.choices, blank=True, db_index=True)
+    """
+    User profile linked to a CustomUser, with role + permissions.
+    """
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="profile"
+    )
+    role = models.ForeignKey(Role, on_delete=models.SET_NULL, null=True, blank=True)
     is_email_verified = models.BooleanField(default=False)
     email_domain = models.CharField(max_length=100, blank=True)
     created_by_admin = models.BooleanField(default=False)
@@ -132,35 +152,42 @@ class UserProfile(models.Model):
         indexes = [models.Index(fields=["role"])]
 
     def save(self, *args, **kwargs):
-        # Track role changes for signals
+        # Track role changes
         if self.pk:
             old = UserProfile.objects.filter(pk=self.pk).values("role").first()
-            if old and old["role"] != self.role:
+            if old and old["role"] != (self.role.id if self.role else None):
                 setattr(self, "_role_changed", True)
 
-        # Auto-assign email domain & default role
+        # Auto-assign email domain
         if getattr(self.user, "email", None):
             self.email_domain = self.user.email.split("@")[-1].lower()
+
+        # Auto-assign role only for self-registered users
         if not self.role:
-            if self.email_domain == "student.university.edu":
-                self.role = self.Role.STUDENT
-            elif self.email_domain == "faculty.university.edu":
-                self.role = self.Role.FACULTY
-            elif self.email_domain == "admin.university.edu":
-                self.role = self.Role.ADMIN_STAFF
+            mapping = DomainRoleMapping.objects.filter(domain=self.email_domain).first()
+            if mapping:
+                self.role = mapping.role
             else:
-                self.role = self.Role.VISITOR
+                # fallback role if no mapping found
+                self.role, _ = Role.objects.get_or_create(name="Visitor")
 
         super().save(*args, **kwargs)
 
-    # === Permissions (powered by the matrix) ===
+    # === Permissions ===
+    @property
+    def permissions(self):
+        try:
+            return self.role.permissions
+        except (AttributeError, Permission.DoesNotExist):
+            return None
+
     @property
     def can_report(self):
-        return self.ROLE_PERMISSION_MAP.get(self.role, {}).get("can_report", False)
+        return bool(self.permissions and self.permissions.can_report)
 
     @property
     def can_fix(self):
-        return self.ROLE_PERMISSION_MAP.get(self.role, {}).get("can_fix", False)
+        return bool(self.permissions and self.permissions.can_fix)
 
     @property
     def requires_proof(self):
@@ -168,56 +195,81 @@ class UserProfile(models.Model):
 
     @property
     def can_assign(self):
-        return self.ROLE_PERMISSION_MAP.get(self.role, {}).get("can_assign", False)
+        return bool(self.permissions and self.permissions.can_assign)
 
     @property
     def can_manage_users(self):
-        return self.ROLE_PERMISSION_MAP.get(self.role, {}).get("can_manage_users", False)
+        return bool(self.permissions and self.permissions.can_manage_users)
 
     @property
     def is_admin_level(self):
-        return self.ROLE_PERMISSION_MAP.get(self.role, {}).get("is_admin_level", False)
+        return bool(self.permissions and self.permissions.is_admin_level)
 
     @property
     def can_close_tickets(self):
         return self.is_admin_level
 
-    # 🔒 Allowed ticket categories per role
-    CATEGORY_MAP = {
-        Role.JANITORIAL: ["Cleaning"],
-        Role.UTILITY: ["Plumbing", "Electrical", "Structural", "HVAC"],
-        Role.IT_SUPPORT: ["Technology", "Equipment"],
-        Role.SECURITY_GUARD: ["Disturbance", "Security", "Parking"],
-    }
-
     def allowed_categories(self):
-        return self.CATEGORY_MAP.get(self.role, [])
+        return self.permissions.allowed_categories if self.permissions else []
 
-    # 🔑 NEW: Find fixers eligible for a given category
+    # 🔑 Find fixers eligible for a given category
     @classmethod
     def fixers_for_category(cls, category):
-        eligible_roles = [
-            role for role, cats in cls.CATEGORY_MAP.items() if category in cats
-        ]
-        return cls.objects.filter(role__in=eligible_roles)
+        return cls.objects.filter(
+            role__permissions__allowed_categories__contains=[category]
+        )
 
     def __str__(self):
-        return f"{self.user.email} - {self.role or 'No Role'}"
+        return f"{self.user.email} - {self.role.name if self.role else 'No Role'}"
 
 
-# ======================
-# StudentProfile, PasswordResetCode
-# ======================
 
 class StudentProfile(models.Model):
-    user_profile = models.OneToOneField(UserProfile, on_delete=models.CASCADE, related_name="student_profile")
-    full_name = models.CharField(max_length=255, blank=True)
-    course = models.CharField(max_length=255, blank=True, null=True)
-    year_level = models.PositiveIntegerField(blank=True, null=True)
-    student_id = models.CharField(max_length=50, blank=True, null=True, unique=True)
+    """
+    Extends UserProfile with student-specific academic details.
+    """
+    user_profile = models.OneToOneField(
+        UserProfile,
+        on_delete=models.CASCADE,
+        related_name="student_profile"
+    )
+    student_id = models.CharField(
+        max_length=50,
+        unique=True,
+        db_index=True,
+        validators=[
+            RegexValidator(
+                regex=r"^\d{2}-\d{4}-\d{6}$",
+                message="Student ID must be in the format NN-NNNN-NNNNNN (e.g., 09-3456-348946)"
+            )
+        ]
+    )
+    course_code = models.CharField(max_length=20, blank=True, null=True)
+    course_name = models.CharField(max_length=255, blank=True, null=True)
+    year_level = models.PositiveSmallIntegerField(blank=True, null=True)
+    section = models.CharField(max_length=10, blank=True, null=True)
+    college = models.CharField(max_length=255, blank=True, null=True)
+    enrollment_year = models.PositiveIntegerField(blank=True, null=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["student_id"]),
+            models.Index(fields=["course_code"]),
+            models.Index(fields=["year_level"]),
+        ]
+        verbose_name = "Student Profile"
+        verbose_name_plural = "Student Profiles"
 
     def __str__(self):
-        return f"StudentProfile: {self.full_name or self.user_profile.user.email}"
+        user = getattr(self.user_profile, "user", None)
+        if user:
+            return f"{user.first_name} {user.last_name} ({self.student_id})".strip()
+        return f"StudentProfile: {self.student_id}"
+
+
 
 
 class PasswordResetCodeManager(models.Manager):
@@ -225,23 +277,34 @@ class PasswordResetCodeManager(models.Manager):
         """
         Create a new reset code for the user.
         Ensures only one active code exists per user.
+        Returns the object and the raw code (for emailing).
         """
         with transaction.atomic():
             # Mark all old active codes as used
             self.filter(user=user, is_used=False).update(is_used=True)
 
-            # Generate new code
-            code = f"{random.randint(100000, 999999)}"
-            return self.create(user=user, code=code)
+            # Generate raw OTP (6-digit)
+            raw_code = f"{random.randint(100000, 999999)}"
+            hashed_code = make_password(raw_code)
+
+            # Save hashed version
+            obj = self.create(user=user, code_hash=hashed_code)
+
+            # Return both for external use (raw_code is sent to email)
+            return obj, raw_code
 
 
 class PasswordResetCode(models.Model):
+    """
+    OTP for password reset.
+    Only one active (unused + unexpired) code is allowed per user.
+    """
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="password_reset_codes"
     )
-    code = models.CharField(max_length=6, blank=True, db_index=True)
+    code_hash = models.CharField(max_length=128, blank=True, db_index=True)
     created_at = models.DateTimeField(default=timezone.now, db_index=True)
     is_used = models.BooleanField(default=False, db_index=True)
 
@@ -257,30 +320,59 @@ class PasswordResetCode(models.Model):
             )
         ]
 
-    def save(self, *args, **kwargs):
-        if not self.code:
-            self.code = f"{random.randint(100000, 999999)}"
-        super().save(*args, **kwargs)
-
-    def is_expired(self):
+    # ======================
+    # Validation & Expiry
+    # ======================
+    def is_expired(self) -> bool:
+        """Check if the OTP has expired (15 minutes)."""
         return self.created_at + timedelta(minutes=15) < timezone.now()
 
+    def check_code(self, raw_code: str) -> bool:
+        """
+        Validate an OTP.
+        Returns True if correct, not expired, and not already used.
+        """
+        if self.is_used or self.is_expired():
+            return False
+        return check_password(raw_code, self.code_hash)
+
     def mark_used(self):
+        """Mark the OTP as used (after successful reset)."""
         self.is_used = True
         self.save(update_fields=["is_used"])
 
+    # ======================
+    # Cleanup
+    # ======================
+    @classmethod
+    def cleanup_expired(cls):
+        """
+        Delete all expired or already used reset codes.
+        Called by Celery / cron / management command.
+        """
+        now = timezone.now()
+        expired = cls.objects.filter(
+            models.Q(is_used=True) | models.Q(created_at__lt=now - timedelta(minutes=15))
+        )
+        count = expired.count()
+        expired.delete()
+        return count
+
     def __str__(self):
         status = "used" if self.is_used else "active"
-        return f"PasswordResetCode for {self.user.email} - {self.code} ({status})"
+        return f"PasswordResetCode for {self.user.email} ({status})"
 
-# ======================
-# 2. INVITE & REGISTRATION
-# ======================
 
 class Invite(models.Model):
+    """
+    Invitation system to onboard privileged users (fixers/admins).
+    Normal users self-register, but fixers/admins require an invite.
+    """
     email = models.EmailField(db_index=True)
     token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False, db_index=True)
-    role = models.CharField(max_length=50, choices=UserProfile.Role.choices)
+
+    # ✅ Role from DB
+    role = models.ForeignKey(Role, on_delete=models.CASCADE, related_name="invites")
 
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -316,19 +408,14 @@ class Invite(models.Model):
         if not self.expires_at:
             self.expires_at = timezone.now() + timedelta(hours=expiry_hours)
 
-        if self.role in [
-            UserProfile.Role.SECURITY_GUARD,
-            UserProfile.Role.MAINTENANCE_OFFICER,
-        ]:
+        # ✅ Delegate approval rule to Role model instead of hardcoding
+        if self.role and getattr(self.role, "requires_admin_approval", False):
             self.requires_admin_approval = True
 
         super().save(*args, **kwargs)
 
-    def __str__(self):
-        return f"Invite for {self.email} - {self.role}"
-
     # =====================================================
-    # ⏳ Expiration Enforcement
+    # ⏳ Expiration & Usage Enforcement
     # =====================================================
     @property
     def is_expired(self) -> bool:
@@ -342,28 +429,35 @@ class Invite(models.Model):
         - Not already used
         - Approved if approval required
         """
-        if self.is_used:
-            return False
-        if self.is_expired:
-            return False
-        if self.requires_admin_approval and not self.is_approved:
-            return False
-        return True
+        return not (
+            self.is_used
+            or self.is_expired
+            or (self.requires_admin_approval and not self.is_approved)
+        )
 
     def mark_used(self, user=None):
-        """Mark the invite as used and optionally log who used it."""
-        if not self.can_be_used():
-            raise ValidationError("Invite cannot be used (expired, already used, or not approved).")
+        """Mark the invite as used and optionally log who approved/used it."""
+        if self.is_used:
+            raise ValidationError("This invite has already been used.")
+        if self.is_expired:
+            raise ValidationError("This invite has expired.")
+        if self.requires_admin_approval and not self.is_approved:
+            raise ValidationError("This invite requires admin approval before it can be used.")
 
         self.is_used = True
-        self.save(update_fields=["is_used"])
+        if user:
+            self.approved_by = user
+            self.approved_at = timezone.now()
+        self.save(update_fields=["is_used", "approved_by", "approved_at"])
         return True
+
+    def __str__(self):
+        return f"Invite for {self.email} - {self.role.name}"
 
 
 # ======================
 # 3. LOCATIONS
 # ======================
-
 class Location(models.Model):
     id = models.AutoField(primary_key=True)
     building_name = models.CharField(max_length=100)
@@ -385,10 +479,6 @@ class Location(models.Model):
 # ======================
 # 4. TICKETING
 # ======================
-
-
-
-
 class Ticket(models.Model):
     class Status(models.TextChoices):
         CREATED = "Created", "Created"
@@ -431,6 +521,10 @@ class Ticket(models.Model):
         on_delete=models.CASCADE,
         related_name="tickets"
     )
+
+    # 🆕 New field: Title
+    title = models.CharField(max_length=255, db_index=True)
+
     description = models.TextField()
     category = models.CharField(max_length=50, choices=Category.choices, db_index=True)
     urgency = models.CharField(
@@ -467,12 +561,17 @@ class Ticket(models.Model):
             models.Index(fields=["category"]),
             models.Index(fields=["created_at"]),
             models.Index(fields=["urgency"]),
+            models.Index(fields=["title"]),
         ]
         constraints = [
             models.CheckConstraint(
                 check=~models.Q(description=""),
                 name="ticket_description_not_empty"
-            )
+            ),
+            models.CheckConstraint(
+                check=~models.Q(title=""),
+                name="ticket_title_not_empty"
+            ),
         ]
 
     def __init__(self, *args, **kwargs):
@@ -483,13 +582,32 @@ class Ticket(models.Model):
     # 🔒 Validation rules
     def clean(self):
         errors = {}
+
+        # 🚫 Empty title
+        if not self.title or not self.title.strip():
+            errors["title"] = "Title cannot be empty."
+
+        # 🚫 Empty description
         if not self.description or not self.description.strip():
             errors["description"] = "Description cannot be empty."
+
+        # 🚫 Missing location
         if not self.location:
             errors["location"] = "Ticket must be linked to a location."
+
+        # 🚫 Missing category
         if not self.category:
             errors["category"] = "Category is required."
 
+        # 📸 Image rules (only validate after ticket exists)
+        if self.pk:
+            image_count = self.images.count()
+            if image_count < 1:
+                errors["images"] = "At least 1 image is required for a ticket."
+            elif image_count > 3:
+                errors["images"] = "A maximum of 3 images are allowed per ticket."
+
+        # 🔒 Status rules
         if self.status in {self.Status.RESOLVED, self.Status.CLOSED} and not self.assignees.exists():
             errors["status"] = f"Ticket cannot be marked {self.status} without an assignee."
 
@@ -572,7 +690,7 @@ class Ticket(models.Model):
         return self
 
     def __str__(self):
-        return f"Ticket #{self.id} - {self.status} - Escalation: {self.escalation_level}"
+        return f"Ticket #{self.id} - {self.title} - {self.status} - Escalation: {self.escalation_level}"
 
 
 class TicketAssignment(models.Model):
@@ -606,6 +724,17 @@ class TicketAssignment(models.Model):
             errors["user"] = f"{self.user} cannot be assigned tickets."
         elif self.ticket and self.ticket.category not in profile.allowed_categories():
             errors["ticket"] = f"{profile.role} cannot be assigned to {self.ticket.category} tickets."
+        else:
+            # ✅ Check fixer availability (max 3 active tickets)
+            active_tickets = self.user.ticket_assignments.filter(
+                ticket__status__in=[
+                    Ticket.Status.CREATED,
+                    Ticket.Status.ASSIGNED,
+                    Ticket.Status.IN_PROGRESS
+                ]
+            ).count()
+            if active_tickets >= 3:
+                errors["user"] = f"{self.user} is already handling 3 active tickets."
 
         if errors:
             raise ValidationError(errors)
@@ -637,11 +766,12 @@ class TicketImage(models.Model):
         if not self.ticket:
             raise ValidationError("TicketImage must be linked to a Ticket.")
 
+        # ✅ Enforce max 3 images per ticket
+        if self.ticket.images.count() >= 3 and not self.pk:
+            raise ValidationError("A ticket cannot have more than 3 images.")
+
     def __str__(self):
         return f"Image for Ticket #{self.ticket.id} uploaded by {self.uploaded_by}"
-
-
-
 
 
 class TicketResolution(models.Model):
@@ -682,7 +812,7 @@ class TicketResolution(models.Model):
             profile = getattr(self.resolved_by, "profile", None)
             if not profile or not profile.can_fix:
                 errors["resolved_by"] = "This user cannot resolve tickets."
-            elif profile.requires_proof and not self.proof_image:
+            elif getattr(profile, "requires_proof", False) and not self.proof_image:
                 errors["proof_image"] = "Proof image is required for resolution."
 
         if errors:
@@ -805,12 +935,19 @@ def create_audit(
     target_invite=None,
     target_ticket=None,
     details: str = "",
+    request=None,
 ):
-    """Safe audit log creator with action validation."""
+    """Safe audit log creator with action validation + request metadata."""
     if action not in AuditLog.Action.values:
         return None
 
     try:
+        # 🔎 Enrich details with request metadata if provided
+        if request:
+            ip = request.META.get("REMOTE_ADDR", "unknown IP")
+            ua = request.META.get("HTTP_USER_AGENT", "unknown UA")
+            details = f"{details} | IP={ip} | UA={ua}".strip()
+
         return AuditLog.objects.create(
             action=action,
             performed_by=performed_by,
@@ -932,16 +1069,13 @@ def log_ticket_resolution(sender, instance, created, **kwargs):
 # =====================================================
 # 🔐 Auth signal hooks
 # =====================================================
-def _get_ip(request):
-    return getattr(request, "META", {}).get("REMOTE_ADDR", "unknown IP")
-
-
 @receiver(user_logged_in)
 def log_user_login(sender, request, user, **kwargs):
     create_audit(
         AuditLog.Action.LOGIN,
         performed_by=user,
-        details=f"User {user.email} logged in from {_get_ip(request)}.",
+        details=f"User {user.email} logged in.",
+        request=request,
     )
 
 
@@ -951,6 +1085,7 @@ def log_user_logout(sender, request, user, **kwargs):
         AuditLog.Action.LOGOUT,
         performed_by=user,
         details=f"User {user.email} logged out.",
+        request=request,
     )
 
 
@@ -959,7 +1094,9 @@ def log_user_login_failed(sender, credentials, request, **kwargs):
     email = credentials.get("email") or credentials.get("username")
     create_audit(
         AuditLog.Action.LOGIN_FAILED,
-        details=f"Failed login attempt for {email} from {_get_ip(request)}.",
+        details=f"Failed login attempt for {email}.",
+        request=request,
     )
+
 
 
