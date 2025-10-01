@@ -213,8 +213,10 @@ REST_FRAMEWORK = {
         "core.throttles.PasswordResetThrottle",
     ],
     "DEFAULT_THROTTLE_RATES": {
-        "anon": "20/hour",
-        "user": "50/hour",
+        "anon": "1000/hour",   # increase anon for dev
+        "user": "1000/hour",   # increase user throttle for dev
+        # "anon": "20/hour",
+        # "user": "50/hour",
         "otp": "5/minute",
         "reset": "3/minute",
     },

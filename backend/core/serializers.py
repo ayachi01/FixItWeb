@@ -60,6 +60,9 @@ class StudentProfileSerializer(serializers.ModelSerializer):
 
 
 
+# -----------------------------
+# User Serializer
+# -----------------------------
 class UserSerializer(serializers.ModelSerializer):
     """Basic User serializer for returning user data"""
     full_name = serializers.SerializerMethodField()
@@ -69,9 +72,9 @@ class UserSerializer(serializers.ModelSerializer):
         fields = ["id", "email", "first_name", "last_name", "full_name"]
 
     def get_full_name(self, obj):
-        return f"{obj.first_name} {obj.last_name}".strip()
-
-
+        if obj.first_name or obj.last_name:
+            return f"{obj.first_name} {obj.last_name}".strip()
+        return obj.email
 
 class RoleSerializer(serializers.ModelSerializer):
     """Serializer for Role model (ensures JSON safe response)"""
@@ -349,26 +352,95 @@ class InviteAcceptSerializer(serializers.ModelSerializer):
 
 
 # ==================== Tickets ====================
+
+# -----------------------------
+# Ticket Image Serializer
+# -----------------------------
+class TicketImageSerializer(serializers.ModelSerializer):
+    uploaded_by = UserSerializer(read_only=True)
+
+    class Meta:
+        model = TicketImage
+        fields = ["id", "image_url", "uploaded_by", "timestamp"]
+
+
+
+
+
+    
+
+
+# -----------------------------
+# Assignment Serializer
+# -----------------------------
+class AssignmentSerializer(serializers.ModelSerializer):
+    user = UserSerializer(read_only=True)
+
+    class Meta:
+        model = TicketAssignment
+        fields = ["id", "user", "assigned_at", "accepted", "accepted_at"]
+
+# -----------------------------
+# Ticket Image Serializer
+# -----------------------------
+class TicketImageSerializer(serializers.ModelSerializer):
+    uploaded_by = UserSerializer(read_only=True)
+
+    class Meta:
+        model = TicketImage
+        fields = ["id", "image_url", "uploaded_by", "timestamp"]
+
+# -----------------------------
+# Ticket Resolution Serializer
+# -----------------------------
+class TicketResolutionSerializer(serializers.ModelSerializer):
+    resolved_by = UserSerializer(read_only=True)
+
+    class Meta:
+        model = TicketResolution
+        fields = ["id", "resolved_by", "proof_image", "resolution_note", "timestamp"]
+
+# -----------------------------
+# Ticket Serializer
+# -----------------------------
 class TicketSerializer(serializers.ModelSerializer):
     location_name = serializers.SerializerMethodField(read_only=True)
+    reporter = UserSerializer(read_only=True)
+    reporter_name = serializers.SerializerMethodField(read_only=True)  # Full name now
+    assignments = AssignmentSerializer(many=True, read_only=True)
+    images = TicketImageSerializer(many=True, read_only=True)
+    resolutions = TicketResolutionSerializer(many=True, read_only=True)
 
     class Meta:
         model = Ticket
-        fields = "__all__"
+        fields = [
+            "id", "title", "description", "status", "category", "urgency",
+            "escalation_level", "reporter", "reporter_name",
+            "assignments", "location", "location_name",
+            "created_at", "updated_at",
+            "images", "resolutions"
+        ]
+        read_only_fields = [
+            "id", "reporter", "reporter_name", "assignments",
+            "created_at", "updated_at"
+        ]
 
     def get_location_name(self, obj):
         return str(obj.location) if obj.location else None
+
+    def get_reporter_name(self, obj):
+        if obj.reporter:
+            if obj.reporter.first_name or obj.reporter.last_name:
+                return f"{obj.reporter.first_name} {obj.reporter.last_name}".strip()
+            return obj.reporter.email
+        return None
 
     def create(self, validated_data):
         request = self.context.get("request")
         if request and request.user.is_authenticated:
             validated_data["reporter"] = request.user
 
-        # ---------- Image validation ----------
-        if not request or "image" not in request.FILES:
-            raise serializers.ValidationError({"image": "At least one image is required."})
-
-        images = request.FILES.getlist("image")
+        images = request.FILES.getlist("image") if request else []
         if len(images) < 1:
             raise serializers.ValidationError({"image": "At least one image is required."})
         if len(images) > 3:
@@ -378,39 +450,9 @@ class TicketSerializer(serializers.ModelSerializer):
 
         for img in images:
             TicketImage.objects.create(ticket=ticket, image_url=img, uploaded_by=request.user)
+
         return ticket
 
-
-class TicketImageSerializer(serializers.ModelSerializer):
-    uploaded_by = UserSerializer(read_only=True)
-
-    class Meta:
-        model = TicketImage
-        fields = ["id", "ticket", "image_url", "uploaded_by", "timestamp"]
-
-
-class TicketResolutionSerializer(serializers.ModelSerializer):
-    resolved_by = UserSerializer(read_only=True)
-
-    class Meta:
-        model = TicketResolution
-        fields = ["id", "ticket", "resolution_note", "proof_image", "resolved_by", "timestamp"]
-
-    def validate(self, attrs):
-        request = self.context.get("request")
-        if request and hasattr(request.user, "profile"):
-            profile = request.user.profile
-            if getattr(profile, "requires_proof", False) and not attrs.get("proof_image"):
-                raise serializers.ValidationError({
-                    "proof_image": "This role requires proof when resolving a ticket."
-                })
-        return attrs
-
-    def create(self, validated_data):
-        request = self.context.get("request")
-        if request and request.user.is_authenticated:
-            validated_data["resolved_by"] = request.user
-        return super().create(validated_data)
 
 
 # ==================== Locations ====================

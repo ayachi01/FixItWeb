@@ -1,3 +1,6 @@
+# ==================================================
+# urls.py
+# ==================================================
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenRefreshView
@@ -10,18 +13,27 @@ from .views import (
     CookieTokenRefreshView,
     LogoutView,
     VerifyEmailView,
+    # ✅ Add these imports for new endpoints
+    AuditLogViewSet,
+    RoleViewSet,
 )
 
+# -------------------- Router --------------------
 router = DefaultRouter()
 router.register(r'users', UserViewSet, basename='user')
 router.register(r'tickets', TicketViewSet, basename='ticket')
 router.register(r'locations', LocationViewSet, basename='location')
 
-# ✅ Custom actions on UserViewSet
+# ✅ New endpoints
+router.register(r'audit-logs', AuditLogViewSet, basename='audit-logs')
+router.register(r'roles', RoleViewSet, basename='roles')
+
+# -------------------- Custom actions --------------------
 forgot_password_otp = UserViewSet.as_view({'post': 'reset_password_request'})
 reset_password_otp = UserViewSet.as_view({'post': 'reset_password_confirm'})
 register_self_service = UserViewSet.as_view({'post': 'register_self_service'})
 
+# -------------------- URL Patterns --------------------
 urlpatterns = [
     path('', include(router.urls)),
 
@@ -32,7 +44,7 @@ urlpatterns = [
     path("auth/logout/", LogoutView.as_view(), name="logout"),
     path("auth/register/", register_self_service, name="register"),
 
-    # ✅ OTP-based reset password
+    # OTP-based reset password
     path("auth/forgot-password-otp/", forgot_password_otp, name="forgot_password_otp"),
     path("auth/reset-password-otp/", reset_password_otp, name="reset_password_otp"),
 
