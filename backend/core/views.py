@@ -34,6 +34,8 @@ from core.models import (
     DomainRoleMapping,   # ✅ Added here so Pylance recognizes it
 )
 
+
+
 # ✅ Always reference the active User model
 User = get_user_model()
 
@@ -516,22 +518,33 @@ class UserViewSet(viewsets.ModelViewSet):
 #                  Ticket Management
 # ==================================================
 
+
 class TicketViewSet(viewsets.ModelViewSet):
-    queryset = Ticket.objects.all()
+    queryset = Ticket.objects.all().select_related("reporter", "location").prefetch_related("images", "assignments")
     serializer_class = TicketSerializer
     permission_classes = [IsAuthenticated]
+
+    # -------------------- My Reports --------------------
+    @action(detail=False, methods=['get'], url_path="my_reports")
+    def my_reports(self, request):
+        """Tickets reported by the current logged-in user"""
+        tickets = Ticket.objects.filter(reporter=request.user).distinct()
+        serializer = self.get_serializer(tickets, many=True)
+        return Response(serializer.data)
 
     # -------------------- Assigned Tickets --------------------
     @action(detail=False, methods=['get'])
     def assigned(self, request):
+        """Tickets assigned to the current user"""
         user = request.user
-        tickets = Ticket.objects.filter(assignments__user=user)
+        tickets = Ticket.objects.filter(assignments__user=user).distinct()
         serializer = self.get_serializer(tickets, many=True)
         return Response(serializer.data)
 
     # -------------------- Unassigned Tickets --------------------
     @action(detail=False, methods=['get'])
     def unassigned(self, request):
+        """Tickets with no assignee"""
         tickets = Ticket.objects.filter(assignments__isnull=True)
         serializer = self.get_serializer(tickets, many=True)
         return Response(serializer.data)
@@ -539,7 +552,7 @@ class TicketViewSet(viewsets.ModelViewSet):
     # -------------------- Report Ticket --------------------
     @action(detail=False, methods=['post'])
     def report_issue(self, request):
-        if not request.user.profile.can_report:
+        if not getattr(request.user.profile, "can_report", False):
             return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
 
         serializer = self.get_serializer(data=request.data, context={'request': request})
@@ -550,14 +563,14 @@ class TicketViewSet(viewsets.ModelViewSet):
                 performed_by=request.user,
                 details=f"Ticket {ticket.id} created"
             )
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
+            return Response(self.get_serializer(ticket).data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     # -------------------- Assign --------------------
     @action(detail=True, methods=['post'])
     def assign(self, request, pk=None):
         ticket = self.get_object()
-        if not request.user.profile.can_assign:
+        if not getattr(request.user.profile, "can_assign", False):
             return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
 
         assignee_id = request.data.get('assignee_id')
@@ -592,7 +605,6 @@ class TicketViewSet(viewsets.ModelViewSet):
         ticket = self.get_object()
         from .models import UserProfile  # avoid circular import
 
-        # ✅ Use the helper method (defined in UserProfile model)
         fixers = UserProfile.fixers_for_category(ticket.category)
 
         data = [
@@ -602,7 +614,7 @@ class TicketViewSet(viewsets.ModelViewSet):
                 "first_name": f.user.first_name,
                 "last_name": f.user.last_name,
                 "full_name": f.user.get_full_name() or f.user.username,
-                "role": f.role.name if f.role else None,  # ✅ safe serialization
+                "role": getattr(f.role, "name", None),
             }
             for f in fixers
         ]
@@ -612,7 +624,7 @@ class TicketViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def close(self, request, pk=None):
         ticket = self.get_object()
-        if not request.user.profile.can_close_tickets:
+        if not getattr(request.user.profile, "can_close_tickets", False):
             return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
 
         if ticket.status == Ticket.Status.CLOSED:
@@ -632,7 +644,7 @@ class TicketViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def resolve(self, request, pk=None):
         ticket = self.get_object()
-        if not request.user.profile.can_fix:
+        if not getattr(request.user.profile, "can_fix", False):
             return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
 
         serializer = TicketResolutionSerializer(data=request.data, context={'request': request})
@@ -666,7 +678,6 @@ class TicketViewSet(viewsets.ModelViewSet):
             details=f"Ticket {ticket.id} reopened"
         )
         return Response({'message': f'Ticket {ticket.id} has been reopened'})
-
 
 # ==================================================
 #                  Locations
@@ -1094,3 +1105,45 @@ class LogoutView(APIView):
             pass
 
         return response 
+    
+
+# ==================================================
+#                  Audit Logs
+# ==================================================
+from rest_framework.permissions import IsAdminUser
+from core.serializers import AuditLogSerializer  # make sure you have this
+
+class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    Returns all audit logs. Admin only.
+    """
+    queryset = AuditLog.objects.all().order_by("-timestamp")
+    serializer_class = AuditLogSerializer
+    permission_classes = [IsAdminUser]
+
+# If you prefer a simple APIView instead:
+from rest_framework.views import APIView
+
+class AuditLogsAPIView(APIView):
+    """
+    GET /api/audit-logs/
+    Admin-only: returns all audit logs
+    """
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        logs = AuditLog.objects.all().order_by("-timestamp")
+        serializer = AuditLogSerializer(logs, many=True)
+        return Response(serializer.data)
+    
+
+from rest_framework.permissions import IsAdminUser
+from core.serializers import RoleSerializer
+
+class RoleViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    Returns all roles. Admin-only access.
+    """
+    queryset = Role.objects.all()
+    serializer_class = RoleSerializer
+    permission_classes = [IsAdminUser]

@@ -17,7 +17,7 @@ export interface Role {
 export interface User {
   id: number;
   email: string;
-  role: Role; // ✅ always normalized to Role object
+  role: Role;
   is_email_verified: boolean;
   features: string[];
   allowed_categories: string[];
@@ -39,10 +39,11 @@ interface AuthState {
   login: (email: string, password: string) => Promise<void>;
   fetchProfile: () => Promise<void>;
   logout: () => Promise<void>;
+  restoreSession: () => void;
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
-  user: null,
+  user: JSON.parse(localStorage.getItem("user") || "null"),
   access: localStorage.getItem("access_token"),
   loading: false,
   error: null,
@@ -82,23 +83,22 @@ export const useAuthStore = create<AuthState>((set) => ({
       // ✅ Normalize role: ensure it's always a Role object
       const normalizedRole: Role =
         typeof profile.role === "string"
-          ? {
-              id: null,
-              name: profile.role,
-              description: null,
-            }
+          ? { id: null, name: profile.role, description: null }
           : profile.role;
 
       const normalizedProfile: User = {
         ...profile,
         role: normalizedRole,
-        roleName: normalizedRole?.name?.toLowerCase() || "", // ✅ convenience string
+        roleName: normalizedRole?.name?.toLowerCase() || "",
       };
 
+      // Save to state + storage
       set({ user: normalizedProfile });
+      localStorage.setItem("user", JSON.stringify(normalizedProfile));
     } catch {
       // If fetch fails, clear session
       localStorage.removeItem("access_token");
+      localStorage.removeItem("user");
       set({ user: null, access: null });
     }
   },
@@ -109,7 +109,21 @@ export const useAuthStore = create<AuthState>((set) => ({
       await logoutApi();
     } finally {
       localStorage.removeItem("access_token");
+      localStorage.removeItem("user");
       set({ user: null, access: null });
+    }
+  },
+
+  // 🔹 Restore session (used on app init)
+  restoreSession: () => {
+    const token = localStorage.getItem("access_token");
+    const storedUser = localStorage.getItem("user");
+
+    if (token && storedUser) {
+      set({
+        access: token,
+        user: JSON.parse(storedUser),
+      });
     }
   },
 }));
