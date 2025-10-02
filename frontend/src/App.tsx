@@ -1,4 +1,4 @@
-// src/App.tsx
+import React from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { useAuthStore } from "./store/authStore";
 
@@ -16,62 +16,87 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import Layout from "./components/Layout";
 
 // Student/Staff Pages
-import ReportTicketPage from "./pages/ReportTicketPage";
+import SubmitTicketPage from "./pages/SubmitTicketPage";
 import AssignedTicketsPage from "./pages/AssignedTicketsPage";
-import MyReportsPage from "./pages/MyReportsPage";
+import MyTicketsPage from "./pages/MyTicketsPage";
 
 // Admin Pages
-import AdminDashboardPage from "./pages/admin/Dashboard";
-import TicketsPage from "./pages/admin/TicketsPage";
+import AdminDashboardPage from "./pages/admin/AdminDashboardPage";
+import AllTicketsPage from "./pages/admin/AllTicketsPage";
 import TicketDetailPage from "./pages/admin/TicketDetailPage";
 import UsersPage from "./pages/admin/UsersPage";
 import UserDetailPage from "./pages/admin/UserDetailPage";
-import RolesPage from "./pages/admin/RolesPage";
+import RolesManagementPage from "./pages/admin/RolesManagementPage";
 import AuditLogsPage from "./pages/admin/AuditLogsPage";
-import SettingsPage from "./pages/admin/SettingsPage";
+import SystemSettingsPage from "./pages/admin/SystemSettingsPage";
 
-// Simple dashboards
+// Optional Admin Pages
+import ReportsPage from "./pages/admin/ReportsPage";
+import NotificationsPage from "./pages/admin/NotificationsPage";
+import BulkActionsPage from "./pages/admin/BulkActionsPage";
+
+// Dashboards
 function StudentDashboard() {
-  return <h1>🎓 Student Dashboard (Report Ticket)</h1>;
+  return <Navigate to="/submit-ticket" replace />;
 }
 function StaffDashboard() {
-  return <h1>👷 Staff Dashboard</h1>;
+  return <Navigate to="/assigned-tickets" replace />;
 }
 
 export default function App() {
   const { user } = useAuthStore();
 
-  // 🔹 Decide default dashboard redirect
+  // 🔹 Decide default dashboard based on permissions
   const getDashboard = () => {
     if (!user) return <Navigate to="/login" replace />;
 
-    // ✅ Ensure roleName is always a string
-    const roleName = user?.role?.name?.toLowerCase() || "";
+    const { permissions } = user;
 
-    if (
-      roleName === "admin" ||
-      roleName === "super admin" ||
-      roleName === "university admin"
-    ) {
+    if (permissions.is_admin_level || permissions.can_manage_users) {
       return <Navigate to="/admin/dashboard" replace />;
     }
 
-    if (roleName.includes("staff")) {
+    if (permissions.can_fix || permissions.can_assign) {
       return <StaffDashboard />;
     }
 
-    return <StudentDashboard />;
+    if (permissions.can_report) {
+      return <StudentDashboard />;
+    }
+
+    return <Navigate to="/login" replace />;
+  };
+
+  // 🔹 Admin route protection
+  const AdminRoute = ({ element }: { element: React.ReactNode }) => {
+    if (!user) return <Navigate to="/login" replace />;
+    const { permissions } = user;
+    if (!permissions.is_admin_level && !permissions.can_manage_users) {
+      return <Navigate to="/dashboard" replace />;
+    }
+    return <>{element}</>;
+  };
+
+  // 🔹 Staff route protection
+  const StaffRoute = ({ element }: { element: React.ReactNode }) => {
+    if (!user) return <Navigate to="/login" replace />;
+    const { permissions } = user;
+    if (
+      !permissions.can_report &&
+      !permissions.can_fix &&
+      !permissions.can_assign
+    ) {
+      return <Navigate to="/dashboard" replace />;
+    }
+    return <>{element}</>;
   };
 
   return (
     <BrowserRouter
-      future={{
-        v7_startTransition: true,
-        v7_relativeSplatPath: true,
-      }}
+      future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
     >
       <Routes>
-        {/* Redirect root based on auth */}
+        {/* Root redirect */}
         <Route
           path="/"
           element={
@@ -98,7 +123,7 @@ export default function App() {
           element={<VerifyEmailPage />}
         />
 
-        {/* Protected with Layout */}
+        {/* Protected routes */}
         <Route
           path="/"
           element={
@@ -107,24 +132,69 @@ export default function App() {
             </ProtectedRoute>
           }
         >
-          {/* Default dashboards */}
           <Route path="dashboard" element={getDashboard()} />
 
-          {/* Student/Staff routes */}
-          <Route path="tickets" element={<MyReportsPage />} />
-          <Route path="report-ticket" element={<ReportTicketPage />} />
-          <Route path="my-reports" element={<MyReportsPage />} />
-          <Route path="assigned-tickets" element={<AssignedTicketsPage />} />
+          {/* Student/Staff */}
+          <Route
+            path="submit-ticket"
+            element={<StaffRoute element={<SubmitTicketPage />} />}
+          />
+          <Route
+            path="my-tickets"
+            element={<StaffRoute element={<MyTicketsPage />} />}
+          />
+          <Route
+            path="assigned-tickets"
+            element={<StaffRoute element={<AssignedTicketsPage />} />}
+          />
 
-          {/* 🔹 Admin routes */}
-          <Route path="admin/dashboard" element={<AdminDashboardPage />} />
-          <Route path="admin/tickets" element={<TicketsPage />} />
-          <Route path="admin/tickets/:id" element={<TicketDetailPage />} />
-          <Route path="admin/users" element={<UsersPage />} />
-          <Route path="admin/users/:id" element={<UserDetailPage />} />
-          <Route path="admin/roles" element={<RolesPage />} />
-          <Route path="admin/audit-logs" element={<AuditLogsPage />} />
-          <Route path="admin/settings" element={<SettingsPage />} />
+          {/* Admin */}
+          <Route
+            path="admin/dashboard"
+            element={<AdminRoute element={<AdminDashboardPage />} />}
+          />
+          <Route
+            path="admin/tickets"
+            element={<AdminRoute element={<AllTicketsPage />} />}
+          />
+          <Route
+            path="admin/tickets/:id"
+            element={<AdminRoute element={<TicketDetailPage />} />}
+          />
+          <Route
+            path="admin/users"
+            element={<AdminRoute element={<UsersPage />} />}
+          />
+          <Route
+            path="admin/users/:id"
+            element={<AdminRoute element={<UserDetailPage />} />}
+          />
+          <Route
+            path="admin/roles"
+            element={<AdminRoute element={<RolesManagementPage />} />}
+          />
+          <Route
+            path="admin/audit-logs"
+            element={<AdminRoute element={<AuditLogsPage />} />}
+          />
+          <Route
+            path="admin/settings"
+            element={<AdminRoute element={<SystemSettingsPage />} />}
+          />
+
+          {/* Optional Admin */}
+          <Route
+            path="admin/reports"
+            element={<AdminRoute element={<ReportsPage />} />}
+          />
+          <Route
+            path="admin/notifications"
+            element={<AdminRoute element={<NotificationsPage />} />}
+          />
+          <Route
+            path="admin/bulk-actions"
+            element={<AdminRoute element={<BulkActionsPage />} />}
+          />
         </Route>
       </Routes>
     </BrowserRouter>

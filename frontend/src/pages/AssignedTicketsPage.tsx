@@ -1,144 +1,173 @@
-// 📂 src/pages/AssignTicketsPage.tsx
-import { useEffect, useState } from "react";
-import { api } from "../api/client"; // ✅ use named import
+// 📂 src/pages/tickets/AssignedTicketsPage.tsx
+import { useState, useEffect } from "react";
 import { useAuthStore } from "../store/authStore";
+import { api } from "../api/client";
+import { toast } from "react-hot-toast";
+
+interface TicketImage {
+  image_url: string;
+}
+
+interface Assignee {
+  id: number;
+  full_name: string;
+  email: string;
+}
 
 interface Ticket {
   id: number;
+  title: string;
   description: string;
+  status: string;
   category: string;
   urgency: string;
-  status: string;
-  location_name?: string;
+  escalation_level: string;
+  location_name: string;
+  created_at: string;
+  assignees: Assignee[];
+  images: TicketImage[];
 }
 
-interface Staff {
-  id: number;
-  full_name: string;
-  first_name?: string;
-  last_name?: string;
-  email: string;
-  role?: string;
-  displayName?: string; // <-- added for UI fallback
-}
+export default function AssignedTicketsPage() {
+  const { access, user } = useAuthStore();
+  const permissions = user?.permissions;
 
-export default function AssignTicketsPage() {
-  const { user } = useAuthStore();
   const [tickets, setTickets] = useState<Ticket[]>([]);
-  const [staffOptions, setStaffOptions] = useState<Record<number, Staff[]>>({});
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [staffOptions, setStaffOptions] = useState<Record<number, Assignee[]>>(
+    {}
+  );
 
-  // 🔹 Use normalized roleName from store
-  const roleName = user?.roleName || "";
+  // Only users who can assign tickets can access this page
+  if (!permissions?.can_assign) {
+    return (
+      <p className="text-red-500">
+        ❌ You do not have permission to assign tickets.
+      </p>
+    );
+  }
 
-  const isStaff = roleName === "staff";
-
-  // Users who can assign tickets
-  const canAssign = [
-    "admin",
-    "super admin",
-    "university admin",
-    "maintenance officer",
-  ].includes(roleName);
-
+  // Fetch unassigned tickets + eligible fixers
   useEffect(() => {
-    const fetchData = async () => {
+    if (!access) return;
+
+    const fetchTickets = async () => {
+      console.log("🔹 Fetching unassigned tickets...");
       setLoading(true);
-      setError("");
 
       try {
-        if (isStaff) {
-          // Staff: fetch assigned tickets
-          const res = await api.get<Ticket[]>("/tickets/assigned/");
-          setTickets(res.data);
-        } else if (canAssign) {
-          // Admins and Maintenance Officer: fetch unassigned tickets
-          const res = await api.get<Ticket[]>("/tickets/unassigned/");
-          setTickets(res.data);
+        const res = await api.get("/tickets/unassigned/", {
+          headers: { Authorization: `Bearer ${access}` },
+        });
+        console.log("Raw API response:", res.data);
 
-          // ✅ For each ticket, fetch eligible fixers
-          const staffPromises = res.data.map(async (ticket) => {
-            try {
-              const staffRes = await api.get<Staff[]>(
-                `/tickets/${ticket.id}/eligible_fixers/`
-              );
-              return {
-                ticketId: ticket.id,
-                staff: staffRes.data.map((s) => ({
-                  ...s,
-                  displayName:
-                    s.full_name?.trim() ||
-                    `${s.first_name || ""} ${s.last_name || ""}`.trim() ||
-                    s.email,
-                })),
-              };
-            } catch (err) {
-              console.error(
-                `Failed to fetch eligible fixers for ticket ${ticket.id}`
-              );
-              return { ticketId: ticket.id, staff: [] };
-            }
-          });
+        const normalizedTickets: Ticket[] = (res.data || []).map((t: any) => ({
+          id: t.id,
+          title: t.title || "No Title",
+          description: t.description || "No Description",
+          status: t.status || "Created",
+          category: t.category || "General",
+          urgency: t.urgency || "Normal",
+          escalation_level: t.escalation_level || "None",
+          location_name: t.location_name || "Unknown Location",
+          created_at: t.created_at || new Date().toISOString(),
+          images: t.images || [],
+          assignees: t.assignees || [],
+        }));
+        console.log("Normalized tickets:", normalizedTickets);
 
-          const staffResults = await Promise.all(staffPromises);
+        setTickets(normalizedTickets);
 
-          // Convert array to dictionary: { ticketId: staff[] }
-          const staffDict: Record<number, Staff[]> = {};
-          staffResults.forEach(({ ticketId, staff }) => {
-            staffDict[ticketId] = staff;
-          });
-          setStaffOptions(staffDict);
-        }
-      } catch (err: any) {
-        console.error(err);
-        setError("Failed to load tickets.");
+        // Fetch eligible fixers for each ticket
+        const staffPromises = normalizedTickets.map(async (ticket) => {
+          try {
+            const staffRes = await api.get<Assignee[]>(
+              `/tickets/${ticket.id}/eligible_fixers/`,
+              {
+                headers: { Authorization: `Bearer ${access}` },
+              }
+            );
+            console.log(
+              `Eligible fixers for ticket ${ticket.id}:`,
+              staffRes.data
+            );
+            return { ticketId: ticket.id, staff: staffRes.data };
+          } catch (err) {
+            console.error(
+              `❌ Failed fetching eligible fixers for ticket ${ticket.id}`,
+              err
+            );
+            return { ticketId: ticket.id, staff: [] };
+          }
+        });
+
+        const staffResults = await Promise.all(staffPromises);
+        const staffDict: Record<number, Assignee[]> = {};
+        staffResults.forEach(({ ticketId, staff }) => {
+          staffDict[ticketId] = staff;
+        });
+        console.log("Staff options dict:", staffDict);
+        setStaffOptions(staffDict);
+      } catch (err) {
+        console.error("❌ Failed fetching tickets:", err);
+        toast.error("Failed to load unassigned tickets.");
       } finally {
         setLoading(false);
+        console.log("🔹 Finished fetching tickets, loading=false");
       }
     };
 
-    fetchData();
-  }, [isStaff, canAssign]);
+    fetchTickets();
+  }, [access]);
 
   const handleAssign = async (ticketId: number, staffId?: number) => {
     if (!staffId) return;
+    console.log(`🔹 Assigning ticket ${ticketId} to staff ${staffId}...`);
+
     try {
-      await api.post(`/tickets/${ticketId}/assign/`, { assignee_id: staffId });
+      await api.post(
+        `/tickets/${ticketId}/assign/`,
+        { assignee_id: staffId },
+        {
+          headers: { Authorization: `Bearer ${access}` },
+        }
+      );
+      toast.success(`✅ Ticket ${ticketId} assigned successfully!`);
+
+      // Remove ticket from list after assignment
       setTickets((prev) => prev.filter((t) => t.id !== ticketId));
-      alert("Ticket assigned successfully!");
     } catch (err: any) {
-      console.error(err);
-      alert(err.response?.data?.error || "Failed to assign ticket");
+      console.error(`❌ Failed assigning ticket ${ticketId}:`, err);
+      toast.error(err.response?.data?.error || "Failed to assign ticket.");
     }
   };
 
-  if (loading) return <p>Loading tickets...</p>;
-  if (error) return <p className="text-red-500">{error}</p>;
-  if (!tickets.length) return <p>No tickets available.</p>;
-
   return (
-    <div className="max-w-4xl mx-auto mt-8 p-6 bg-gray-50 rounded-lg shadow-sm">
-      <h1 className="text-2xl font-bold mb-4">
-        {isStaff ? "🛠️ Assigned Tickets" : "📝 Assign Tickets"}
-      </h1>
+    <div className="max-w-5xl mx-auto mt-8 p-6 bg-white rounded-xl shadow-md">
+      <h1 className="text-2xl font-bold mb-6">📝 Assign Tickets</h1>
 
-      <ul className="space-y-4">
-        {tickets.map((ticket) => (
-          <li key={ticket.id} className="p-4 border rounded bg-white shadow-sm">
-            <h2 className="font-semibold text-lg">{ticket.category}</h2>
-            {ticket.location_name && (
-              <p className="text-sm text-gray-600">{ticket.location_name}</p>
-            )}
-            <p className="mt-2">{ticket.description}</p>
-            <p className="mt-2 text-sm text-gray-500">
-              Status: <span className="font-medium">{ticket.status}</span> |
-              Urgency: {ticket.urgency}
-            </p>
+      {loading ? (
+        <p>Loading tickets...</p>
+      ) : tickets.length === 0 ? (
+        <p>No unassigned tickets available.</p>
+      ) : (
+        <div className="space-y-4">
+          {tickets.map((ticket) => (
+            <div
+              key={ticket.id}
+              className="p-4 border rounded-lg shadow-sm bg-gray-50"
+            >
+              <h2 className="text-lg font-semibold">{ticket.title}</h2>
+              <p className="text-gray-600">{ticket.description}</p>
+              <p className="text-sm text-gray-500">
+                {ticket.location_name} •{" "}
+                {new Date(ticket.created_at).toLocaleString()}
+              </p>
+              <p className="text-sm mt-1 font-medium">
+                Category: {ticket.category}
+              </p>
 
-            {/* Assignment dropdown for admins and maintenance officer */}
-            {canAssign && (
-              <div className="mt-3 flex gap-2 items-center">
+              <div className="mt-2">
                 <select
                   defaultValue=""
                   className="border p-1 rounded"
@@ -147,34 +176,19 @@ export default function AssignTicketsPage() {
                   }
                 >
                   <option value="" disabled>
-                    Assign to staff
+                    Select staff to assign
                   </option>
                   {(staffOptions[ticket.id] || []).map((staff) => (
-                    <option key={`staff-${staff.id}`} value={staff.id}>
-                      {staff.displayName} ({staff.role})
+                    <option key={staff.id} value={staff.id}>
+                      {staff.full_name} ({staff.email})
                     </option>
                   ))}
                 </select>
               </div>
-            )}
-
-            {/* Staff actions */}
-            {isStaff && (
-              <div className="mt-3 flex gap-2">
-                <button className="px-3 py-1 bg-green-500 text-white rounded">
-                  Accept
-                </button>
-                <button className="px-3 py-1 bg-blue-500 text-white rounded">
-                  Resolve
-                </button>
-                <button className="px-3 py-1 bg-red-500 text-white rounded">
-                  Close
-                </button>
-              </div>
-            )}
-          </li>
-        ))}
-      </ul>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

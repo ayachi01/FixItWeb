@@ -13,6 +13,16 @@ export interface Role {
   description: string | null;
 }
 
+// 🔹 Permissions type from backend
+export interface Permissions {
+  can_report: boolean;
+  can_fix: boolean;
+  can_assign: boolean;
+  can_manage_users: boolean;
+  is_admin_level: boolean;
+  allowed_categories: string[];
+}
+
 // 🔹 Full User type based on backend UserProfileView response
 export interface User {
   id: number;
@@ -20,7 +30,7 @@ export interface User {
   role: Role;
   is_email_verified: boolean;
   features: string[];
-  allowed_categories: string[];
+  permissions: Permissions; // ✅ Added permissions
   student_profile?: {
     full_name: string;
     course: string;
@@ -86,10 +96,21 @@ export const useAuthStore = create<AuthState>((set) => ({
           ? { id: null, name: profile.role, description: null }
           : profile.role;
 
+      // 🔹 Normalize permissions
+      const normalizedPermissions: Permissions = {
+        can_report: profile.features?.includes("canReport") ?? false,
+        can_fix: profile.can_fix ?? false,
+        can_assign: profile.can_assign ?? false,
+        can_manage_users: profile.can_manage_users ?? false,
+        is_admin_level: profile.is_admin_level ?? false,
+        allowed_categories: profile.allowed_categories || [],
+      };
+
       const normalizedProfile: User = {
         ...profile,
         role: normalizedRole,
         roleName: normalizedRole?.name?.toLowerCase() || "",
+        permissions: normalizedPermissions,
       };
 
       // Save to state + storage
@@ -120,9 +141,21 @@ export const useAuthStore = create<AuthState>((set) => ({
     const storedUser = localStorage.getItem("user");
 
     if (token && storedUser) {
+      const parsedUser = JSON.parse(storedUser);
+
+      // Ensure permissions object exists
+      const normalizedPermissions: Permissions = {
+        can_report: parsedUser.permissions?.can_report ?? false,
+        can_fix: parsedUser.permissions?.can_fix ?? false,
+        can_assign: parsedUser.permissions?.can_assign ?? false,
+        can_manage_users: parsedUser.permissions?.can_manage_users ?? false,
+        is_admin_level: parsedUser.permissions?.is_admin_level ?? false,
+        allowed_categories: parsedUser.permissions?.allowed_categories || [],
+      };
+
       set({
         access: token,
-        user: JSON.parse(storedUser),
+        user: { ...parsedUser, permissions: normalizedPermissions },
       });
     }
   },
