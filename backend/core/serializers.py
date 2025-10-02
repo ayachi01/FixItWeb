@@ -27,7 +27,13 @@ from core.models import StudentProfile, UserProfile, Role
 
 User = get_user_model()
 
-# ✅ Move this ABOVE UserProfileSerializer
+# core/serializers.py
+import re
+from rest_framework import serializers
+from .models import UserProfile, Role, StudentProfile, CustomUser
+
+
+# ✅ Student Profile Serializer
 class StudentProfileSerializer(serializers.ModelSerializer):
     """Serializer for student academic details (writable for students)"""
     first_name = serializers.CharField(source="user_profile.user.first_name", read_only=True)
@@ -54,21 +60,59 @@ class StudentProfileSerializer(serializers.ModelSerializer):
         return value
 
     def update(self, instance, validated_data):
+        # 🔒 Prevent overwriting student_id if already set
         if "student_id" in validated_data and instance.student_id:
             validated_data.pop("student_id")
         return super().update(instance, validated_data)
 
 
+# ✅ Basic User Serializer
+# core/serializers.py
+import re
+from rest_framework import serializers
+from .models import UserProfile, Role, StudentProfile, CustomUser
 
-# -----------------------------
-# User Serializer
-# -----------------------------
+
+# ✅ Student Profile Serializer
+class StudentProfileSerializer(serializers.ModelSerializer):
+    """Serializer for student academic details (writable for students)"""
+    first_name = serializers.CharField(source="user_profile.user.first_name", read_only=True)
+    last_name = serializers.CharField(source="user_profile.user.last_name", read_only=True)
+    email = serializers.EmailField(source="user_profile.user.email", read_only=True)
+
+    class Meta:
+        model = StudentProfile
+        fields = [
+            "id", "student_id",
+            "first_name", "last_name", "email",
+            "course_code", "course_name",
+            "year_level", "section",
+            "college", "enrollment_year",
+        ]
+        read_only_fields = ["id", "first_name", "last_name", "email"]
+
+    def validate_student_id(self, value):
+        pattern = r"^\d{2}-\d{4}-\d{6}$"
+        if not re.match(pattern, value):
+            raise serializers.ValidationError(
+                "Student ID must be in the format NN-NNNN-NNNNNN (e.g., 09-3456-348946)."
+            )
+        return value
+
+    def update(self, instance, validated_data):
+        # 🔒 Prevent overwriting student_id if already set
+        if "student_id" in validated_data and instance.student_id:
+            validated_data.pop("student_id")
+        return super().update(instance, validated_data)
+
+
+# ✅ Basic User Serializer
 class UserSerializer(serializers.ModelSerializer):
     """Basic User serializer for returning user data"""
     full_name = serializers.SerializerMethodField()
 
     class Meta:
-        model = User
+        model = CustomUser
         fields = ["id", "email", "first_name", "last_name", "full_name"]
 
     def get_full_name(self, obj):
@@ -76,6 +120,8 @@ class UserSerializer(serializers.ModelSerializer):
             return f"{obj.first_name} {obj.last_name}".strip()
         return obj.email
 
+
+# ✅ Role Serializer
 class RoleSerializer(serializers.ModelSerializer):
     """Serializer for Role model (ensures JSON safe response)"""
     class Meta:
@@ -83,6 +129,7 @@ class RoleSerializer(serializers.ModelSerializer):
         fields = ["id", "name", "description"]
 
 
+# ✅ Extended UserProfile Serializer
 class UserProfileSerializer(serializers.ModelSerializer):
     """
     Extended profile serializer with role, flags, features, and nested student info.
@@ -103,7 +150,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
     allowed_categories = serializers.SerializerMethodField()
     student_profile = StudentProfileSerializer(required=False)
 
-    # ✅ Role is nested via RoleSerializer (not a raw model object)
+    # ✅ Role is nested
     role = RoleSerializer(read_only=True)
 
     class Meta:
@@ -158,11 +205,10 @@ class UserProfileSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         """
         Update user profile and nested student profile.
-        Only backend-managed fields are updated here (not frontend overwriting).
         """
         student_data = validated_data.pop("student_profile", None)
 
-        # ✅ Update backend-controlled UserProfile fields
+        # ✅ Update profile fields
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
@@ -177,6 +223,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
             student_profile.save()
 
         return instance
+
 
 
 # ==================== Registration ====================
@@ -352,6 +399,9 @@ class InviteAcceptSerializer(serializers.ModelSerializer):
 
 
 # ==================== Tickets ====================
+# ==================== Tickets Serializers ====================
+
+
 
 # -----------------------------
 # Ticket Image Serializer
@@ -362,13 +412,6 @@ class TicketImageSerializer(serializers.ModelSerializer):
     class Meta:
         model = TicketImage
         fields = ["id", "image_url", "uploaded_by", "timestamp"]
-
-
-
-
-
-    
-
 
 # -----------------------------
 # Assignment Serializer
@@ -379,16 +422,6 @@ class AssignmentSerializer(serializers.ModelSerializer):
     class Meta:
         model = TicketAssignment
         fields = ["id", "user", "assigned_at", "accepted", "accepted_at"]
-
-# -----------------------------
-# Ticket Image Serializer
-# -----------------------------
-class TicketImageSerializer(serializers.ModelSerializer):
-    uploaded_by = UserSerializer(read_only=True)
-
-    class Meta:
-        model = TicketImage
-        fields = ["id", "image_url", "uploaded_by", "timestamp"]
 
 # -----------------------------
 # Ticket Resolution Serializer
@@ -406,8 +439,9 @@ class TicketResolutionSerializer(serializers.ModelSerializer):
 class TicketSerializer(serializers.ModelSerializer):
     location_name = serializers.SerializerMethodField(read_only=True)
     reporter = UserSerializer(read_only=True)
-    reporter_name = serializers.SerializerMethodField(read_only=True)  # Full name now
+    reporter_name = serializers.SerializerMethodField(read_only=True)
     assignments = AssignmentSerializer(many=True, read_only=True)
+    assignees = serializers.SerializerMethodField(read_only=True)
     images = TicketImageSerializer(many=True, read_only=True)
     resolutions = TicketResolutionSerializer(many=True, read_only=True)
 
@@ -416,12 +450,12 @@ class TicketSerializer(serializers.ModelSerializer):
         fields = [
             "id", "title", "description", "status", "category", "urgency",
             "escalation_level", "reporter", "reporter_name",
-            "assignments", "location", "location_name",
+            "assignments", "assignees", "location", "location_name",
             "created_at", "updated_at",
             "images", "resolutions"
         ]
         read_only_fields = [
-            "id", "reporter", "reporter_name", "assignments",
+            "id", "reporter", "reporter_name", "assignments", "assignees",
             "created_at", "updated_at"
         ]
 
@@ -435,24 +469,10 @@ class TicketSerializer(serializers.ModelSerializer):
             return obj.reporter.email
         return None
 
-    def create(self, validated_data):
-        request = self.context.get("request")
-        if request and request.user.is_authenticated:
-            validated_data["reporter"] = request.user
-
-        images = request.FILES.getlist("image") if request else []
-        if len(images) < 1:
-            raise serializers.ValidationError({"image": "At least one image is required."})
-        if len(images) > 3:
-            raise serializers.ValidationError({"image": "A maximum of 3 images are allowed."})
-
-        ticket = Ticket.objects.create(**validated_data)
-
-        for img in images:
-            TicketImage.objects.create(ticket=ticket, image_url=img, uploaded_by=request.user)
-
-        return ticket
-
+    def get_assignees(self, obj):
+        # Serialize users instead of returning model instances
+        users = [assignment.user for assignment in obj.assignments.all()]
+        return UserSerializer(users, many=True).data
 
 
 # ==================== Locations ====================

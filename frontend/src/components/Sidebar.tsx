@@ -1,5 +1,5 @@
-// src/components/Sidebar.tsx
-import { useNavigate } from "react-router-dom";
+import React from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useAuthStore } from "../store/authStore";
 import {
   FileText,
@@ -12,6 +12,8 @@ import {
   Key,
   LayoutDashboard,
   LogOut,
+  Bell,
+  File,
 } from "lucide-react";
 
 interface MenuItem {
@@ -23,42 +25,40 @@ interface MenuItem {
 export default function Sidebar() {
   const { user, logout } = useAuthStore();
   const navigate = useNavigate();
+  const location = useLocation();
 
   if (!user) return null;
+  const { permissions } = user;
 
-  const roleName = user?.role?.name?.toLowerCase() || "";
-
-  // 🔹 Common menu (all users)
-  const commonMenu: MenuItem[] = [
-    {
-      label: "Report Ticket",
-      path: "/report-ticket",
-      icon: <Home size={18} />,
-    },
-    { label: "My Reports", path: "/tickets", icon: <FileText size={18} /> },
-  ];
-
-  // 🔹 Staff-only
-  const staffMenu: MenuItem[] = roleName.includes("staff")
+  // 🔹 Build menu properly
+  const commonMenu: MenuItem[] = permissions.can_report
     ? [
         {
-          label: "Overview",
-          path: "/assigned-tickets/overview",
-          icon: <ClipboardCheck size={18} />,
+          label: "Submit Ticket",
+          path: "/submit-ticket",
+          icon: <Home size={18} />,
         },
         {
-          label: "Assign Tickets",
-          path: "/assigned-tickets/assign",
-          icon: <ClipboardCheck size={18} />,
+          label: "My Tickets",
+          path: "/my-tickets",
+          icon: <FileText size={18} />,
         },
       ]
     : [];
 
-  // 🔹 Admin-only
+  const staffMenu: MenuItem[] =
+    permissions.can_fix || permissions.can_assign
+      ? [
+          {
+            label: "Assigned Tickets",
+            path: "/assigned-tickets",
+            icon: <ClipboardCheck size={18} />,
+          },
+        ]
+      : [];
+
   const adminMenu: MenuItem[] =
-    roleName === "admin" ||
-    roleName === "super admin" ||
-    roleName === "university admin"
+    permissions.is_admin_level || permissions.can_manage_users
       ? [
           {
             label: "Admin Dashboard",
@@ -71,12 +71,27 @@ export default function Sidebar() {
             icon: <Ticket size={18} />,
           },
           {
+            label: "Reports",
+            path: "/admin/reports",
+            icon: <File size={18} />,
+          },
+          {
+            label: "Notifications",
+            path: "/admin/notifications",
+            icon: <Bell size={18} />,
+          },
+          {
+            label: "Bulk Actions",
+            path: "/admin/bulk-actions",
+            icon: <ClipboardCheck size={18} />,
+          },
+          {
             label: "Manage Users",
             path: "/admin/users",
             icon: <Users size={18} />,
           },
           {
-            label: "Roles",
+            label: "Roles Management",
             path: "/admin/roles",
             icon: <Key size={18} />,
           },
@@ -93,49 +108,46 @@ export default function Sidebar() {
         ]
       : [];
 
-  // 🔹 Logout handler
+  const renderMenu = (menu: MenuItem[]) =>
+    menu.map((item) => {
+      const isActive = location.pathname.startsWith(item.path);
+      return (
+        <button
+          key={item.path}
+          onClick={() => navigate(item.path)}
+          className={`flex items-center w-full px-4 py-2 rounded hover:bg-gray-700 text-left transition-colors duration-150 ${
+            isActive ? "bg-gray-700 font-semibold" : ""
+          }`}
+        >
+          {item.icon}
+          <span className="ml-2">{item.label}</span>
+        </button>
+      );
+    });
+
   const handleLogout = async () => {
     await logout();
     navigate("/login");
   };
 
   return (
-    <div className="h-screen w-64 bg-gray-800 text-white flex flex-col">
-      {/* Logo / Header */}
-      <div className="p-4 text-xl font-bold border-b border-gray-700">
+    <div className="flex flex-col h-screen w-64 bg-gray-800 text-white shadow-lg">
+      {/* Logo */}
+      <div className="p-4 text-2xl font-bold border-b border-gray-700 flex items-center justify-center">
         🎓 FixIt
       </div>
 
-      {/* Menus */}
-      <div className="flex-1 p-2 space-y-2">
-        {[...commonMenu, ...staffMenu].map((item) => (
-          <button
-            key={item.path}
-            onClick={() => navigate(item.path)}
-            className="flex items-center w-full px-4 py-2 rounded hover:bg-gray-700 text-left"
-          >
-            {item.icon}
-            <span className="ml-2">{item.label}</span>
-          </button>
-        ))}
-
-        {/* Admin section */}
+      {/* Menu */}
+      <div className="flex-1 overflow-y-auto p-2 space-y-2">
+        {renderMenu(commonMenu)}
+        {renderMenu(staffMenu)}
         {adminMenu.length > 0 && (
           <>
             <hr className="my-3 border-gray-600" />
             <p className="px-4 text-sm font-semibold text-gray-400">
               Admin Panel
             </p>
-            {adminMenu.map((item) => (
-              <button
-                key={item.path}
-                onClick={() => navigate(item.path)}
-                className="flex items-center w-full px-4 py-2 rounded hover:bg-gray-700 text-left"
-              >
-                {item.icon}
-                <span className="ml-2">{item.label}</span>
-              </button>
-            ))}
+            {renderMenu(adminMenu)}
           </>
         )}
       </div>
@@ -144,7 +156,7 @@ export default function Sidebar() {
       <div className="p-4 border-t border-gray-700">
         <button
           onClick={handleLogout}
-          className="flex items-center justify-center w-full bg-red-500 hover:bg-red-600 text-white py-2 rounded"
+          className="flex items-center justify-center w-full bg-red-500 hover:bg-red-600 text-white py-2 rounded transition-colors duration-150"
         >
           <LogOut size={16} className="mr-2" /> Logout
         </button>
