@@ -1,6 +1,6 @@
 // src/pages/ForgotPassword.tsx
 import { useState } from "react";
-import { api } from "../api/client"; // Make sure this points to your axios instance
+import { api } from "../../api/client"; // Make sure this points to your axios instance
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState("");

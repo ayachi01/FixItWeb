@@ -1,94 +1,55 @@
-import React from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { useAuthStore } from "./store/authStore";
 
 // Auth Pages
-import Login from "./pages/Login";
-import Register from "./pages/Register";
-import ForgotPasswordChoice from "./pages/ForgotPasswordChoice";
-import ForgotPassword from "./pages/ForgotPassword";
-import ResetPassword from "./pages/ResetPassword";
-import ForgotPasswordOTP from "./pages/ForgotPasswordOTP";
-import VerifyEmailPage from "./pages/VerifyEmailPage";
+import Login from "./pages/Auth/Login";
+import Register from "./pages/Auth/Register";
+import ForgotPasswordChoice from "./pages/Auth/ForgotPasswordChoice";
+import ForgotPassword from "./pages/Auth/ForgotPassword";
+import ResetPassword from "./pages/Auth/ResetPassword";
+import ForgotPasswordOTP from "./pages/Auth/ForgotPasswordOTP";
+import VerifyEmailPage from "./pages/Auth/VerifyEmailPage";
 
 // Protected
 import ProtectedRoute from "./components/ProtectedRoute";
-import Layout from "./components/Layout";
+import Layout from "./components/Dashboard/DashboardLayout";
 
-// Student/Staff Pages
-import SubmitTicketPage from "./pages/SubmitTicketPage";
-import AssignedTicketsPage from "./pages/AssignedTicketsPage";
-import MyTicketsPage from "./pages/MyTicketsPage";
-
-// Admin Pages
-import AdminDashboardPage from "./pages/admin/AdminDashboardPage";
-import AllTicketsPage from "./pages/admin/AllTicketsPage";
-import TicketDetailPage from "./pages/admin/TicketDetailPage";
-import UsersPage from "./pages/admin/UsersPage";
-import UserDetailPage from "./pages/admin/UserDetailPage";
-import RolesManagementPage from "./pages/admin/RolesManagementPage";
-import AuditLogsPage from "./pages/admin/AuditLogsPage";
-import SystemSettingsPage from "./pages/admin/SystemSettingsPage";
-
-// Optional Admin Pages
-import ReportsPage from "./pages/admin/ReportsPage";
-import NotificationsPage from "./pages/admin/NotificationsPage";
-import BulkActionsPage from "./pages/admin/BulkActionsPage";
-
-// Dashboards
-function StudentDashboard() {
-  return <Navigate to="/submit-ticket" replace />;
-}
-function StaffDashboard() {
-  return <Navigate to="/assigned-tickets" replace />;
-}
+// Dashboard Pages
+import SubmitTicketPage from "./pages/Dashboard/SubmitTicketPage";
+import AssignedTicketsPage from "./pages/Dashboard/AssignedTicketsPage";
+import MyTicketsPage from "./pages/Dashboard/MyTicketsPage";
+import FixerAssignedTicketsPage from "./pages/Dashboard/FixerAssignedTicketsPage";
+import AdminDashboardPage from "./pages/Dashboard/DashboardPage";
+import AllTicketsPage from "./pages/Dashboard/AllTicketsPage";
+import TicketDetailPage from "./pages/Dashboard/TicketDetailPage";
+import UsersPage from "./pages/Dashboard/UsersPage";
+import UserDetailPage from "./pages/Dashboard/UserDetailPage";
+import RolesManagementPage from "./pages/Dashboard/RolesManagementPage";
+import AuditLogsPage from "./pages/Dashboard/AuditLogsPage";
+import SystemSettingsPage from "./pages/Dashboard/SystemSettingsPage";
+import ReportsPage from "./pages/Dashboard/ReportsPage";
+import NotificationsPage from "./pages/Dashboard/NotificationsPage";
+import BulkActionsPage from "./pages/Dashboard/BulkActionsPage";
 
 export default function App() {
   const { user } = useAuthStore();
 
-  // 🔹 Decide default dashboard based on permissions
-  const getDashboard = () => {
+  // 🔹 Default redirect based on permissions
+  const getDefaultDashboard = () => {
     if (!user) return <Navigate to="/login" replace />;
-
     const { permissions } = user;
 
     if (permissions.is_admin_level || permissions.can_manage_users) {
       return <Navigate to="/admin/dashboard" replace />;
     }
-
     if (permissions.can_fix || permissions.can_assign) {
-      return <StaffDashboard />;
+      return <Navigate to="/assigned-tickets" replace />;
     }
-
     if (permissions.can_report) {
-      return <StudentDashboard />;
+      return <Navigate to="/submit-ticket" replace />;
     }
 
     return <Navigate to="/login" replace />;
-  };
-
-  // 🔹 Admin route protection
-  const AdminRoute = ({ element }: { element: React.ReactNode }) => {
-    if (!user) return <Navigate to="/login" replace />;
-    const { permissions } = user;
-    if (!permissions.is_admin_level && !permissions.can_manage_users) {
-      return <Navigate to="/dashboard" replace />;
-    }
-    return <>{element}</>;
-  };
-
-  // 🔹 Staff route protection
-  const StaffRoute = ({ element }: { element: React.ReactNode }) => {
-    if (!user) return <Navigate to="/login" replace />;
-    const { permissions } = user;
-    if (
-      !permissions.can_report &&
-      !permissions.can_fix &&
-      !permissions.can_assign
-    ) {
-      return <Navigate to="/dashboard" replace />;
-    }
-    return <>{element}</>;
   };
 
   return (
@@ -108,7 +69,7 @@ export default function App() {
           }
         />
 
-        {/* Auth routes */}
+        {/* Auth pages */}
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/forgot-password" element={<ForgotPasswordChoice />} />
@@ -123,7 +84,7 @@ export default function App() {
           element={<VerifyEmailPage />}
         />
 
-        {/* Protected routes */}
+        {/* Protected Dashboard Layout */}
         <Route
           path="/"
           element={
@@ -132,69 +93,32 @@ export default function App() {
             </ProtectedRoute>
           }
         >
-          <Route path="dashboard" element={getDashboard()} />
+          {/* Dashboard default redirect */}
+          <Route path="dashboard" element={getDefaultDashboard()} />
 
-          {/* Student/Staff */}
+          {/* Student / Staff Pages */}
+          <Route path="submit-ticket" element={<SubmitTicketPage />} />
+          <Route path="my-tickets" element={<MyTicketsPage />} />
+          <Route path="assigned-tickets" element={<AssignedTicketsPage />} />
           <Route
-            path="submit-ticket"
-            element={<StaffRoute element={<SubmitTicketPage />} />}
-          />
-          <Route
-            path="my-tickets"
-            element={<StaffRoute element={<MyTicketsPage />} />}
-          />
-          <Route
-            path="assigned-tickets"
-            element={<StaffRoute element={<AssignedTicketsPage />} />}
+            path="my-assigned-tickets"
+            element={<FixerAssignedTicketsPage />}
           />
 
-          {/* Admin */}
-          <Route
-            path="admin/dashboard"
-            element={<AdminRoute element={<AdminDashboardPage />} />}
-          />
-          <Route
-            path="admin/tickets"
-            element={<AdminRoute element={<AllTicketsPage />} />}
-          />
-          <Route
-            path="admin/tickets/:id"
-            element={<AdminRoute element={<TicketDetailPage />} />}
-          />
-          <Route
-            path="admin/users"
-            element={<AdminRoute element={<UsersPage />} />}
-          />
-          <Route
-            path="admin/users/:id"
-            element={<AdminRoute element={<UserDetailPage />} />}
-          />
-          <Route
-            path="admin/roles"
-            element={<AdminRoute element={<RolesManagementPage />} />}
-          />
-          <Route
-            path="admin/audit-logs"
-            element={<AdminRoute element={<AuditLogsPage />} />}
-          />
-          <Route
-            path="admin/settings"
-            element={<AdminRoute element={<SystemSettingsPage />} />}
-          />
+          {/* Admin Pages */}
+          <Route path="admin/dashboard" element={<AdminDashboardPage />} />
+          <Route path="admin/tickets" element={<AllTicketsPage />} />
+          <Route path="admin/tickets/:id" element={<TicketDetailPage />} />
+          <Route path="admin/users" element={<UsersPage />} />
+          <Route path="admin/users/:id" element={<UserDetailPage />} />
+          <Route path="admin/roles" element={<RolesManagementPage />} />
+          <Route path="admin/audit-logs" element={<AuditLogsPage />} />
+          <Route path="admin/settings" element={<SystemSettingsPage />} />
 
-          {/* Optional Admin */}
-          <Route
-            path="admin/reports"
-            element={<AdminRoute element={<ReportsPage />} />}
-          />
-          <Route
-            path="admin/notifications"
-            element={<AdminRoute element={<NotificationsPage />} />}
-          />
-          <Route
-            path="admin/bulk-actions"
-            element={<AdminRoute element={<BulkActionsPage />} />}
-          />
+          {/* Optional Admin Pages */}
+          <Route path="admin/reports" element={<ReportsPage />} />
+          <Route path="admin/notifications" element={<NotificationsPage />} />
+          <Route path="admin/bulk-actions" element={<BulkActionsPage />} />
         </Route>
       </Routes>
     </BrowserRouter>

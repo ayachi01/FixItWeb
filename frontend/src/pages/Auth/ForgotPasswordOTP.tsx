@@ -1,6 +1,6 @@
 // src/pages/ForgotPasswordOTP.tsx
 import { useState } from "react";
-import { api } from "../api/client"; // ✅ axios instance
+import { api } from "../../api/client"; // ✅ axios instance
 import { useNavigate } from "react-router-dom";
 
 export default function ForgotPasswordOTP() {

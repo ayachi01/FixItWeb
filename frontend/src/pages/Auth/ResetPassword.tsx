@@ -1,7 +1,7 @@
 // src/pages/ResetPassword.tsx
 import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { api } from "../api/client"; // your Axios instance
+import { api } from "../../api/client"; // your Axios instance
 
 export default function ResetPassword() {
   const { uidb64, token } = useParams<{ uidb64: string; token: string }>();
