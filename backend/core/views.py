@@ -235,6 +235,8 @@ class UserViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['post'], permission_classes=[AllowAny], url_path='create')
     def create_user(self, request):
         return self.register_self_service(request)
+    
+
 
     # -------------------- OTP Verification --------------------
     @action(detail=False, methods=['post'], permission_classes=[AllowAny], throttle_classes=[OTPThrottle])
@@ -378,9 +380,33 @@ class UserViewSet(viewsets.ModelViewSet):
 
         create_audit("Invite Approved", request.user, target_invite=invite, details=f"Invite approved for {invite.email}")
         return Response({'message': 'Invite approved. User may now accept the invite.'}, status=status.HTTP_200_OK)
+    
 
-    # -------------------- Password Reset --------------------
-    @action(detail=False, methods=['post'], permission_classes=[AllowAny], throttle_classes=[PasswordResetThrottle])
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    @action(
+        detail=False,
+        methods=['post'],
+        permission_classes=[AllowAny],
+        throttle_classes=[PasswordResetThrottle]
+    )
     def reset_password_request(self, request):
         email = request.data.get("email")
         if not email:
@@ -391,43 +417,96 @@ class UserViewSet(viewsets.ModelViewSet):
         except User.DoesNotExist:
             return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
 
-        PasswordResetCode.objects.filter(user=user, is_used=False).update(is_used=True)
-        reset_code = PasswordResetCode.objects.create(user=user)
-        deliver_code(email, "Password Reset Code", f"Your reset code is {reset_code.code}", "Reset Code")
-        create_audit("Password Reset Requested", performed_by=None, target_user=user, details=f"Password reset code for {user.email}")
+        # Invalidate old codes and create new OTP
+        reset_code_obj, raw_code = PasswordResetCode.objects.create_for_user(user)
+
+        # Send email with correct parameters
+        deliver_code(
+            email,
+            subject="Password Reset Code",
+            body=f"Your password reset code is {raw_code}",
+            code_type="password_reset"  # required argument
+        )
+
+        # Log audit
+        create_audit(
+            action="Password Reset Requested",
+            performed_by=None,
+            target_user=user,
+            details=f"Password reset code generated for {user.email}"
+        )
 
         return Response({"message": "Password reset code sent"}, status=status.HTTP_200_OK)
 
-    @action(detail=False, methods=['post'], permission_classes=[AllowAny], throttle_classes=[PasswordResetThrottle])
+    @action(
+        detail=False,
+        methods=['post'],
+        permission_classes=[AllowAny],
+        throttle_classes=[PasswordResetThrottle]
+    )
     def reset_password_confirm(self, request):
         email = request.data.get("email")
         code = request.data.get("code")
         new_password = request.data.get("new_password")
 
         if not email or not code or not new_password:
-            return Response({"error": "Email, code, and new_password are required"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": "Email, code, and new_password are required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
         try:
             user = User.objects.get(email=email)
         except User.DoesNotExist:
             return Response({"error": "Invalid email or code"}, status=status.HTTP_400_BAD_REQUEST)
 
-        reset_qs = PasswordResetCode.objects.filter(user=user, code=code, is_used=False).order_by('-created_at')
+        # Fetch latest unused OTPs
+        reset_qs = PasswordResetCode.objects.filter(user=user, is_used=False).order_by('-created_at')
         if not reset_qs.exists():
             return Response({"error": "Invalid or already used code"}, status=status.HTTP_400_BAD_REQUEST)
 
         reset_code = reset_qs.first()
+
+        # Check expiry
         if reset_code.is_expired():
             return Response({"error": "Code expired"}, status=status.HTTP_400_BAD_REQUEST)
 
+        # Validate submitted code
+        if not reset_code.check_code(code):
+            return Response({"error": "Invalid code"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Reset password
         user.set_password(new_password)
         user.save()
         reset_code.mark_used()
-        create_audit("Password Reset Confirmed", performed_by=user, target_user=user, details=f"Password reset successful for {user.email}")
+
+        # Log audit
+        create_audit(
+            action="Password Reset Confirmed",
+            performed_by=user,
+            target_user=user,
+            details=f"Password reset successful for {user.email}"
+        )
 
         return Response({"message": "Password has been reset successfully"}, status=status.HTTP_200_OK)
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    
 # ==================================================
 #                  Ticket Management
 # ==================================================

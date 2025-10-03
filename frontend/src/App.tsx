@@ -5,7 +5,7 @@ import { useAuthStore } from "./store/authStore";
 import Login from "./pages/Auth/Login";
 import Register from "./pages/Auth/Register";
 import ForgotPasswordChoice from "./pages/Auth/ForgotPasswordChoice";
-import ForgotPassword from "./pages/Auth/ForgotPassword";
+import ForgotPassword from "./pages/Auth/ForgotPasswordEmail";
 import ResetPassword from "./pages/Auth/ResetPassword";
 import ForgotPasswordOTP from "./pages/Auth/ForgotPasswordOTP";
 import VerifyEmailPage from "./pages/Auth/VerifyEmailPage";
