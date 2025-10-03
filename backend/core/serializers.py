@@ -106,9 +106,13 @@ class StudentProfileSerializer(serializers.ModelSerializer):
         return super().update(instance, validated_data)
 
 
-# ✅ Basic User Serializer
+# ==================================================
+#                  User Serializer
+# ==================================================
+
+
 class UserSerializer(serializers.ModelSerializer):
-    """Basic User serializer for returning user data"""
+    """Basic User serializer for returning user data with full_name."""
     full_name = serializers.SerializerMethodField()
 
     class Meta:
@@ -116,9 +120,20 @@ class UserSerializer(serializers.ModelSerializer):
         fields = ["id", "email", "first_name", "last_name", "full_name"]
 
     def get_full_name(self, obj):
+        """
+        Prefer model's get_full_name() if available,
+        otherwise fallback to first/last name, then email/username.
+        """
+        if hasattr(obj, "get_full_name") and callable(obj.get_full_name):
+            name = obj.get_full_name().strip()
+            if name:
+                return name
+
         if obj.first_name or obj.last_name:
             return f"{obj.first_name} {obj.last_name}".strip()
-        return obj.email
+
+        return obj.email or getattr(obj, "username", None)
+
 
 
 # ✅ Role Serializer
@@ -398,11 +413,16 @@ class InviteAcceptSerializer(serializers.ModelSerializer):
         return user
 
 
+
+
+
+
+
+
+
+
+
 # ==================== Tickets ====================
-# ==================== Tickets Serializers ====================
-
-
-
 # -----------------------------
 # Ticket Image Serializer
 # -----------------------------
@@ -473,6 +493,15 @@ class TicketSerializer(serializers.ModelSerializer):
         # Serialize users instead of returning model instances
         users = [assignment.user for assignment in obj.assignments.all()]
         return UserSerializer(users, many=True).data
+
+
+
+
+
+
+
+
+
 
 
 # ==================== Locations ====================
