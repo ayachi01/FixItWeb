@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { getAllTickets } from "../../api/tickets";
 import { getAllUsers } from "../../api/users";
+import { useAuthStore } from "../../store/authStore";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -25,6 +26,7 @@ ChartJS.register(
 );
 
 export default function Dashboard() {
+  const { user } = useAuthStore();
   const [ticketCount, setTicketCount] = useState(0);
   const [pendingCount, setPendingCount] = useState(0);
   const [userCount, setUserCount] = useState(0);
@@ -49,7 +51,6 @@ export default function Dashboard() {
         const users = await getAllUsers();
         setUserCount(users.length);
 
-        // --- Tickets by Status ---
         const statusCounts: Record<string, number> = {};
         tickets.forEach((t: any) => {
           statusCounts[t.status] = (statusCounts[t.status] || 0) + 1;
@@ -73,7 +74,6 @@ export default function Dashboard() {
           ],
         });
 
-        // --- Tickets by Category ---
         const categoryCounts: Record<string, number> = {};
         tickets.forEach((t: any) => {
           categoryCounts[t.category] = (categoryCounts[t.category] || 0) + 1;
@@ -109,9 +109,13 @@ export default function Dashboard() {
     loadData();
   }, []);
 
+  if (!user) return <p>Loading user info...</p>;
+
+  const { permissions } = user;
+
   return (
     <div className="p-6">
-      <h1 className="text-2xl font-bold mb-6">📊 Admin Dashboard</h1>
+      <h1 className="text-2xl font-bold mb-6">📊 Dashboard</h1>
 
       {loading ? (
         <p>Loading stats...</p>
@@ -119,35 +123,58 @@ export default function Dashboard() {
         <>
           {/* --- Counts --- */}
           <div className="grid grid-cols-3 gap-4 mb-6">
-            <div className="bg-white shadow rounded p-4 text-center">
-              <h2 className="text-lg font-semibold">Total Tickets</h2>
-              <p className="text-3xl">{ticketCount}</p>
-            </div>
-            <div className="bg-white shadow rounded p-4 text-center">
-              <h2 className="text-lg font-semibold">Users</h2>
-              <p className="text-3xl">{userCount}</p>
-            </div>
-            <div className="bg-white shadow rounded p-4 text-center">
-              <h2 className="text-lg font-semibold">Pending Tickets</h2>
-              <p className="text-3xl">{pendingCount}</p>
-            </div>
+            {/* Tickets visible to staff/fixers/admins */}
+            {(permissions.can_report ||
+              permissions.can_fix ||
+              permissions.can_assign) && (
+              <div className="bg-white shadow rounded p-4 text-center">
+                <h2 className="text-lg font-semibold">Total Tickets</h2>
+                <p className="text-3xl">{ticketCount}</p>
+              </div>
+            )}
+
+            {/* User count only visible to admins */}
+            {permissions.is_admin_level || permissions.can_manage_users ? (
+              <div className="bg-white shadow rounded p-4 text-center">
+                <h2 className="text-lg font-semibold">Users</h2>
+                <p className="text-3xl">{userCount}</p>
+              </div>
+            ) : null}
+
+            {/* Pending tickets visible to staff/fixers/admins */}
+            {(permissions.can_fix || permissions.can_assign) && (
+              <div className="bg-white shadow rounded p-4 text-center">
+                <h2 className="text-lg font-semibold">Pending Tickets</h2>
+                <p className="text-3xl">{pendingCount}</p>
+              </div>
+            )}
           </div>
 
           {/* --- Charts --- */}
           <div className="grid grid-cols-2 gap-6">
-            <div className="bg-white shadow rounded p-4">
-              <h2 className="text-lg font-semibold mb-2 text-center">
-                Tickets by Status
-              </h2>
-              <Bar data={ticketsByStatus} options={{ responsive: true }} />
-            </div>
+            {/* Tickets by Status for staff/fixers/admins */}
+            {(permissions.can_fix ||
+              permissions.can_assign ||
+              permissions.can_report) && (
+              <div className="bg-white shadow rounded p-4">
+                <h2 className="text-lg font-semibold mb-2 text-center">
+                  Tickets by Status
+                </h2>
+                <Bar data={ticketsByStatus} options={{ responsive: true }} />
+              </div>
+            )}
 
-            <div className="bg-white shadow rounded p-4">
-              <h2 className="text-lg font-semibold mb-2 text-center">
-                Tickets by Category
-              </h2>
-              <Pie data={ticketsByCategory} options={{ responsive: true }} />
-            </div>
+            {/* Tickets by Category for staff/fixers/admins */}
+            {(permissions.can_fix ||
+              permissions.can_assign ||
+              permissions.can_report) && (
+              <div className="bg-white shadow rounded p-4">
+                <h2 className="text-lg font-semibold mb-2 text-center">
+                  Tickets by Category
+                </h2>
+                <Pie data={ticketsByCategory} options={{ responsive: true }} />
+              </div>
+            )}
           </div>
         </>
       )}

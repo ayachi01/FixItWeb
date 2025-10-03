@@ -1,7 +1,7 @@
 // src/pages/VerifyEmailPage.tsx
 import { useEffect, useState, useRef } from "react";
 import { useParams, Link } from "react-router-dom";
-import { api } from "../api/client"; // ✅ use your Axios instance
+import { api } from "../../api/client"; // ✅ use your Axios instance
 
 export default function VerifyEmailPage() {
   const { uidb64, token } = useParams<{ uidb64: string; token: string }>();

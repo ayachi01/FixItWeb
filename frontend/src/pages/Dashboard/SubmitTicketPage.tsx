@@ -1,7 +1,7 @@
 // 📂 src/pages/tickets/SubmitTicketPage.tsx
 import { useState, useEffect } from "react";
-import { useAuthStore } from "../store/authStore";
-import { api } from "../api/client";
+import { useAuthStore } from "../../store/authStore";
+import { api } from "../../api/client";
 import { toast } from "react-hot-toast";
 
 interface Location {

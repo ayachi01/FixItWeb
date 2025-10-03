@@ -1,7 +1,7 @@
 // src/pages/Register.tsx
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { register as apiRegister } from "../api"; // ✅ your API helper
+import { register as apiRegister } from "../../api"; // ✅ your API helper
 
 export default function Register() {
   const [firstName, setFirstName] = useState("");
