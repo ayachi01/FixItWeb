@@ -497,29 +497,23 @@ class UserViewSet(viewsets.ModelViewSet):
 
 
 
-
-
-
-
-
-
-
-
-
-    
 # ==================================================
 #                  Ticket Management
 # ==================================================
+from core.models import Ticket, TicketAssignment, AuditLog, UserProfile, TicketImage
 
 from django.db.models import Prefetch
-
 
 class TicketViewSet(viewsets.ModelViewSet):
     """
     Ticket endpoints (list/retrieve + custom actions).
     - /api/tickets/ (list, create)
-    - /api/tickets/{id}/assign/ etc.
+    - /api/tickets/{id}/assign/
+    - /api/tickets/my_reports/
+    - /api/tickets/assigned/
+    - /api/tickets/unassigned/
     """
+
     queryset = Ticket.objects.all().select_related("reporter", "location").prefetch_related(
         "images",
         Prefetch("assignments", queryset=TicketAssignment.objects.select_related("user"))
@@ -527,69 +521,112 @@ class TicketViewSet(viewsets.ModelViewSet):
     serializer_class = TicketSerializer
     permission_classes = [IsAuthenticated]
 
-    @action(detail=False, methods=['get'], url_path="my_reports")
-    def my_reports(self, request):
-        tickets = Ticket.objects.filter(reporter=request.user).distinct().select_related("reporter", "location").prefetch_related(
+    def _prefetch_queryset(self, qs):
+        """Helper: consistently apply select_related and prefetch_related."""
+        return qs.select_related("reporter", "location").prefetch_related(
             "images",
             Prefetch("assignments", queryset=TicketAssignment.objects.select_related("user"))
         )
-        serializer = self.get_serializer(tickets, many=True)
-        return Response(serializer.data)
+
+    # ------------------------
+    # Override create
+    # ------------------------
+    def create(self, request, *args, **kwargs):
+        """Create a ticket + handle image uploads"""
+        serializer = self.get_serializer(data=request.data, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+
+        # Save ticket with reporter = current user
+        ticket = serializer.save(reporter=request.user)
+
+        # Handle multiple images if provided
+        for img in request.FILES.getlist("image"):
+            TicketImage.objects.create(
+                ticket=ticket,
+                image_url=img,
+                uploaded_by=request.user
+            )
+
+        create_audit(
+            AuditLog.Action.TICKET_CREATED,
+            performed_by=request.user,
+            details=f"Ticket {ticket.id} created"
+        )
+
+        headers = self.get_success_headers(serializer.data)
+        return Response(
+            self.get_serializer(ticket).data,
+            status=status.HTTP_201_CREATED,
+            headers=headers
+        )
+
+    # ------------------------
+    # Custom Endpoints
+    # ------------------------
+
+    @action(detail=False, methods=['get'], url_path="my_reports")
+    def my_reports(self, request):
+        """Tickets reported by the current user."""
+        tickets = self._prefetch_queryset(Ticket.objects.filter(reporter=request.user).distinct())
+        return Response(self.get_serializer(tickets, many=True).data)
 
     @action(detail=False, methods=['get'], url_path="assigned")
     def assigned(self, request):
-        """
-        Tickets assigned to the current user (via TicketAssignment relationship).
-        Returns full TicketSerializer (includes assignees as serialized users).
-        """
-        tickets = Ticket.objects.filter(assignments__user=request.user).distinct().select_related(
-            "reporter", "location"
-        ).prefetch_related(
-            "images",
-            Prefetch("assignments", queryset=TicketAssignment.objects.select_related("user"))
-        )
-        serializer = self.get_serializer(tickets, many=True)
-        return Response(serializer.data)
+        """Tickets assigned to the current user."""
+        tickets = self._prefetch_queryset(Ticket.objects.filter(assignments__user=request.user).distinct())
+        return Response(self.get_serializer(tickets, many=True).data)
 
     @action(detail=False, methods=['get'], url_path="unassigned")
     def unassigned(self, request):
-        tickets = Ticket.objects.filter(assignments__isnull=True).select_related("reporter", "location").prefetch_related("images")
-        serializer = self.get_serializer(tickets, many=True)
-        return Response(serializer.data)
+        """Tickets that have no assignees."""
+        tickets = self._prefetch_queryset(Ticket.objects.filter(assignments__isnull=True))
+        return Response(self.get_serializer(tickets, many=True).data)
 
     @action(detail=False, methods=['post'], url_path="report_issue")
     def report_issue(self, request):
+        """Create a new ticket (if user has permission)."""
         if not getattr(request.user.profile, "can_report", False):
-            return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
+            return Response({'error': 'You are not allowed to report issues.'}, status=status.HTTP_403_FORBIDDEN)
 
         serializer = self.get_serializer(data=request.data, context={'request': request})
         if serializer.is_valid():
-            ticket = serializer.save()
-            create_audit(AuditLog.Action.TICKET_CREATED, performed_by=request.user, details=f"Ticket {ticket.id} created")
+            ticket = serializer.save(reporter=request.user)
+
+            # Handle multiple images
+            for img in request.FILES.getlist("image"):
+                TicketImage.objects.create(
+                    ticket=ticket,
+                    image_url=img,
+                    uploaded_by=request.user
+                )
+
+            create_audit(
+                AuditLog.Action.TICKET_CREATED,
+                performed_by=request.user,
+                details=f"Ticket {ticket.id} created"
+            )
             return Response(self.get_serializer(ticket).data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     @action(detail=True, methods=['post'], url_path="assign")
     def assign(self, request, pk=None):
+        """Assign a ticket to a user (if current user can assign)."""
         ticket = self.get_object()
         if not getattr(request.user.profile, "can_assign", False):
-            return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
+            return Response({'error': 'You are not authorized to assign tickets.'}, status=status.HTTP_403_FORBIDDEN)
 
         assignee_id = request.data.get('assignee_id')
         if not assignee_id:
-            return Response({'error': 'Assignee ID is required'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': 'Assignee ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        try:
-            assignee = User.objects.get(id=assignee_id)
-        except User.DoesNotExist:
-            return Response({'error': 'Invalid assignee'}, status=status.HTTP_400_BAD_REQUEST)
-
+        assignee = get_object_or_404(User, id=assignee_id)
         profile = getattr(assignee, "profile", None)
+
         if not profile or not getattr(profile, "can_fix", False):
-            return Response({'error': 'User cannot be assigned tickets'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': 'This user cannot be assigned tickets.'}, status=status.HTTP_400_BAD_REQUEST)
 
         if ticket.category not in getattr(profile, "allowed_categories", lambda: [])():
-            return Response({'error': f'User cannot fix {ticket.category} tickets'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': f'This user cannot fix {ticket.category} tickets.'}, status=status.HTTP_400_BAD_REQUEST)
 
         TicketAssignment.objects.get_or_create(ticket=ticket, user=assignee)
         ticket.status = Ticket.Status.ASSIGNED
@@ -605,6 +642,7 @@ class TicketViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['get'], url_path="eligible_fixers")
     def eligible_fixers(self, request, pk=None):
+        """List users eligible to fix this ticket (based on category)."""
         ticket = self.get_object()
         fixers = UserProfile.fixers_for_category(ticket.category)
         data = [
@@ -622,11 +660,13 @@ class TicketViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'], url_path="close")
     def close(self, request, pk=None):
+        """Close a ticket (if user has permission)."""
         ticket = self.get_object()
         if not getattr(request.user.profile, "can_close_tickets", False):
-            return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
+            return Response({'error': 'You are not authorized to close tickets.'}, status=status.HTTP_403_FORBIDDEN)
         if ticket.status == Ticket.Status.CLOSED:
-            return Response({'error': 'Ticket already closed'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': 'Ticket is already closed.'}, status=status.HTTP_400_BAD_REQUEST)
+
         ticket.status = Ticket.Status.CLOSED
         ticket.save(update_fields=["status", "updated_at"])
         create_audit(AuditLog.Action.TICKET_CLOSED, performed_by=request.user, details=f"Ticket {ticket.id} closed")
@@ -634,9 +674,10 @@ class TicketViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'], url_path="resolve")
     def resolve(self, request, pk=None):
+        """Resolve a ticket (if user has fix permissions)."""
         ticket = self.get_object()
         if not getattr(request.user.profile, "can_fix", False):
-            return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
+            return Response({'error': 'You are not authorized to resolve tickets.'}, status=status.HTTP_403_FORBIDDEN)
 
         serializer = TicketResolutionSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
@@ -649,14 +690,27 @@ class TicketViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'], url_path="reopen")
     def reopen(self, request, pk=None):
+        """Reopen a closed ticket."""
         ticket = self.get_object()
         if ticket.status != Ticket.Status.CLOSED:
-            return Response({'error': 'Only closed tickets can be reopened'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': 'Only closed tickets can be reopened.'}, status=status.HTTP_400_BAD_REQUEST)
+
         ticket.status = Ticket.Status.REOPENED
         ticket.save(update_fields=["status", "updated_at"])
         create_audit(AuditLog.Action.TICKET_REOPENED, performed_by=request.user, details=f"Ticket {ticket.id} reopened")
         return Response({'message': f'Ticket {ticket.id} has been reopened'})
     
+
+
+
+
+
+
+
+
+
+
+
 # ==================================================
 #                  Locations
 # ==================================================
