@@ -15,6 +15,8 @@ from .views import (
     VerifyEmailView,
     AuditLogViewSet,
     RoleViewSet,
+    ForgotPasswordView,
+    ResetPasswordView,
 )
 
 # -------------------- Router --------------------
@@ -54,9 +56,13 @@ urlpatterns = [
     path("auth/logout/", LogoutView.as_view(), name="logout"),
     path("auth/register/", register_self_service, name="register"),
 
-    # OTP-based reset password
+    # OTP-based reset password (UserViewSet)
     path("auth/forgot-password-otp/", forgot_password_otp, name="forgot_password_otp"),
     path("auth/reset-password-otp/", reset_password_otp, name="reset_password_otp"),
+
+    # Email-link reset password
+    path("auth/forgot-password/", ForgotPasswordView.as_view(), name="forgot_password_email"),
+    path("auth/reset-password/<uidb64>/<token>/", ResetPasswordView.as_view(), name="reset_password_email"),
 
     # Email verification
     path("auth/verify-email/<uidb64>/<token>/", VerifyEmailView.as_view(), name="verify_email"),
