@@ -1,4 +1,4 @@
-// 📂 src/pages/admin/RolesPage.tsx
+// 📂 src/pages/Dashboard/RolesPage.tsx
 import { useEffect, useState } from "react";
 import { api } from "../../api/client";
 

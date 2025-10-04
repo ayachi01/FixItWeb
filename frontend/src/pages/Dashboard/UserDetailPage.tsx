@@ -148,7 +148,7 @@ export default function UserDetailPage() {
         });
         toast.success("User updated successfully");
       }
-      navigate("/admin/users");
+      navigate("/dashboard/users");
     } catch (err: any) {
       toast.error(
         err.response?.data?.error ||
@@ -343,7 +343,7 @@ export default function UserDetailPage() {
             {isCreate ? "Create" : "Save"}
           </button>
           <button
-            onClick={() => navigate("/admin/users")}
+            onClick={() => navigate("/dashboard/users")}
             className="bg-gray-300 px-4 py-2 rounded hover:bg-gray-400"
           >
             Cancel

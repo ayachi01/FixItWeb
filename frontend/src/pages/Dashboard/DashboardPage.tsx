@@ -1,6 +1,6 @@
-// 📂 src/pages/admin/Dashboard.tsx
+// 📂 src/pages/Dashboard/Dashboard.tsx
 import { useEffect, useState } from "react";
-import { getAllTickets } from "../../api/tickets";
+import { getAllTickets } from "../../api/ticket";
 import { getAllUsers } from "../../api/users";
 import { useAuthStore } from "../../store/authStore";
 import {
