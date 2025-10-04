@@ -1,5 +1,5 @@
+// Sidebar.tsx
 import { useNavigate, useLocation } from "react-router-dom";
-import type { Permissions } from "../../store/authStore"; // ✅ type-only import
 import { useAuthStore } from "../../store/authStore";
 import {
   FileText,
@@ -20,85 +20,69 @@ interface MenuItem {
   label: string;
   path: string;
   icon: React.ReactNode;
-  permissionCheck?: (permissions: Permissions) => boolean;
 }
 
-// 🔹 Grouped for clarity
-const generalMenu = [
+// 🔹 All menu items (everyone can see)
+const menuItems: MenuItem[] = [
   {
     label: "Submit Ticket",
-    path: "/submit-ticket",
+    path: "/dashboard/submit-ticket",
     icon: <Home size={18} />,
-    permissionCheck: (p: Permissions) => p.can_report,
   },
   {
     label: "My Tickets",
-    path: "/my-tickets",
+    path: "/dashboard/my-tickets",
     icon: <FileText size={18} />,
-    permissionCheck: (p: Permissions) => p.can_report,
   },
   {
-    label: "Assigned Tickets",
-    path: "/assigned-tickets",
+    label: "My Unassigned Tickets",
+    path: "/dashboard/assigned-tickets",
     icon: <ClipboardCheck size={18} />,
-    permissionCheck: (p: Permissions) => p.can_fix || p.can_assign,
   },
-];
-
-const adminMenu = [
   {
-    label: "Admin Dashboard",
-    path: "/admin/dashboard",
+    label: "My Assigned Tickets",
+    path: "/dashboard/my-assigned-tickets",
+    icon: <ClipboardCheck size={18} />,
+  },
+  {
+    label: "Dashboard",
+    path: "/dashboard/main",
     icon: <LayoutDashboard size={18} />,
-    permissionCheck: (p: Permissions) => p.is_admin_level || p.can_manage_users,
   },
   {
     label: "All Tickets",
-    path: "/admin/tickets",
+    path: "/dashboard/tickets",
     icon: <Ticket size={18} />,
-    permissionCheck: (p: Permissions) => p.is_admin_level || p.can_manage_users,
   },
   {
     label: "Reports",
-    path: "/admin/reports",
+    path: "/dashboard/reports",
     icon: <File size={18} />,
-    permissionCheck: (p: Permissions) => p.is_admin_level || p.can_manage_users,
   },
   {
     label: "Notifications",
-    path: "/admin/notifications",
+    path: "/dashboard/notifications",
     icon: <Bell size={18} />,
-    permissionCheck: (p: Permissions) => p.is_admin_level || p.can_manage_users,
-  },
-  {
-    label: "Bulk Actions",
-    path: "/admin/bulk-actions",
-    icon: <ClipboardCheck size={18} />,
-    permissionCheck: (p: Permissions) => p.is_admin_level || p.can_manage_users,
   },
   {
     label: "Manage Users",
-    path: "/admin/users",
+    path: "/dashboard/users",
     icon: <Users size={18} />,
-    permissionCheck: (p: Permissions) => p.can_manage_users,
   },
   {
     label: "Roles Management",
-    path: "/admin/roles",
+    path: "/dashboard/roles",
     icon: <Key size={18} />,
-    permissionCheck: (p: Permissions) => p.can_manage_users,
   },
   {
     label: "Audit Logs",
-    path: "/admin/audit-logs",
+    path: "/dashboard/audit-logs",
     icon: <ShieldCheck size={18} />,
-    permissionCheck: (p: Permissions) => p.is_admin_level,
   },
   {
     label: "System Settings",
-    path: "/admin/settings",
+    path: "/dashboard/settings",
     icon: <Settings size={18} />,
-    permissionCheck: (p: Permissions) => p.is_admin_level,
   },
 ];
 
@@ -108,30 +92,23 @@ export default function Sidebar() {
   const location = useLocation();
 
   if (!user) return null;
-  const { permissions } = user;
-
-  const allMenu: MenuItem[] = [...generalMenu, ...adminMenu];
 
   const renderMenu = () =>
-    allMenu
-      .filter((item) =>
-        item.permissionCheck ? item.permissionCheck(permissions) : true
-      )
-      .map((item) => {
-        const isActive = location.pathname.startsWith(item.path);
-        return (
-          <button
-            key={item.path}
-            onClick={() => navigate(item.path)}
-            className={`flex items-center w-full px-4 py-2 rounded hover:bg-gray-700 text-left transition-colors duration-150 ${
-              isActive ? "bg-gray-700 font-semibold" : ""
-            }`}
-          >
-            {item.icon}
-            <span className="ml-2">{item.label}</span>
-          </button>
-        );
-      });
+    menuItems.map((item) => {
+      const isActive = location.pathname.startsWith(item.path);
+      return (
+        <button
+          key={item.path}
+          onClick={() => navigate(item.path)}
+          className={`flex items-center w-full px-4 py-2 rounded hover:bg-gray-700 text-left transition-colors duration-150 ${
+            isActive ? "bg-gray-700 font-semibold" : ""
+          }`}
+        >
+          {item.icon}
+          <span className="ml-2">{item.label}</span>
+        </button>
+      );
+    });
 
   const handleLogout = async () => {
     await logout();

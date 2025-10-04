@@ -1152,7 +1152,7 @@ class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
     """
     queryset = AuditLog.objects.all().order_by("-timestamp")
     serializer_class = AuditLogSerializer
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsAuthenticated]
 
 # If you prefer a simple APIView instead:
 from rest_framework.views import APIView
@@ -1162,7 +1162,7 @@ class AuditLogsAPIView(APIView):
     GET /api/audit-logs/
     Admin-only: returns all audit logs
     """
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
         logs = AuditLog.objects.all().order_by("-timestamp")
@@ -1179,4 +1179,4 @@ class RoleViewSet(viewsets.ReadOnlyModelViewSet):
     """
     queryset = Role.objects.all()
     serializer_class = RoleSerializer
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsAuthenticated]

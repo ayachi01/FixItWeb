@@ -1,7 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { useAuthStore } from "./store/authStore";
 
-// Auth Pages
+// 🔑 Authentication Pages (public - before login)
 import Login from "./pages/Auth/Login";
 import Register from "./pages/Auth/Register";
 import ForgotPasswordChoice from "./pages/Auth/ForgotPasswordChoice";
@@ -10,15 +10,15 @@ import ResetPassword from "./pages/Auth/ResetPassword";
 import ForgotPasswordOTP from "./pages/Auth/ForgotPasswordOTP";
 import VerifyEmailPage from "./pages/Auth/VerifyEmailPage";
 
-// Protected
+// 🔒 Layout wrapper (only checks if user is logged in)
 import ProtectedRoute from "./components/ProtectedRoute";
 import Layout from "./components/Dashboard/DashboardLayout";
 
-// Dashboard Pages
+// 📊 Dashboard Pages (all accessible once logged in)
 import SubmitTicketPage from "./pages/Dashboard/SubmitTicketPage";
-import AssignedTicketsPage from "./pages/Dashboard/AssignedTicketsPage";
+import AssignedTicketsPage from "./pages/Dashboard/MyUnassignTicketsPage";
 import MyTicketsPage from "./pages/Dashboard/MyTicketsPage";
-import FixerAssignedTicketsPage from "./pages/Dashboard/FixerAssignedTicketsPage";
+import FixerAssignedTicketsPage from "./pages/Dashboard/MyAssignedTicketsPage";
 import AdminDashboardPage from "./pages/Dashboard/DashboardPage";
 import AllTicketsPage from "./pages/Dashboard/AllTicketsPage";
 import TicketDetailPage from "./pages/Dashboard/TicketDetailPage";
@@ -29,35 +29,22 @@ import AuditLogsPage from "./pages/Dashboard/AuditLogsPage";
 import SystemSettingsPage from "./pages/Dashboard/SystemSettingsPage";
 import ReportsPage from "./pages/Dashboard/ReportsPage";
 import NotificationsPage from "./pages/Dashboard/NotificationsPage";
-import BulkActionsPage from "./pages/Dashboard/BulkActionsPage";
 
 export default function App() {
   const { user } = useAuthStore();
 
-  // 🔹 Default redirect based on permissions
+  // 🔓 Default redirect: always push logged-in users to main dashboard
   const getDefaultDashboard = () => {
     if (!user) return <Navigate to="/login" replace />;
-    const { permissions } = user;
-
-    if (permissions.is_admin_level || permissions.can_manage_users) {
-      return <Navigate to="/admin/dashboard" replace />;
-    }
-    if (permissions.can_fix || permissions.can_assign) {
-      return <Navigate to="/assigned-tickets" replace />;
-    }
-    if (permissions.can_report) {
-      return <Navigate to="/submit-ticket" replace />;
-    }
-
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/dashboard/main" replace />;
   };
 
   return (
-    <BrowserRouter
-      future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
-    >
+    <BrowserRouter>
       <Routes>
-        {/* Root redirect */}
+        {/* Root redirect:
+            - If logged in → dashboard
+            - If not logged in → login page */}
         <Route
           path="/"
           element={
@@ -69,7 +56,7 @@ export default function App() {
           }
         />
 
-        {/* Auth pages */}
+        {/* Public authentication routes */}
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/forgot-password" element={<ForgotPasswordChoice />} />
@@ -84,7 +71,7 @@ export default function App() {
           element={<VerifyEmailPage />}
         />
 
-        {/* Protected Dashboard Layout */}
+        {/* 🔒 Protected area: Once logged in, ALL routes inside here are open to every user */}
         <Route
           path="/"
           element={
@@ -93,32 +80,37 @@ export default function App() {
             </ProtectedRoute>
           }
         >
-          {/* Dashboard default redirect */}
+          {/* Dashboard default */}
           <Route path="dashboard" element={getDefaultDashboard()} />
 
-          {/* Student / Staff Pages */}
-          <Route path="submit-ticket" element={<SubmitTicketPage />} />
-          <Route path="my-tickets" element={<MyTicketsPage />} />
-          <Route path="assigned-tickets" element={<AssignedTicketsPage />} />
+          {/* 🚪 All feature pages (no role restrictions on frontend) */}
           <Route
-            path="my-assigned-tickets"
+            path="dashboard/submit-ticket"
+            element={<SubmitTicketPage />}
+          />
+          <Route path="dashboard/my-tickets" element={<MyTicketsPage />} />
+          <Route
+            path="dashboard/assigned-tickets"
+            element={<AssignedTicketsPage />}
+          />
+          <Route
+            path="dashboard/my-assigned-tickets"
             element={<FixerAssignedTicketsPage />}
           />
 
-          {/* Admin Pages */}
-          <Route path="admin/dashboard" element={<AdminDashboardPage />} />
-          <Route path="admin/tickets" element={<AllTicketsPage />} />
-          <Route path="admin/tickets/:id" element={<TicketDetailPage />} />
-          <Route path="admin/users" element={<UsersPage />} />
-          <Route path="admin/users/:id" element={<UserDetailPage />} />
-          <Route path="admin/roles" element={<RolesManagementPage />} />
-          <Route path="admin/audit-logs" element={<AuditLogsPage />} />
-          <Route path="admin/settings" element={<SystemSettingsPage />} />
-
-          {/* Optional Admin Pages */}
-          <Route path="admin/reports" element={<ReportsPage />} />
-          <Route path="admin/notifications" element={<NotificationsPage />} />
-          <Route path="admin/bulk-actions" element={<BulkActionsPage />} />
+          <Route path="dashboard/main" element={<AdminDashboardPage />} />
+          <Route path="dashboard/tickets" element={<AllTicketsPage />} />
+          <Route path="dashboard/tickets/:id" element={<TicketDetailPage />} />
+          <Route path="dashboard/users" element={<UsersPage />} />
+          <Route path="dashboard/users/:id" element={<UserDetailPage />} />
+          <Route path="dashboard/roles" element={<RolesManagementPage />} />
+          <Route path="dashboard/audit-logs" element={<AuditLogsPage />} />
+          <Route path="dashboard/settings" element={<SystemSettingsPage />} />
+          <Route path="dashboard/reports" element={<ReportsPage />} />
+          <Route
+            path="dashboard/notifications"
+            element={<NotificationsPage />}
+          />
         </Route>
       </Routes>
     </BrowserRouter>
