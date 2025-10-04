@@ -1,4 +1,4 @@
-// 📂 src/pages/admin/SettingsPage.tsx
+// 📂 src/pages/Dashboard/SettingsPage.tsx
 import React from "react";
 
 export default function SettingsPage() {

@@ -1,4 +1,4 @@
-// 📂 src/pages/admin/UserCreatePage.tsx
+// 📂 src/pages/Dashboard/UserCreatePage.tsx
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../../api/client";
@@ -106,7 +106,7 @@ export default function UserCreatePage() {
         { headers: { Authorization: `Bearer ${token}` } }
       );
       toast.success("User created successfully");
-      navigate("/admin/users");
+      navigate("/dashboard/users");
     } catch (err: any) {
       toast.error(err.response?.data?.error || "Failed to create user");
     } finally {
@@ -249,7 +249,7 @@ export default function UserCreatePage() {
             Save
           </button>
           <button
-            onClick={() => navigate("/admin/users")}
+            onClick={() => navigate("/dashboard/users")}
             className="bg-gray-300 px-4 py-2 rounded hover:bg-gray-400"
           >
             Cancel

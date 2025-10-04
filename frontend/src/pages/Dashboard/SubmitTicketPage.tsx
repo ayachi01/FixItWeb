@@ -1,4 +1,4 @@
-// 📂 src/pages/tickets/SubmitTicketPage.tsx
+// 📂 src/pages/Dashboard/SubmitTicketPage.tsx
 import { useState, useEffect } from "react";
 import { useAuthStore } from "../../store/authStore";
 import { api } from "../../api/client";

@@ -1,4 +1,4 @@
-// 📂 src/pages/admin/TicketsPage.tsx
+// 📂 src/pages/Dashboard/TicketsPage.tsx
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../../api/client"; // your axios instance

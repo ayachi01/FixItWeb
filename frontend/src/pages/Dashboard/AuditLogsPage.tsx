@@ -1,4 +1,4 @@
-// 📂 src/pages/admin/AuditLogsPage.tsx
+// 📂 src/pages/Dashboard/AuditLogsPage.tsx
 import { useEffect, useState } from "react";
 import { api } from "../../api/client";
 

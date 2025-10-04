@@ -1,4 +1,4 @@
-// 📂 src/pages/admin/UserDetailPage.tsx
+// 📂 src/pages/Dashboard/TicketDetailPage.tsx
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { api } from "../../api/client";
@@ -241,7 +241,7 @@ export default function UserDetailPage() {
             {saving ? "Saving..." : "Save"}
           </button>
           <button
-            onClick={() => navigate("/admin/users")}
+            onClick={() => navigate("/dashboard/users")}
             className="bg-gray-300 px-4 py-2 rounded hover:bg-gray-400"
           >
             Cancel

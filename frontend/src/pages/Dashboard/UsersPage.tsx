@@ -1,4 +1,4 @@
-// 📂 src/pages/admin/UsersPage.tsx
+// 📂 src/pages/Dashboard/UsersPage.tsx
 import { useEffect, useState, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { api } from "../../api/client";
@@ -74,11 +74,11 @@ export default function UsersPage() {
   }, [isAuthorized, navigate, fetchUsers, location.key]);
 
   const handleEdit = (id: number) => {
-    navigate(`/admin/users/${id}`);
+    navigate(`/dashboard/users/${id}`);
   };
 
   const handleCreate = () => {
-    navigate("/admin/users/create");
+    navigate("/dashboard/users/create");
   };
 
   const handleDelete = async (id: number) => {
