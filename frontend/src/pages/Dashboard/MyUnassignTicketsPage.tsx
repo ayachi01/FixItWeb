@@ -29,23 +29,13 @@ interface Ticket {
 }
 
 export default function AssignedTicketsPage() {
-  const { access, user } = useAuthStore();
-  const permissions = user?.permissions;
+  const { access } = useAuthStore();
 
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(false);
   const [staffOptions, setStaffOptions] = useState<Record<number, Assignee[]>>(
     {}
   );
-
-  // Only users who can assign tickets can access this page
-  if (!permissions?.can_assign) {
-    return (
-      <p className="text-red-500">
-        ❌ You do not have permission to assign tickets.
-      </p>
-    );
-  }
 
   // Fetch unassigned tickets + eligible fixers
   useEffect(() => {
