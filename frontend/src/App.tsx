@@ -22,6 +22,7 @@ import FixerAssignedTicketsPage from "./pages/Dashboard/MyAssignedTicketsPage";
 import AdminDashboardPage from "./pages/Dashboard/DashboardPage";
 import AllTicketsPage from "./pages/Dashboard/AllTicketsPage";
 import TicketDetailPage from "./pages/Dashboard/TicketDetailPage";
+import EditTicketPage from "./pages/Dashboard/EditTicketPage"; // ✅ Import EditTicketPage
 import UsersPage from "./pages/Dashboard/UsersPage";
 import UserDetailPage from "./pages/Dashboard/UserDetailPage";
 import RolesManagementPage from "./pages/Dashboard/RolesManagementPage";
@@ -42,9 +43,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Root redirect:
-            - If logged in → dashboard
-            - If not logged in → login page */}
+        {/* Root redirect */}
         <Route
           path="/"
           element={
@@ -71,7 +70,7 @@ export default function App() {
           element={<VerifyEmailPage />}
         />
 
-        {/* 🔒 Protected area: Once logged in, ALL routes inside here are open to every user */}
+        {/* 🔒 Protected area */}
         <Route
           path="/"
           element={
@@ -83,7 +82,7 @@ export default function App() {
           {/* Dashboard default */}
           <Route path="dashboard" element={getDefaultDashboard()} />
 
-          {/* 🚪 All feature pages (no role restrictions on frontend) */}
+          {/* 🚪 Feature pages */}
           <Route
             path="dashboard/submit-ticket"
             element={<SubmitTicketPage />}
@@ -97,10 +96,16 @@ export default function App() {
             path="dashboard/my-assigned-tickets"
             element={<FixerAssignedTicketsPage />}
           />
-
           <Route path="dashboard/main" element={<AdminDashboardPage />} />
           <Route path="dashboard/tickets" element={<AllTicketsPage />} />
           <Route path="dashboard/tickets/:id" element={<TicketDetailPage />} />
+
+          {/* ✅ Edit ticket route */}
+          <Route
+            path="dashboard/tickets/:id/edit"
+            element={<EditTicketPage />}
+          />
+
           <Route path="dashboard/users" element={<UsersPage />} />
           <Route path="dashboard/users/:id" element={<UserDetailPage />} />
           <Route path="dashboard/roles" element={<RolesManagementPage />} />

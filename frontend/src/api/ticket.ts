@@ -22,7 +22,8 @@ export type TicketStatus =
   | "NEEDS_ASSISTANCE"
   | "RESOLVED"
   | "CLOSED"
-  | "REOPENED";
+  | "REOPENED"
+  | "CANCELLED"; // ✅ added
 
 export type TicketCategory =
   | "CLEANING"
