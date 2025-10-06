@@ -1,249 +1,140 @@
-// 📂 src/pages/Dashboard/MyReportsPage.tsx
-import { useState, useEffect } from "react";
-import { useAuthStore } from "../../store/authStore";
+// 📂 src/pages/Dashboard/MyTicketsPage.tsx
+import { useEffect, useState } from "react";
+import type { Ticket, TicketStatus } from "../../api/ticket";
 import { api } from "../../api/client";
+import { useAuthStore } from "../../store/authStore";
 import { toast } from "react-hot-toast";
+import { useNavigate } from "react-router-dom";
 
-interface TicketImage {
-  image_url: string;
-}
+// 🎨 Status color mapping
+const statusColors: Record<TicketStatus, string> = {
+  CREATED: "bg-gray-100 text-gray-800",
+  ASSIGNED: "bg-blue-100 text-blue-800",
+  IN_PROGRESS: "bg-yellow-100 text-yellow-800",
+  NEEDS_ASSISTANCE: "bg-red-100 text-red-800",
+  RESOLVED: "bg-green-100 text-green-800",
+  CLOSED: "bg-gray-300 text-gray-900",
+  REOPENED: "bg-purple-100 text-purple-800",
+  CANCELLED: "bg-red-200 text-red-900",
+};
 
-interface Assignee {
-  id: number;
-  full_name: string;
-  email: string;
-}
+// Format status for readability
+const formatStatus = (status: TicketStatus) => status.replace(/_/g, " "); // "IN_PROGRESS" → "IN PROGRESS"
 
-interface Ticket {
-  id: number;
-  title: string;
-  description: string;
-  status: string;
-  category: string;
-  urgency: string;
-  escalation_level: string;
-  location_name: string;
-  created_at: string;
-  assignees: Assignee[];
-  images: TicketImage[];
-}
-
-export default function MyReportsPage() {
+export default function MyTicketsPage() {
   const { access } = useAuthStore();
   const [tickets, setTickets] = useState<Ticket[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const navigate = useNavigate();
 
-  // Fetch user's tickets
-  useEffect(() => {
+  const fetchMyTickets = async () => {
     if (!access) return;
+    try {
+      setLoading(true);
+      setError(null);
 
-    const fetchTickets = async () => {
-      try {
-        setLoading(true);
-        const res = await api.get("/tickets/my_reports/", {
-          headers: { Authorization: `Bearer ${access}` },
-        });
+      const response = await api.get<Ticket[]>("/tickets/my_reports/", {
+        headers: { Authorization: `Bearer ${access}` },
+      });
 
-        // Normalize API response to avoid undefined fields
-        const normalizedTickets = res.data.map((t: any) => ({
-          ...t,
-          images: t.images || [],
-          assignees: t.assignees || [],
-        }));
+      setTickets(response.data);
+    } catch (err: any) {
+      console.error(err);
+      toast.error("❌ Failed to load your tickets.");
+      setError("Failed to load your tickets.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
-        setTickets(normalizedTickets);
-      } catch (err) {
-        console.error(err);
-        toast.error("❌ Failed to load your tickets.");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchTickets();
+  useEffect(() => {
+    fetchMyTickets();
   }, [access]);
 
-  const statusColor = (status: string) => {
-    switch (status) {
-      case "Created":
-        return "bg-gray-200 text-gray-800";
-      case "Assigned":
-      case "In Progress":
-        return "bg-blue-200 text-blue-800";
-      case "Needs Assistance":
-        return "bg-yellow-200 text-yellow-800";
-      case "Resolved":
-        return "bg-green-200 text-green-800";
-      case "Closed":
-        return "bg-gray-400 text-white";
-      case "Reopened":
-        return "bg-red-200 text-red-800";
-      default:
-        return "bg-gray-200 text-gray-800";
-    }
-  };
-
-  const urgencyColor = (urgency: string) =>
-    urgency === "Urgent"
-      ? "bg-red-100 text-red-800"
-      : "bg-gray-100 text-gray-800";
-
-  const escalationColor = (level: string) => {
-    switch (level) {
-      case "Secondary":
-        return "bg-yellow-100 text-yellow-800";
-      case "Admin":
-        return "bg-red-100 text-red-800";
-      default:
-        return "bg-gray-100 text-gray-800";
-    }
-  };
+  if (loading) return <p className="text-center mt-4">Loading tickets...</p>;
+  if (error) return <p className="text-center mt-4 text-red-500">{error}</p>;
+  if (tickets.length === 0)
+    return (
+      <p className="text-center mt-4">You have not reported any tickets.</p>
+    );
 
   return (
-    <div className="max-w-5xl mx-auto mt-8 p-6 bg-white rounded-xl shadow-md">
-      <h1 className="text-2xl font-bold mb-6">📄 My Tickets</h1>
+    <div className="p-6 max-w-7xl mx-auto mt-8 bg-white shadow rounded-lg">
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="text-xl font-semibold">📄 My Tickets</h2>
+        <button
+          onClick={fetchMyTickets}
+          className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
+        >
+          Refresh
+        </button>
+      </div>
 
-      {loading ? (
-        <p>Loading tickets...</p>
-      ) : tickets.length === 0 ? (
-        <p>You have not reported any tickets yet.</p>
-      ) : (
-        <div className="space-y-4">
-          {tickets.map((ticket) => (
-            <div
-              key={ticket.id}
-              className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 border rounded-lg shadow-sm cursor-pointer hover:bg-gray-50"
-              onClick={() => setSelectedTicket(ticket)}
-            >
-              <div className="flex items-start sm:items-center space-x-4 w-full">
-                {/* Images */}
-                <div className="flex space-x-2 overflow-x-auto">
-                  {(ticket.images || []).map((img, idx) => (
-                    <img
-                      key={idx}
-                      src={img.image_url}
-                      alt={`${ticket.title}-${idx}`}
-                      className="w-20 h-20 object-cover rounded"
-                    />
-                  ))}
-                </div>
-
-                <div className="flex-1">
-                  <h2 className="text-lg font-semibold">{ticket.title}</h2>
-                  <p className="text-gray-600 text-sm">{ticket.description}</p>
-                  <p className="text-gray-500 text-xs mt-1">
-                    {ticket.location_name} •{" "}
-                    {new Date(ticket.created_at).toLocaleString()}
-                  </p>
-
-                  {(ticket.assignees || []).length > 0 && (
-                    <p className="text-sm mt-1 text-gray-700">
-                      Assigned to:{" "}
-                      {(ticket.assignees || [])
-                        .map((a) => a.full_name)
-                        .join(", ")}
-                    </p>
-                  )}
-
-                  <p className="text-sm mt-1">
-                    <span
-                      className={`px-2 py-1 rounded-full text-xs font-semibold ${escalationColor(
-                        ticket.escalation_level
-                      )}`}
-                    >
-                      Escalation: {ticket.escalation_level}
-                    </span>
-                  </p>
-                </div>
-              </div>
-
-              <div className="mt-2 sm:mt-0 flex flex-col items-end space-y-1">
-                <span
-                  className={`px-2 py-1 rounded-full text-sm font-semibold ${statusColor(
-                    ticket.status
-                  )}`}
-                >
-                  {ticket.status}
-                </span>
-                <span
-                  className={`px-2 py-1 rounded-full text-sm font-semibold ${urgencyColor(
-                    ticket.urgency
-                  )}`}
-                >
-                  {ticket.category} • {ticket.urgency}
-                </span>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* ------------------ Ticket Modal ------------------ */}
-      {selectedTicket && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-          <div className="bg-white rounded-xl shadow-lg w-11/12 max-w-3xl p-6 relative overflow-y-auto max-h-[90vh]">
-            <button
-              className="absolute top-4 right-4 text-gray-500 hover:text-gray-800 font-bold"
-              onClick={() => setSelectedTicket(null)}
-            >
-              ✖
-            </button>
-            <h2 className="text-xl font-bold mb-4">{selectedTicket.title}</h2>
-            <p className="text-gray-600 mb-2">{selectedTicket.description}</p>
-            <p className="text-gray-500 text-xs mb-2">
-              {selectedTicket.location_name} •{" "}
-              {new Date(selectedTicket.created_at).toLocaleString()}
-            </p>
-
-            <div className="flex flex-wrap gap-2 mb-2">
-              {(selectedTicket.assignees || []).map((a) => (
-                <span
-                  key={a.id}
-                  className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs"
-                >
-                  {a.full_name}
-                </span>
-              ))}
-            </div>
-
-            <div className="flex flex-wrap gap-2 mb-2">
-              {(selectedTicket.images || []).map((img, idx) => (
-                <img
-                  key={idx}
-                  src={img.image_url}
-                  alt={`${selectedTicket.title}-${idx}`}
-                  className="w-24 h-24 object-cover rounded"
-                />
-              ))}
-            </div>
-
-            <div className="flex gap-2 mt-2 flex-wrap">
-              <span
-                className={`px-2 py-1 rounded-full text-xs font-semibold ${statusColor(
-                  selectedTicket.status
-                )}`}
+      <div className="overflow-x-auto">
+        <table className="w-full border border-gray-200 rounded-lg overflow-hidden text-sm">
+          <thead className="bg-gray-100 text-gray-700 text-left">
+            <tr>
+              <th className="px-4 py-2 border-b">ID</th>
+              <th className="px-4 py-2 border-b">Title</th>
+              <th className="px-4 py-2 border-b">Submitted By</th>
+              <th className="px-4 py-2 border-b">Status</th>
+              <th className="px-4 py-2 border-b">Location</th>
+              <th className="px-4 py-2 border-b">Category</th>
+              <th className="px-4 py-2 border-b">Urgency</th>
+              <th className="px-4 py-2 border-b text-center">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {tickets.map((ticket) => (
+              <tr
+                key={ticket.id}
+                className="hover:bg-gray-50 transition-colors"
               >
-                {selectedTicket.status}
-              </span>
-              <span
-                className={`px-2 py-1 rounded-full text-xs font-semibold ${urgencyColor(
-                  selectedTicket.urgency
-                )}`}
-              >
-                {selectedTicket.category} • {selectedTicket.urgency}
-              </span>
-              <span
-                className={`px-2 py-1 rounded-full text-xs font-semibold ${escalationColor(
-                  selectedTicket.escalation_level
-                )}`}
-              >
-                Escalation: {selectedTicket.escalation_level}
-              </span>
-            </div>
-          </div>
-        </div>
-      )}
+                <td className="px-4 py-2 border-b">{ticket.id}</td>
+                <td className="px-4 py-2 border-b">{ticket.title}</td>
+                <td className="px-4 py-2 border-b">
+                  {ticket.reporter?.full_name ||
+                    ticket.reporter?.email ||
+                    "N/A"}
+                </td>
+                <td className="px-4 py-2 border-b">
+                  <span
+                    className={`px-2 py-1 rounded text-xs font-medium ${
+                      statusColors[ticket.status]
+                    }`}
+                  >
+                    {formatStatus(ticket.status)}
+                  </span>
+                </td>
+                <td className="px-4 py-2 border-b">
+                  {ticket.location_name || "N/A"}
+                </td>
+                <td className="px-4 py-2 border-b">{ticket.category}</td>
+                <td className="px-4 py-2 border-b">
+                  <span
+                    className={`px-2 py-1 rounded text-xs font-medium ${
+                      ticket.urgency === "URGENT"
+                        ? "bg-red-100 text-red-800"
+                        : "bg-gray-100 text-gray-800"
+                    }`}
+                  >
+                    {ticket.urgency}
+                  </span>
+                </td>
+                <td className="px-4 py-2 border-b text-center">
+                  <button
+                    onClick={() => navigate(`/dashboard/tickets/${ticket.id}`)}
+                    className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 transition"
+                  >
+                    View Details
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

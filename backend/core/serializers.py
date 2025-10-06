@@ -417,25 +417,22 @@ class InviteAcceptSerializer(serializers.ModelSerializer):
 
 
 
+from rest_framework import serializers
 
-
-
-
-
-# ==================== Tickets ====================
-# -----------------------------
+# ====================
 # Ticket Image Serializer
-# -----------------------------
+# ====================
 class TicketImageSerializer(serializers.ModelSerializer):
     uploaded_by = UserSerializer(read_only=True)
 
     class Meta:
         model = TicketImage
         fields = ["id", "image_url", "uploaded_by", "timestamp"]
+        read_only_fields = ["id", "uploaded_by", "timestamp"]
 
-# -----------------------------
+# ====================
 # Assignment Serializer
-# -----------------------------
+# ====================
 class AssignmentSerializer(serializers.ModelSerializer):
     user = UserSerializer(read_only=True)
 
@@ -443,9 +440,9 @@ class AssignmentSerializer(serializers.ModelSerializer):
         model = TicketAssignment
         fields = ["id", "user", "assigned_at", "accepted", "accepted_at"]
 
-# -----------------------------
+# ====================
 # Ticket Resolution Serializer
-# -----------------------------
+# ====================
 class TicketResolutionSerializer(serializers.ModelSerializer):
     resolved_by = UserSerializer(read_only=True)
 
@@ -453,9 +450,9 @@ class TicketResolutionSerializer(serializers.ModelSerializer):
         model = TicketResolution
         fields = ["id", "resolved_by", "proof_image", "resolution_note", "timestamp"]
 
-# -----------------------------
+# ====================
 # Ticket Serializer
-# -----------------------------
+# ====================
 class TicketSerializer(serializers.ModelSerializer):
     location_name = serializers.SerializerMethodField(read_only=True)
     reporter = UserSerializer(read_only=True)
@@ -465,6 +462,20 @@ class TicketSerializer(serializers.ModelSerializer):
     images = TicketImageSerializer(many=True, read_only=True)
     resolutions = TicketResolutionSerializer(many=True, read_only=True)
 
+    # Custom fields for handling image uploads in create/update
+    image = serializers.ListField(
+        child=serializers.ImageField(),
+        write_only=True,
+        required=False,
+        help_text="Upload one or multiple images for the ticket"
+    )
+    existing_images = serializers.ListField(
+        child=serializers.IntegerField(),
+        write_only=True,
+        required=False,
+        help_text="List of existing image IDs to keep during update"
+    )
+
     class Meta:
         model = Ticket
         fields = [
@@ -472,13 +483,16 @@ class TicketSerializer(serializers.ModelSerializer):
             "escalation_level", "reporter", "reporter_name",
             "assignments", "assignees", "location", "location_name",
             "created_at", "updated_at",
-            "images", "resolutions"
+            "images", "resolutions", "image", "existing_images"
         ]
         read_only_fields = [
             "id", "reporter", "reporter_name", "assignments", "assignees",
-            "created_at", "updated_at"
+            "created_at", "updated_at", "images", "resolutions"
         ]
 
+    # ------------------------
+    # Serializer Methods
+    # ------------------------
     def get_location_name(self, obj):
         return str(obj.location) if obj.location else None
 
@@ -490,9 +504,60 @@ class TicketSerializer(serializers.ModelSerializer):
         return None
 
     def get_assignees(self, obj):
-        # Serialize users instead of returning model instances
         users = [assignment.user for assignment in obj.assignments.all()]
         return UserSerializer(users, many=True).data
+
+    # ------------------------
+    # Create
+    # ------------------------
+    def create(self, validated_data):
+        images = validated_data.pop("image", [])
+        if len(images) < 1:
+            raise serializers.ValidationError({"image": "A ticket must have at least 1 image."})
+        if len(images) > 3:
+            raise serializers.ValidationError({"image": "Cannot upload more than 3 images."})
+
+        ticket = super().create(validated_data)
+        request = self.context.get("request")
+
+        # Create TicketImage objects
+        for img in images:
+            TicketImage.objects.create(ticket=ticket, image_url=img, uploaded_by=request.user)
+
+        return ticket
+
+    # ------------------------
+    # Update
+    # ------------------------
+    def update(self, instance, validated_data):
+        request = self.context.get("request")
+        new_images = validated_data.pop("image", [])
+        existing_images_ids = validated_data.pop("existing_images", [])
+
+        # Convert to integers and remove None
+        existing_images_ids = [int(i) for i in existing_images_ids if i is not None]
+
+        # Delete removed images
+        for img in instance.images.all():
+            if img.id not in existing_images_ids:
+                img.delete()
+
+        # Validate total images
+        total_images = len(existing_images_ids) + len(new_images)
+        if total_images < 1:
+            raise serializers.ValidationError({"image": "A ticket must have at least 1 image."})
+        if total_images > 3:
+            raise serializers.ValidationError({"image": "Cannot have more than 3 images."})
+
+        ticket = super().update(instance, validated_data)
+
+        # Add new images
+        for img in new_images:
+            TicketImage.objects.create(ticket=ticket, image_url=img, uploaded_by=request.user)
+
+        return ticket
+
+
 
 
 

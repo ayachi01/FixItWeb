@@ -454,7 +454,6 @@ class Invite(models.Model):
     def __str__(self):
         return f"Invite for {self.email} - {self.role.name}"
 
-
 # ======================
 # 3. LOCATIONS
 # ======================
@@ -476,6 +475,18 @@ class Location(models.Model):
         return f"{self.building_name} - Floor {self.floor_number} - {self.room_identifier}"
 
 
+
+
+
+
+
+
+
+
+
+
+
+
 # ======================
 # 4. TICKETING
 # ======================
@@ -488,6 +499,7 @@ class Ticket(models.Model):
         RESOLVED = "Resolved", "Resolved"
         CLOSED = "Closed", "Closed"
         REOPENED = "Reopened", "Reopened"
+        CANCELLED = "Cancelled", "Cancelled"
 
     class Category(models.TextChoices):
         CLEANING = "Cleaning", "Cleaning"
@@ -521,10 +533,7 @@ class Ticket(models.Model):
         on_delete=models.CASCADE,
         related_name="tickets"
     )
-
-    # 🆕 New field: Title
     title = models.CharField(max_length=255, db_index=True)
-
     description = models.TextField()
     category = models.CharField(max_length=50, choices=Category.choices, db_index=True)
     urgency = models.CharField(
@@ -545,13 +554,11 @@ class Ticket(models.Model):
         default=Escalation.NONE,
         db_index=True,
     )
-
     assignees = models.ManyToManyField(
         settings.AUTH_USER_MODEL,
         through="TicketAssignment",
         related_name="assigned_tickets",
     )
-
     created_at = models.DateTimeField(default=timezone.now, db_index=True)
     updated_at = models.DateTimeField(auto_now=True, db_index=True)
 
@@ -564,14 +571,8 @@ class Ticket(models.Model):
             models.Index(fields=["title"]),
         ]
         constraints = [
-            models.CheckConstraint(
-                check=~models.Q(description=""),
-                name="ticket_description_not_empty"
-            ),
-            models.CheckConstraint(
-                check=~models.Q(title=""),
-                name="ticket_title_not_empty"
-            ),
+            models.CheckConstraint(check=~models.Q(description=""), name="ticket_description_not_empty"),
+            models.CheckConstraint(check=~models.Q(title=""), name="ticket_title_not_empty"),
         ]
 
     def __init__(self, *args, **kwargs):
@@ -579,43 +580,28 @@ class Ticket(models.Model):
         self._original_status = getattr(self, "status", None)
         self._original_escalation_level = getattr(self, "escalation_level", None)
 
-    # 🔒 Validation rules
     def clean(self):
         errors = {}
-
-        # 🚫 Empty title
         if not self.title or not self.title.strip():
             errors["title"] = "Title cannot be empty."
-
-        # 🚫 Empty description
         if not self.description or not self.description.strip():
             errors["description"] = "Description cannot be empty."
-
-        # 🚫 Missing location
         if not self.location:
             errors["location"] = "Ticket must be linked to a location."
-
-        # 🚫 Missing category
         if not self.category:
             errors["category"] = "Category is required."
-
-        # 📸 Image rules (only validate after ticket exists)
         if self.pk:
             image_count = self.images.count()
             if image_count < 1:
                 errors["images"] = "At least 1 image is required for a ticket."
             elif image_count > 3:
                 errors["images"] = "A maximum of 3 images are allowed per ticket."
-
-        # 🔒 Status rules
         if self.status in {self.Status.RESOLVED, self.Status.CLOSED} and not self.assignees.exists():
             errors["status"] = f"Ticket cannot be marked {self.status} without an assignee."
-
         if errors:
             raise ValidationError(errors)
 
     def has_changed(self, field):
-        """Check if a field’s value has changed since loading from DB"""
         if field == "status":
             return getattr(self, "status") != self._original_status
         if field == "escalation_level":
@@ -625,17 +611,13 @@ class Ticket(models.Model):
         old = Ticket.objects.filter(pk=self.pk).values(field).first()
         return old and getattr(self, field) != old[field]
 
-    # 🚨 Auto-escalation with audit log
     def auto_escalate(self, performed_by=None):
         now = timezone.now()
         age = now - self.created_at
-
-        if self.status in {self.Status.RESOLVED, self.Status.CLOSED}:
+        if self.status in {self.Status.RESOLVED, self.Status.CLOSED, self.Status.CANCELLED}:
             return False
-
         changed = False
         new_level = self.escalation_level
-
         if self.escalation_level == self.Escalation.NONE:
             if self.urgency == self.Urgency.URGENT and age > timedelta(hours=4):
                 new_level = self.Escalation.SECONDARY
@@ -643,11 +625,9 @@ class Ticket(models.Model):
             elif self.urgency == self.Urgency.STANDARD and age > timedelta(hours=24):
                 new_level = self.Escalation.SECONDARY
                 changed = True
-
         if age > timedelta(hours=48) and self.escalation_level != self.Escalation.ADMIN:
             new_level = self.Escalation.ADMIN
             changed = True
-
         if changed and new_level != self.escalation_level:
             with transaction.atomic():
                 self.escalation_level = new_level
@@ -661,7 +641,6 @@ class Ticket(models.Model):
             return True
         return False
 
-    # ✅ Close ticket with audit
     def close(self, performed_by=None):
         if self.status != self.Status.CLOSED:
             with transaction.atomic():
@@ -675,9 +654,21 @@ class Ticket(models.Model):
                 )
         return self
 
-    # 🔄 Reopen ticket with audit
+    def cancel(self, performed_by=None):
+        if self.status != self.Status.CANCELLED:
+            with transaction.atomic():
+                self.status = self.Status.CANCELLED
+                self.save(update_fields=["status", "updated_at"])
+                create_audit(
+                    action=AuditLog.Action.TICKET_CANCELLED,
+                    performed_by=performed_by,
+                    target_user=self.reporter,
+                    details=f"Ticket #{self.id} cancelled.",
+                )
+        return self
+
     def reopen(self, performed_by=None):
-        if self.status == self.Status.CLOSED:
+        if self.status in {self.Status.CLOSED, self.Status.CANCELLED}:
             with transaction.atomic():
                 self.status = self.Status.REOPENED
                 self.save(update_fields=["status", "updated_at"])
@@ -692,18 +683,12 @@ class Ticket(models.Model):
     def __str__(self):
         return f"Ticket #{self.id} - {self.title} - {self.status} - Escalation: {self.escalation_level}"
 
-
+# ======================
+# 5. ASSIGNMENTS
+# ======================
 class TicketAssignment(models.Model):
-    ticket = models.ForeignKey(
-        "Ticket",
-        on_delete=models.CASCADE,
-        related_name="assignments"
-    )
-    user = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
-        related_name="ticket_assignments"
-    )
+    ticket = models.ForeignKey("Ticket", on_delete=models.CASCADE, related_name="assignments")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="ticket_assignments")
     assigned_at = models.DateTimeField(default=timezone.now)
     accepted_at = models.DateTimeField(null=True, blank=True)
     accepted = models.BooleanField(default=False)
@@ -713,11 +698,9 @@ class TicketAssignment(models.Model):
             models.UniqueConstraint(fields=["ticket", "user"], name="unique_ticket_assignment")
         ]
 
-    # 🔒 Validation rules
     def clean(self):
         errors = {}
         profile = getattr(self.user, "profile", None)
-
         if not profile:
             errors["user"] = "Assigned user must have a profile."
         elif not profile.can_fix:
@@ -725,7 +708,6 @@ class TicketAssignment(models.Model):
         elif self.ticket and self.ticket.category not in profile.allowed_categories():
             errors["ticket"] = f"{profile.role} cannot be assigned to {self.ticket.category} tickets."
         else:
-            # ✅ Check fixer availability (max 3 active tickets)
             active_tickets = self.user.ticket_assignments.filter(
                 ticket__status__in=[
                     Ticket.Status.CREATED,
@@ -735,16 +717,13 @@ class TicketAssignment(models.Model):
             ).count()
             if active_tickets >= 3:
                 errors["user"] = f"{self.user} is already handling 3 active tickets."
-
         if errors:
             raise ValidationError(errors)
 
-    # ✅ Save with validation only (audit handled externally)
     def save(self, *args, **kwargs):
         self.full_clean()
         super().save(*args, **kwargs)
 
-    # 🚀 Mark as accepted safely (audit handled externally)
     def mark_accepted(self):
         with transaction.atomic():
             self.accepted = True
@@ -755,7 +734,9 @@ class TicketAssignment(models.Model):
     def __str__(self):
         return f"Assignment: {self.user} -> Ticket #{self.ticket.id}"
 
-
+# ======================
+# 6. IMAGES
+# ======================
 class TicketImage(models.Model):
     ticket = models.ForeignKey(Ticket, on_delete=models.CASCADE, related_name="images")
     image_url = models.ImageField(upload_to="ticket_images/")
@@ -765,26 +746,18 @@ class TicketImage(models.Model):
     def clean(self):
         if not self.ticket:
             raise ValidationError("TicketImage must be linked to a Ticket.")
-
-        # ✅ Enforce max 3 images per ticket
         if self.ticket.images.count() >= 3 and not self.pk:
             raise ValidationError("A ticket cannot have more than 3 images.")
 
     def __str__(self):
         return f"Image for Ticket #{self.ticket.id} uploaded by {self.uploaded_by}"
 
-
+# ======================
+# 7. RESOLUTIONS
+# ======================
 class TicketResolution(models.Model):
-    ticket = models.ForeignKey(
-        Ticket,
-        on_delete=models.CASCADE,
-        related_name="resolutions"
-    )
-    resolved_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.SET_NULL,
-        null=True
-    )
+    ticket = models.ForeignKey(Ticket, on_delete=models.CASCADE, related_name="resolutions")
+    resolved_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
     proof_image = models.ImageField(
         upload_to="resolutions/",
         null=True,
@@ -796,16 +769,11 @@ class TicketResolution(models.Model):
 
     class Meta:
         constraints = [
-            models.CheckConstraint(
-                check=~models.Q(resolution_note=""),
-                name="resolution_note_not_empty"
-            )
+            models.CheckConstraint(check=~models.Q(resolution_note=""), name="resolution_note_not_empty")
         ]
 
-    # 🔒 Validation rules
     def clean(self):
         errors = {}
-
         if not self.resolved_by:
             errors["resolved_by"] = "A resolver must be set."
         else:
@@ -814,25 +782,38 @@ class TicketResolution(models.Model):
                 errors["resolved_by"] = "This user cannot resolve tickets."
             elif getattr(profile, "requires_proof", False) and not self.proof_image:
                 errors["proof_image"] = "Proof image is required for resolution."
-
         if errors:
             raise ValidationError(errors)
 
-    # ✅ Save wrapped in transaction (no direct audit here)
     def save(self, *args, **kwargs):
         with transaction.atomic():
             is_new = self._state.adding
             self.full_clean()
             super().save(*args, **kwargs)
-
             if is_new:
-                # Auto-update ticket status if not already resolved/closed
-                if self.ticket.status not in {Ticket.Status.RESOLVED, Ticket.Status.CLOSED}:
+                if self.ticket.status not in {Ticket.Status.RESOLVED, Ticket.Status.CLOSED, Ticket.Status.CANCELLED}:
                     self.ticket.status = Ticket.Status.RESOLVED
                     self.ticket.save(update_fields=["status", "updated_at"])
 
     def __str__(self):
         return f"Resolution for Ticket #{self.ticket.id} by {self.resolved_by}"
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 # =====================================================

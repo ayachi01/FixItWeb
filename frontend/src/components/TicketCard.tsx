@@ -3,14 +3,17 @@ import type { Ticket } from "../api/ticket";
 
 interface Props {
   ticket: Ticket;
+  mode?: "myTickets" | "assigned"; // determines which actions to show
 }
 
-export default function TicketCard({ ticket }: Props) {
+export default function TicketCard({ ticket, mode = "assigned" }: Props) {
   const canResolve =
-    ticket.can_fix && ["ASSIGNED", "REOPENED"].includes(ticket.status);
-  const canReopen = ticket.can_fix && ticket.status === "RESOLVED";
+    ticket.can_fix &&
+    ["ASSIGNED", "REOPENED"].includes(ticket.status.toUpperCase());
+  const canReopen =
+    ticket.can_fix && ticket.status.toUpperCase() === "RESOLVED";
 
-  const statusColor: Record<Ticket["status"], string> = {
+  const statusColor: Record<string, string> = {
     CREATED: "bg-gray-400",
     ASSIGNED: "bg-yellow-500",
     IN_PROGRESS: "bg-blue-500",
@@ -20,12 +23,12 @@ export default function TicketCard({ ticket }: Props) {
     REOPENED: "bg-orange-500",
   };
 
-  const urgencyColor: Record<Ticket["urgency"], string> = {
+  const urgencyColor: Record<string, string> = {
     STANDARD: "bg-gray-300",
     URGENT: "bg-red-500",
   };
 
-  const escalationColor: Record<Ticket["escalation_level"], string> = {
+  const escalationColor: Record<string, string> = {
     NONE: "bg-gray-300",
     SECONDARY: "bg-yellow-600",
     ADMIN: "bg-red-700",
@@ -41,21 +44,21 @@ export default function TicketCard({ ticket }: Props) {
         <div className="flex gap-1 flex-wrap">
           <span
             className={`px-2 py-1 rounded text-white text-xs ${
-              statusColor[ticket.status]
+              statusColor[ticket.status.toUpperCase()]
             }`}
           >
             {ticket.status.replace("_", " ")}
           </span>
           <span
             className={`px-2 py-1 rounded text-white text-xs ${
-              urgencyColor[ticket.urgency]
+              urgencyColor[ticket.urgency.toUpperCase()]
             }`}
           >
             {ticket.urgency}
           </span>
           <span
             className={`px-2 py-1 rounded text-white text-xs ${
-              escalationColor[ticket.escalation_level]
+              escalationColor[ticket.escalation_level.toUpperCase()]
             }`}
           >
             {ticket.escalation_level.replace("_", " ")}
@@ -83,24 +86,37 @@ export default function TicketCard({ ticket }: Props) {
       </div>
 
       {/* Action Buttons */}
-      <div className="flex gap-2 flex-wrap mb-3">
-        {canResolve && (
-          <button className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 transition">
-            Resolve
+      {mode === "assigned" && (
+        <div className="flex gap-2 flex-wrap mb-3">
+          {canResolve && (
+            <button className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 transition">
+              Resolve
+            </button>
+          )}
+          {canReopen && (
+            <button className="px-3 py-1 bg-orange-600 text-white rounded hover:bg-orange-700 transition">
+              Reopen
+            </button>
+          )}
+          <button className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition">
+            Upload Proof
           </button>
-        )}
-        {canReopen && (
-          <button className="px-3 py-1 bg-orange-600 text-white rounded hover:bg-orange-700 transition">
-            Reopen
+          <button className="px-3 py-1 bg-gray-600 text-white rounded hover:bg-gray-700 transition">
+            View Details
           </button>
-        )}
-        <button className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition">
-          Upload Proof
-        </button>
-        <button className="px-3 py-1 bg-gray-600 text-white rounded hover:bg-gray-700 transition">
-          View Details
-        </button>
-      </div>
+        </div>
+      )}
+
+      {mode === "myTickets" && (
+        <div className="flex gap-2 flex-wrap mb-3">
+          <button className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition">
+            Upload Proof
+          </button>
+          <button className="px-3 py-1 bg-gray-600 text-white rounded hover:bg-gray-700 transition">
+            View Details
+          </button>
+        </div>
+      )}
 
       {/* Images */}
       {ticket.images && ticket.images.length > 0 ? (
