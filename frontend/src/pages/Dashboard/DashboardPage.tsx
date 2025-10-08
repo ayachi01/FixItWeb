@@ -1,4 +1,3 @@
-// 📂 src/pages/Dashboard/Dashboard.tsx
 import { useEffect, useState } from "react";
 import { getAllTickets } from "../../api/ticket";
 import { getAllUsers } from "../../api/users";
@@ -36,69 +35,86 @@ export default function Dashboard() {
 
   useEffect(() => {
     async function loadData() {
+      if (!user?.permissions) return setLoading(false);
+
       try {
-        const tickets = await getAllTickets();
-        setTicketCount(tickets.length);
+        // Only fetch tickets if user has ticket-related permissions
+        let tickets: any[] = [];
+        if (
+          user.permissions.can_report ||
+          user.permissions.can_fix ||
+          user.permissions.can_assign
+        ) {
+          tickets = await getAllTickets();
+          setTicketCount(tickets.length);
 
-        const pendingTickets = tickets.filter(
-          (t: any) =>
-            t.status === "Created" ||
-            t.status === "Assigned" ||
-            t.status === "In Progress"
-        );
-        setPendingCount(pendingTickets.length);
+          const pendingTickets = tickets.filter(
+            (t: any) =>
+              t.status === "Created" ||
+              t.status === "Assigned" ||
+              t.status === "In Progress"
+          );
+          setPendingCount(pendingTickets.length);
 
-        const users = await getAllUsers();
-        setUserCount(users.length);
+          // Prepare chart data safely
+          const statusCounts: Record<string, number> = {};
+          tickets.forEach((t: any) => {
+            statusCounts[t.status] = (statusCounts[t.status] || 0) + 1;
+          });
+          setTicketsByStatus({
+            labels: Object.keys(statusCounts),
+            datasets: [
+              {
+                label: "Tickets by Status",
+                data: Object.values(statusCounts),
+                backgroundColor: [
+                  "#4f46e5",
+                  "#f59e0b",
+                  "#10b981",
+                  "#ef4444",
+                  "#3b82f6",
+                  "#8b5cf6",
+                  "#ec4899",
+                ],
+              },
+            ],
+          });
 
-        const statusCounts: Record<string, number> = {};
-        tickets.forEach((t: any) => {
-          statusCounts[t.status] = (statusCounts[t.status] || 0) + 1;
-        });
-        setTicketsByStatus({
-          labels: Object.keys(statusCounts),
-          datasets: [
-            {
-              label: "Tickets by Status",
-              data: Object.values(statusCounts),
-              backgroundColor: [
-                "#4f46e5",
-                "#f59e0b",
-                "#10b981",
-                "#ef4444",
-                "#3b82f6",
-                "#8b5cf6",
-                "#ec4899",
-              ],
-            },
-          ],
-        });
+          const categoryCounts: Record<string, number> = {};
+          tickets.forEach((t: any) => {
+            categoryCounts[t.category] = (categoryCounts[t.category] || 0) + 1;
+          });
+          setTicketsByCategory({
+            labels: Object.keys(categoryCounts),
+            datasets: [
+              {
+                label: "Tickets by Category",
+                data: Object.values(categoryCounts),
+                backgroundColor: [
+                  "#f87171",
+                  "#34d399",
+                  "#60a5fa",
+                  "#fbbf24",
+                  "#a78bfa",
+                  "#f472b6",
+                  "#4ade80",
+                  "#facc15",
+                  "#38bdf8",
+                  "#fb7185",
+                ],
+              },
+            ],
+          });
+        }
 
-        const categoryCounts: Record<string, number> = {};
-        tickets.forEach((t: any) => {
-          categoryCounts[t.category] = (categoryCounts[t.category] || 0) + 1;
-        });
-        setTicketsByCategory({
-          labels: Object.keys(categoryCounts),
-          datasets: [
-            {
-              label: "Tickets by Category",
-              data: Object.values(categoryCounts),
-              backgroundColor: [
-                "#f87171",
-                "#34d399",
-                "#60a5fa",
-                "#fbbf24",
-                "#a78bfa",
-                "#f472b6",
-                "#4ade80",
-                "#facc15",
-                "#38bdf8",
-                "#fb7185",
-              ],
-            },
-          ],
-        });
+        // Only fetch users if user has admin permissions
+        if (
+          user.permissions.is_admin_level ||
+          user.permissions.can_manage_users
+        ) {
+          const users = await getAllUsers();
+          setUserCount(users.length);
+        }
       } catch (err) {
         console.error("Failed to load dashboard stats:", err);
       } finally {
@@ -107,11 +123,11 @@ export default function Dashboard() {
     }
 
     loadData();
-  }, []);
+  }, [user]);
 
   if (!user) return <p>Loading user info...</p>;
 
-  const { permissions } = user;
+  const permissions = user.permissions || {};
 
   return (
     <div className="p-6">
@@ -123,7 +139,6 @@ export default function Dashboard() {
         <>
           {/* --- Counts --- */}
           <div className="grid grid-cols-3 gap-4 mb-6">
-            {/* Tickets visible to staff/fixers/admins */}
             {(permissions.can_report ||
               permissions.can_fix ||
               permissions.can_assign) && (
@@ -133,15 +148,13 @@ export default function Dashboard() {
               </div>
             )}
 
-            {/* User count only visible to admins */}
-            {permissions.is_admin_level || permissions.can_manage_users ? (
+            {(permissions.is_admin_level || permissions.can_manage_users) && (
               <div className="bg-white shadow rounded p-4 text-center">
                 <h2 className="text-lg font-semibold">Users</h2>
                 <p className="text-3xl">{userCount}</p>
               </div>
-            ) : null}
+            )}
 
-            {/* Pending tickets visible to staff/fixers/admins */}
             {(permissions.can_fix || permissions.can_assign) && (
               <div className="bg-white shadow rounded p-4 text-center">
                 <h2 className="text-lg font-semibold">Pending Tickets</h2>
@@ -152,29 +165,32 @@ export default function Dashboard() {
 
           {/* --- Charts --- */}
           <div className="grid grid-cols-2 gap-6">
-            {/* Tickets by Status for staff/fixers/admins */}
             {(permissions.can_fix ||
               permissions.can_assign ||
-              permissions.can_report) && (
-              <div className="bg-white shadow rounded p-4">
-                <h2 className="text-lg font-semibold mb-2 text-center">
-                  Tickets by Status
-                </h2>
-                <Bar data={ticketsByStatus} options={{ responsive: true }} />
-              </div>
-            )}
+              permissions.can_report) &&
+              ticketsByStatus.labels?.length > 0 && (
+                <div className="bg-white shadow rounded p-4">
+                  <h2 className="text-lg font-semibold mb-2 text-center">
+                    Tickets by Status
+                  </h2>
+                  <Bar data={ticketsByStatus} options={{ responsive: true }} />
+                </div>
+              )}
 
-            {/* Tickets by Category for staff/fixers/admins */}
             {(permissions.can_fix ||
               permissions.can_assign ||
-              permissions.can_report) && (
-              <div className="bg-white shadow rounded p-4">
-                <h2 className="text-lg font-semibold mb-2 text-center">
-                  Tickets by Category
-                </h2>
-                <Pie data={ticketsByCategory} options={{ responsive: true }} />
-              </div>
-            )}
+              permissions.can_report) &&
+              ticketsByCategory.labels?.length > 0 && (
+                <div className="bg-white shadow rounded p-4">
+                  <h2 className="text-lg font-semibold mb-2 text-center">
+                    Tickets by Category
+                  </h2>
+                  <Pie
+                    data={ticketsByCategory}
+                    options={{ responsive: true }}
+                  />
+                </div>
+              )}
           </div>
         </>
       )}

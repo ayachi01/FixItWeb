@@ -1,5 +1,4 @@
-// src/pages/Register.tsx
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { register as apiRegister } from "../../api"; // ✅ your API helper
 
@@ -19,13 +18,22 @@ export default function Register() {
     setError("");
     setSuccessMessage("");
 
+    // ✅ Frontend-only confirm password check
     if (password !== confirmPassword) {
       setError("Passwords do not match");
       return;
     }
 
+    // ✅ Frontend-only email domain check
+    const emailDomain = email.split("@")[1]?.toLowerCase();
+    if (emailDomain !== "pirmaed.com") {
+      setError("Only pirmaed.com email addresses are allowed.");
+      return;
+    }
+
     setLoading(true);
     try {
+      // ✅ Send confirm_password to backend
       const res = await apiRegister(
         firstName,
         lastName,
@@ -58,7 +66,17 @@ export default function Register() {
     } catch (err: any) {
       console.error("❌ Registration error:", err);
       console.error("🔍 Error response:", err.response?.data);
-      setError(err.response?.data?.error || "Registration failed");
+
+      // Handle different possible backend validation errors
+      const backendData = err.response?.data;
+      setError(
+        backendData?.error ||
+          backendData?.password?.[0] ||
+          backendData?.email?.[0] ||
+          backendData?.first_name?.[0] ||
+          backendData?.last_name?.[0] ||
+          "Registration failed"
+      );
     } finally {
       setLoading(false);
     }

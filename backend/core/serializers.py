@@ -12,68 +12,16 @@ from core.models import (
     UserProfile, StudentProfile, Role, Invite,
     Ticket, TicketImage, TicketResolution,
     Location, PasswordResetCode, AuditLog,
-    TicketAssignment,
+    TicketAssignment, Permission,
 )
 
-# ✅ Always reference your custom user
+# ✅ Always reference your custom user dynamically
 User = get_user_model()
 
 
-# ==================== Serializers ====================
-import re
-from rest_framework import serializers
-from django.contrib.auth import get_user_model
-from core.models import StudentProfile, UserProfile, Role
-
-User = get_user_model()
-
-# core/serializers.py
-import re
-from rest_framework import serializers
-from .models import UserProfile, Role, StudentProfile, CustomUser
-
-
-# ✅ Student Profile Serializer
-class StudentProfileSerializer(serializers.ModelSerializer):
-    """Serializer for student academic details (writable for students)"""
-    first_name = serializers.CharField(source="user_profile.user.first_name", read_only=True)
-    last_name = serializers.CharField(source="user_profile.user.last_name", read_only=True)
-    email = serializers.EmailField(source="user_profile.user.email", read_only=True)
-
-    class Meta:
-        model = StudentProfile
-        fields = [
-            "id", "student_id",
-            "first_name", "last_name", "email",
-            "course_code", "course_name",
-            "year_level", "section",
-            "college", "enrollment_year",
-        ]
-        read_only_fields = ["id", "first_name", "last_name", "email"]
-
-    def validate_student_id(self, value):
-        pattern = r"^\d{2}-\d{4}-\d{6}$"
-        if not re.match(pattern, value):
-            raise serializers.ValidationError(
-                "Student ID must be in the format NN-NNNN-NNNNNN (e.g., 09-3456-348946)."
-            )
-        return value
-
-    def update(self, instance, validated_data):
-        # 🔒 Prevent overwriting student_id if already set
-        if "student_id" in validated_data and instance.student_id:
-            validated_data.pop("student_id")
-        return super().update(instance, validated_data)
-
-
-# ✅ Basic User Serializer
-# core/serializers.py
-import re
-from rest_framework import serializers
-from .models import UserProfile, Role, StudentProfile, CustomUser
-
-
-# ✅ Student Profile Serializer
+# ==================================================
+#              Student Profile Serializer
+# ==================================================
 class StudentProfileSerializer(serializers.ModelSerializer):
     """Serializer for student academic details (writable for students)"""
     first_name = serializers.CharField(source="user_profile.user.first_name", read_only=True)
@@ -109,34 +57,31 @@ class StudentProfileSerializer(serializers.ModelSerializer):
 # ==================================================
 #                  User Serializer
 # ==================================================
-
-
 class UserSerializer(serializers.ModelSerializer):
-    """Basic User serializer for returning user data with full_name."""
+    """Basic User serializer for returning user data with full_name + status."""
     full_name = serializers.SerializerMethodField()
+    status = serializers.SerializerMethodField()
 
     class Meta:
-        model = CustomUser
-        fields = ["id", "email", "first_name", "last_name", "full_name"]
+        model = User
+        fields = ["id", "email", "first_name", "last_name", "full_name", "status"]
 
     def get_full_name(self, obj):
-        """
-        Prefer model's get_full_name() if available,
-        otherwise fallback to first/last name, then email/username.
-        """
         if hasattr(obj, "get_full_name") and callable(obj.get_full_name):
             name = obj.get_full_name().strip()
             if name:
                 return name
-
         if obj.first_name or obj.last_name:
             return f"{obj.first_name} {obj.last_name}".strip()
-
         return obj.email or getattr(obj, "username", None)
 
+    def get_status(self, obj):
+        return "active" if obj.is_active else "inactive"
 
 
-# ✅ Role Serializer
+# ==================================================
+#                  Role Serializer
+# ==================================================
 class RoleSerializer(serializers.ModelSerializer):
     """Serializer for Role model (ensures JSON safe response)"""
     class Meta:
@@ -144,18 +89,48 @@ class RoleSerializer(serializers.ModelSerializer):
         fields = ["id", "name", "description"]
 
 
-# ✅ Extended UserProfile Serializer
+# ==================================================
+#             Permission Serializer (nested)
+# ==================================================
+class PermissionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Permission
+        fields = [
+            "can_report", "can_fix", "can_assign",
+            "can_manage_users", "is_admin_level",
+            "allowed_categories",
+        ]
+
+
+# ==================================================
+#          Extended User Profile Serializer
+# ==================================================
 class UserProfileSerializer(serializers.ModelSerializer):
     """
     Extended profile serializer with role, flags, features, and nested student info.
+    Matches what frontend UsersPage.tsx expects.
     """
     id = serializers.SerializerMethodField()
     email = serializers.SerializerMethodField()
     first_name = serializers.SerializerMethodField()
     last_name = serializers.SerializerMethodField()
     full_name = serializers.SerializerMethodField()
+    status = serializers.SerializerMethodField()
 
-    # Permission flags (read-only, derived from UserProfile properties)
+    # ✅ Role + Permissions
+    role = RoleSerializer(read_only=True)
+    role_id = serializers.PrimaryKeyRelatedField(
+        queryset=Role.objects.all(),
+        source="role",
+        write_only=True,
+        required=False
+    )
+    permissions = PermissionSerializer(source="role.permissions", read_only=True)
+
+    # ✅ Nested StudentProfile
+    student_profile = StudentProfileSerializer(required=False)
+
+    # ✅ Permission flags from properties
     can_fix = serializers.BooleanField(read_only=True)
     can_assign = serializers.BooleanField(read_only=True)
     can_manage_users = serializers.BooleanField(read_only=True)
@@ -163,16 +138,13 @@ class UserProfileSerializer(serializers.ModelSerializer):
 
     features = serializers.SerializerMethodField()
     allowed_categories = serializers.SerializerMethodField()
-    student_profile = StudentProfileSerializer(required=False)
-
-    # ✅ Role is nested
-    role = RoleSerializer(read_only=True)
 
     class Meta:
         model = UserProfile
         fields = [
-            "id", "email", "first_name", "last_name", "full_name",
-            "role", "is_email_verified", "email_domain",
+            "id", "email", "first_name", "last_name", "full_name", "status",
+            "role", "role_id", "is_email_verified", "email_domain",
+            "permissions",
             "can_fix", "can_assign", "can_manage_users", "is_admin_level",
             "features", "allowed_categories", "student_profile",
         ]
@@ -192,12 +164,14 @@ class UserProfileSerializer(serializers.ModelSerializer):
 
     def get_full_name(self, obj):
         if hasattr(obj, "user"):
-            return f"{obj.user.first_name} {obj.user.last_name}".strip()
+            return f"{obj.user.first_name} {obj.user.last_name}".strip() or obj.user.email
         return ""
+
+    def get_status(self, obj):
+        return "active" if getattr(obj.user, "is_active", False) else "inactive"
 
     # ---------- Features ----------
     def get_features(self, obj):
-        """Build features dynamically from profile flags"""
         features = []
         if getattr(obj, "can_report", False):
             features.extend(["canReport", "myReports"])
@@ -211,19 +185,68 @@ class UserProfileSerializer(serializers.ModelSerializer):
             features.extend(["reportsView", "escalate", "closeTickets"])
         if getattr(obj, "role", None) and obj.role.name.lower() in ["super admin", "university admin"]:
             features.extend(["systemSettings", "aiReports"])
-        return list(dict.fromkeys(features))  # deduplicate
+        return list(dict.fromkeys(features))
 
     def get_allowed_categories(self, obj):
         return obj.allowed_categories() if hasattr(obj, "allowed_categories") else []
 
+    # ---------- Create ----------
+    def create(self, validated_data):
+        """
+        Create User + UserProfile + optional StudentProfile.
+        """
+        student_data = validated_data.pop("student_profile", None)
+        role = validated_data.pop("role", None)
+
+        # ✅ Extract user fields
+        user_fields = {}
+        for field in ["first_name", "last_name", "email", "password"]:
+            if field in validated_data:
+                user_fields[field] = validated_data.pop(field)
+
+        # ✅ Create User
+        user = User.objects.create(
+            first_name=user_fields.get("first_name", ""),
+            last_name=user_fields.get("last_name", ""),
+            email=user_fields["email"]
+        )
+        if "password" in user_fields and user_fields["password"]:
+            user.set_password(user_fields["password"])
+        user.save()
+
+        # ✅ Create UserProfile
+        profile = UserProfile.objects.create(user=user, role=role, **validated_data)
+
+        # ✅ Create StudentProfile if data provided
+        if student_data:
+            StudentProfile.objects.create(user_profile=profile, **student_data)
+
+        return profile
+
     # ---------- Update ----------
     def update(self, instance, validated_data):
         """
-        Update user profile and nested student profile.
+        Update UserProfile, related User fields, role, and nested StudentProfile.
         """
         student_data = validated_data.pop("student_profile", None)
+        role = validated_data.pop("role", None)
 
-        # ✅ Update profile fields
+        # ✅ Update related User fields
+        user = instance.user
+        for field in ["first_name", "last_name", "email", "password"]:
+            if field in validated_data:
+                value = validated_data.pop(field)
+                if field == "password" and value:
+                    user.set_password(value)
+                elif value is not None:
+                    setattr(user, field, value)
+        user.save()
+
+        # ✅ Update role
+        if role:
+            instance.role = role
+
+        # ✅ Update UserProfile fields
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
@@ -240,8 +263,9 @@ class UserProfileSerializer(serializers.ModelSerializer):
         return instance
 
 
-
-# ==================== Registration ====================
+# ==================================================
+#         Student Registration Serializer
+# ==================================================
 class StudentRegisterSerializer(serializers.ModelSerializer):
     """Serializer for student self-service registration"""
     confirm_password = serializers.CharField(write_only=True)
@@ -252,10 +276,17 @@ class StudentRegisterSerializer(serializers.ModelSerializer):
         extra_kwargs = {"password": {"write_only": True}}
 
     def validate(self, attrs):
+        # Check if passwords match
         if attrs["password"] != attrs["confirm_password"]:
             raise serializers.ValidationError({"password": "Passwords do not match."})
-        if not attrs["email"].endswith(".edu") and "university" not in attrs["email"]:
-            raise serializers.ValidationError({"email": "Must use a valid university email."})
+
+        # Only allow emails from pirmaed.com
+        email_domain = attrs["email"].split("@")[-1]
+        if email_domain.lower() != "pirmaed.com":
+            raise serializers.ValidationError(
+                {"email": "Only pirmaed.com email addresses are allowed."}
+            )
+
         return attrs
 
     def create(self, validated_data):
@@ -273,6 +304,12 @@ class StudentRegisterSerializer(serializers.ModelSerializer):
         return user
 
 
+
+
+
+# ==================================================
+#         Staff Create Serializer (Admin)
+# ==================================================
 class StaffCreateSerializer(serializers.ModelSerializer):
     """Registrar/HR creating staff/faculty accounts"""
     role = serializers.SlugRelatedField(queryset=Role.objects.all(), slug_field="name")
@@ -300,117 +337,151 @@ class StaffCreateSerializer(serializers.ModelSerializer):
             profile.save()
         return user
 
-# ==================== Invites ====================
+
+
+
+# ==================================================
+#                 Invite Serializers
+# ==================================================
+from rest_framework import serializers
+from .models import Invite
+from django.utils import timezone
+
+
 class InviteSerializer(serializers.ModelSerializer):
-    """Read serializer for returning invite details"""
-    status = serializers.SerializerMethodField()
-    approved_by = serializers.SerializerMethodField()
-    role = serializers.CharField(source="role.name", read_only=True)
+    """
+    Used by admin and frontend to view/create invites.
+    Handles both model instances and dicts safely.
+    """
+    role_name = serializers.CharField(source='role.name', read_only=True)
+    created_by_email = serializers.CharField(source='created_by.email', read_only=True)
+    created_by_full_name = serializers.SerializerMethodField()  # For InvitesListPage
+    expired = serializers.SerializerMethodField()  # Safe expired flag
+    status_label = serializers.SerializerMethodField()  # Safe status label
 
     class Meta:
         model = Invite
         fields = [
-            "email", "role", "token",
-            "created_at", "expires_at",
-            "is_used", "requires_admin_approval",
-            "is_approved", "approved_by", "approved_at",
-            "status",
+            'id', 'email', 'token', 'role', 'role_name',
+            'created_by', 'created_by_email', 'created_by_full_name',
+            'created_at', 'expires_at', 'is_used', 'expired', 'status_label',
         ]
-        read_only_fields = fields
+        read_only_fields = [
+            'id', 'token', 'created_by', 'created_at', 'is_used', 'expired'
+        ]
 
-    def get_status(self, obj):
-        if obj.is_used:
-            return "used"
-        if obj.is_expired:
-            return "expired"
-        if obj.requires_admin_approval and not obj.is_approved:
-            return "pending_approval"
-        if obj.is_approved:
-            return "approved"
-        return "active"
+    # ------------------------
+    # Serializer Methods
+    # ------------------------
+    def get_expired(self, obj):
+        """
+        Compute expired status safely.
+        Works for both model instance and dict.
+        """
+        if isinstance(obj, Invite):
+            return getattr(obj, 'is_expired', None) or (obj.expires_at and obj.expires_at < timezone.now())
+        return obj.get('expired', False)
 
-    def get_approved_by(self, obj):
-        return obj.approved_by.email if obj.approved_by else None
+    def get_created_by_full_name(self, obj):
+        """
+        Return full name or email of the user who created the invite.
+        Works for both model instance and dict.
+        """
+        if isinstance(obj, Invite):
+            if obj.created_by:
+                full_name = getattr(obj.created_by, "full_name", None)
+                if not full_name:
+                    full_name = f"{obj.created_by.first_name} {obj.created_by.last_name}".strip()
+                return full_name or obj.created_by.email
+            return None
+        # obj is a dict (e.g., during POST creation)
+        return obj.get('created_by_email', None)
 
+    def get_status_label(self, obj):
+        """
+        Safely compute status label:
+        - "Used" if invite is already used
+        - "Expired" if invite expired
+        - "Pending" otherwise
+        Works for both model instance and dict.
+        """
+        if isinstance(obj, Invite):
+            is_used = getattr(obj, 'is_used', False)
+            expired = getattr(obj, 'is_expired', None)
+            if expired is None and obj.expires_at:
+                expired = obj.expires_at < timezone.now()
+        else:
+            is_used = obj.get('is_used', False)
+            expired = obj.get('expired', False)
 
-class InviteCreateSerializer(serializers.ModelSerializer):
-    """Serializer for creating invites"""
-    role = serializers.SlugRelatedField(queryset=Role.objects.all(), slug_field="name")
+        if is_used:
+            return "Used"
+        if expired:
+            return "Expired"
+        return "Pending"
 
-    class Meta:
-        model = Invite
-        fields = ["email", "role"]
-
+    # ------------------------
+    # Email Validation
+    # ------------------------
     def validate_email(self, value):
-        email = value.lower().strip()
-        if Invite.objects.filter(
-            email=email,
-            is_used=False,
-            expires_at__gt=timezone.now()
-        ).exists():
-            raise serializers.ValidationError("An active invite already exists for this email.")
-        if User.objects.filter(email=email).exists():
-            raise serializers.ValidationError("A user with this email already exists.")
-        return email
-
-    def create(self, validated_data):
-        validated_data["email"] = validated_data["email"].lower().strip()
-        return Invite.objects.create(**validated_data)  # expiry handled in Invite.save()
+        """
+        Prevent duplicate active invites but allow re-sending if expired or used.
+        """
+        existing_invite = Invite.objects.filter(email=value, is_used=False).first()
+        if existing_invite:
+            # Allow same email reuse handled by InviteViewSet.perform_create()
+            pass
+        return value
 
 
-class InviteApproveSerializer(serializers.ModelSerializer):
-    """Admins approve an invite"""
-    class Meta:
-        model = Invite
-        fields = ["is_approved"]
-
-    def update(self, instance, validated_data):
-        request = self.context.get("request")
-        instance.is_approved = True
-        instance.approved_at = timezone.now()
-        if request and hasattr(request, "user"):
-            instance.approved_by = request.user
-        instance.save()
-        return instance
-
-
-class InviteAcceptSerializer(serializers.ModelSerializer):
-    """Invite acceptance (set password)"""
+# ==================================================
+#        Invite Registration Serializer
+# ==================================================
+class InviteAcceptSerializer(serializers.Serializer):
+    """
+    Used by the user to register via an invite.
+    Matches InviteViewSet.register endpoint.
+    """
+    token = serializers.UUIDField()
+    first_name = serializers.CharField(max_length=150)
+    last_name = serializers.CharField(max_length=150)
     password = serializers.CharField(write_only=True)
+    confirm_password = serializers.CharField(write_only=True)
 
-    class Meta:
-        model = Invite
-        fields = ["token", "password"]
+    def validate(self, data):
+        if data['password'] != data['confirm_password']:
+            raise serializers.ValidationError("Passwords do not match.")
+        return data
 
-    def validate(self, attrs):
-        invite = self.instance
+
+# ==================================================
+#        Invite Validation Serializer
+# ==================================================
+class InviteValidateSerializer(serializers.Serializer):
+    """
+    Used to validate an invite token before registration.
+    Matches InviteViewSet.validate endpoint.
+    """
+    token = serializers.UUIDField()
+
+    def validate_token(self, value):
+        try:
+            invite = Invite.objects.get(token=value)
+        except Invite.DoesNotExist:
+            raise serializers.ValidationError("Invalid or expired invite.")
+
         if not invite.can_be_used():
-            raise serializers.ValidationError(
-                "This invite cannot be used (expired, already used, or not approved)."
-            )
-        return attrs
+            raise serializers.ValidationError("Invite cannot be used (expired or already used).")
 
-    def update(self, instance, validated_data):
-        password = validated_data["password"]
-        user, _ = User.objects.get_or_create(
-            email=instance.email,
-            defaults={"is_active": True},
-        )
-        user.set_password(password)
-        user.is_active = True
-        user.save()
+        return value
 
-        profile, created = UserProfile.objects.get_or_create(
-            user=user,
-            defaults={"role": instance.role, "is_email_verified": True},
-        )
-        if not created:
-            profile.role = instance.role
-            profile.is_email_verified = True
-            profile.save()
 
-        instance.mark_used(user=user)  # model enforces rules
-        return user
+
+
+
+
+
+
 
 
 
@@ -574,6 +645,13 @@ class LocationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Location
         fields = ["id", "building_name", "floor_number", "room_identifier"]
+
+
+
+
+
+
+
 
 
 # ==================== JWT Auth (Email-based) ====================
