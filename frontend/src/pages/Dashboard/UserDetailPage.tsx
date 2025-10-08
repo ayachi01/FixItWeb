@@ -17,9 +17,6 @@ interface User {
   last_name: string;
   role?: Role;
   is_email_verified: boolean;
-  course?: string; // for students
-  year_level?: number; // for students
-  student_id?: string; // for students
   password?: string;
   confirm_password?: string;
 }
@@ -102,16 +99,6 @@ export default function UserDetailPage() {
       }
     }
 
-    // Student-specific fields
-    if (user.role?.name === "Student") {
-      if (!user.course || !user.year_level || !user.student_id) {
-        toast.error(
-          "Students must provide course, year level, and student ID."
-        );
-        return false;
-      }
-    }
-
     return true;
   };
 
@@ -121,7 +108,6 @@ export default function UserDetailPage() {
     try {
       setSaving(true);
       if (isCreate) {
-        // Create new user via self-service endpoint
         await api.post("/users/register_self_service/", {
           first_name: user.first_name,
           last_name: user.last_name,
@@ -130,21 +116,14 @@ export default function UserDetailPage() {
           confirm_password: user.confirm_password,
           role_id: user.role?.id,
           is_email_verified: user.is_email_verified,
-          course: user.course,
-          year_level: user.year_level,
-          student_id: user.student_id,
         });
         toast.success("User created successfully");
       } else {
-        // Update existing user
         await api.put(`/users/${id}/`, {
           full_name: `${user.first_name} ${user.last_name}`,
           email: user.email,
           role_id: user.role?.id,
           is_email_verified: user.is_email_verified,
-          course: user.course,
-          year_level: user.year_level,
-          student_id: user.student_id,
         });
         toast.success("User updated successfully");
       }
@@ -270,52 +249,6 @@ export default function UserDetailPage() {
             ))}
           </select>
         </div>
-
-        {/* Student-specific fields */}
-        {user.role?.name === "Student" && (
-          <>
-            <div>
-              <label htmlFor="course" className="block font-semibold mb-1">
-                Course
-              </label>
-              <input
-                id="course"
-                type="text"
-                value={user.course || ""}
-                onChange={(e) => setUser({ ...user, course: e.target.value })}
-                className="w-full border px-3 py-2 rounded"
-              />
-            </div>
-            <div>
-              <label htmlFor="yearLevel" className="block font-semibold mb-1">
-                Year Level
-              </label>
-              <input
-                id="yearLevel"
-                type="number"
-                value={user.year_level || ""}
-                onChange={(e) =>
-                  setUser({ ...user, year_level: parseInt(e.target.value) })
-                }
-                className="w-full border px-3 py-2 rounded"
-              />
-            </div>
-            <div>
-              <label htmlFor="studentId" className="block font-semibold mb-1">
-                Student ID
-              </label>
-              <input
-                id="studentId"
-                type="text"
-                value={user.student_id || ""}
-                onChange={(e) =>
-                  setUser({ ...user, student_id: e.target.value })
-                }
-                className="w-full border px-3 py-2 rounded"
-              />
-            </div>
-          </>
-        )}
 
         {/* Email Verified */}
         <div className="flex items-center space-x-2">
