@@ -363,16 +363,39 @@ class PasswordResetCode(models.Model):
         return f"PasswordResetCode for {self.user.email} ({status})"
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# ==========================
+# ✅ FINAL Invite Model
+# ==========================
+
+
+
 class Invite(models.Model):
     """
-    Invitation system to onboard privileged users (fixers/admins).
-    Normal users self-register, but fixers/admins require an invite.
+    Invitation system to onboard privileged users (e.g., fixers, moderators, admins).
+    Normal users self-register, but privileged roles are invited by an admin.
     """
+
     email = models.EmailField(db_index=True)
     token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False, db_index=True)
 
-    # ✅ Role from DB
-    role = models.ForeignKey(Role, on_delete=models.CASCADE, related_name="invites")
+    # ✅ Role from DB (not hardcoded)
+    role = models.ForeignKey("Role", on_delete=models.CASCADE, related_name="invites")
 
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -384,17 +407,6 @@ class Invite(models.Model):
     expires_at = models.DateTimeField(null=True, blank=True)
     is_used = models.BooleanField(default=False)
 
-    requires_admin_approval = models.BooleanField(default=False)
-    is_approved = models.BooleanField(default=False)
-    approved_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="approved_invites",
-    )
-    approved_at = models.DateTimeField(null=True, blank=True)
-
     class Meta:
         constraints = [
             models.UniqueConstraint(
@@ -403,56 +415,49 @@ class Invite(models.Model):
         ]
 
     def save(self, *args, **kwargs):
-        """Auto-set expiry and admin approval flags when saving."""
+        """Auto-set expiry when saving."""
         expiry_hours = getattr(settings, "INVITE_EXPIRY_HOURS", 24)
         if not self.expires_at:
             self.expires_at = timezone.now() + timedelta(hours=expiry_hours)
-
-        # ✅ Delegate approval rule to Role model instead of hardcoding
-        if self.role and getattr(self.role, "requires_admin_approval", False):
-            self.requires_admin_approval = True
-
         super().save(*args, **kwargs)
 
     # =====================================================
-    # ⏳ Expiration & Usage Enforcement
+    # ⏳ Expiration & Usage Checks
     # =====================================================
     @property
     def is_expired(self) -> bool:
         """Return True if invite has expired."""
-        return self.expires_at and timezone.now() > self.expires_at
+        return bool(self.expires_at and timezone.now() > self.expires_at)
 
     def can_be_used(self) -> bool:
         """
-        Check if the invite can be used.
+        Determine if invite can be used:
         - Not expired
         - Not already used
-        - Approved if approval required
         """
-        return not (
-            self.is_used
-            or self.is_expired
-            or (self.requires_admin_approval and not self.is_approved)
-        )
+        return not self.is_expired and not self.is_used
 
-    def mark_used(self, user=None):
-        """Mark the invite as used and optionally log who approved/used it."""
+    def mark_used(self):
+        """Mark the invite as used once registration completes."""
         if self.is_used:
             raise ValidationError("This invite has already been used.")
         if self.is_expired:
             raise ValidationError("This invite has expired.")
-        if self.requires_admin_approval and not self.is_approved:
-            raise ValidationError("This invite requires admin approval before it can be used.")
 
         self.is_used = True
-        if user:
-            self.approved_by = user
-            self.approved_at = timezone.now()
-        self.save(update_fields=["is_used", "approved_by", "approved_at"])
+        self.save(update_fields=["is_used"])
         return True
 
     def __str__(self):
         return f"Invite for {self.email} - {self.role.name}"
+
+
+
+
+
+
+
+
 
 # ======================
 # 3. LOCATIONS

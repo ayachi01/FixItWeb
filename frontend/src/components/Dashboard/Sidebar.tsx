@@ -1,4 +1,4 @@
-// Sidebar.tsx
+// 📂 src/components/Sidebar.tsx
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuthStore } from "../../store/authStore";
 import {
@@ -22,7 +22,6 @@ interface MenuItem {
   icon: React.ReactNode;
 }
 
-// 🔹 All menu items (everyone can see)
 const menuItems: MenuItem[] = [
   {
     label: "Submit Ticket",
@@ -54,11 +53,7 @@ const menuItems: MenuItem[] = [
     path: "/dashboard/tickets",
     icon: <Ticket size={18} />,
   },
-  {
-    label: "Reports",
-    path: "/dashboard/reports",
-    icon: <File size={18} />,
-  },
+  { label: "Reports", path: "/dashboard/reports", icon: <File size={18} /> },
   {
     label: "Notifications",
     path: "/dashboard/notifications",
@@ -73,6 +68,12 @@ const menuItems: MenuItem[] = [
     label: "Roles Management",
     path: "/dashboard/roles",
     icon: <Key size={18} />,
+  },
+  { label: "Invite User", path: "/dashboard/invite", icon: <Key size={18} /> },
+  {
+    label: "All Invites",
+    path: "/dashboard/invites",
+    icon: <FileText size={18} />,
   },
   {
     label: "Audit Logs",

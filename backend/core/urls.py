@@ -17,6 +17,7 @@ from .views import (
     RoleViewSet,
     ForgotPasswordView,
     ResetPasswordView,
+    InviteViewSet,  # ✅ Added InviteViewSet
 )
 
 # -------------------- Router --------------------
@@ -28,6 +29,7 @@ router.register(r'locations', LocationViewSet, basename='location')
 # Admin-only endpoints
 router.register(r'audit-logs', AuditLogViewSet, basename='audit-logs')
 router.register(r'roles', RoleViewSet, basename='roles')
+router.register(r'invites', InviteViewSet, basename='invites')  # ✅ Added invites route
 
 # -------------------- Custom actions --------------------
 forgot_password_otp = UserViewSet.as_view({'post': 'reset_password_request'})

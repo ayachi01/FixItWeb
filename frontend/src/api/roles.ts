@@ -1,28 +1,48 @@
+// 📂 src/api/roles.ts
 import { api } from "./client";
 
-// Fetch all roles
-export async function getAllRoles() {
+// ==============================
+// ✅ Role Interface
+// ==============================
+export interface Role {
+  id: number;
+  name: string;
+  description?: string;
+  permissions?: number[];
+  requires_admin_approval?: boolean;
+}
+
+// ==============================
+// 🔹 Fetch all roles
+// ==============================
+export async function getAllRoles(): Promise<Role[]> {
   const res = await api.get("/roles/");
-  return res.data;
+  return res.data as Role[];
 }
 
-// Fetch single role
-export async function getRoleById(id: number) {
+// ==============================
+// 🔹 Fetch single role
+// ==============================
+export async function getRoleById(id: number): Promise<Role> {
   const res = await api.get(`/roles/${id}/`);
-  return res.data;
+  return res.data as Role;
 }
 
-// Create role
+// ==============================
+// 🔹 Create role
+// ==============================
 export async function createRole(data: {
   name: string;
   description: string;
-  permissions: number[]; // array of permission IDs
-}) {
+  permissions: number[];
+}): Promise<Role> {
   const res = await api.post("/roles/", data);
-  return res.data;
+  return res.data as Role;
 }
 
-// Update role
+// ==============================
+// 🔹 Update role
+// ==============================
 export async function updateRole(
   id: number,
   data: Partial<{
@@ -30,13 +50,15 @@ export async function updateRole(
     description: string;
     permissions: number[];
   }>
-) {
+): Promise<Role> {
   const res = await api.patch(`/roles/${id}/`, data);
-  return res.data;
+  return res.data as Role;
 }
 
-// Delete role
-export async function deleteRole(id: number) {
+// ==============================
+// 🔹 Delete role
+// ==============================
+export async function deleteRole(id: number): Promise<Role> {
   const res = await api.delete(`/roles/${id}/`);
-  return res.data;
+  return res.data as Role;
 }

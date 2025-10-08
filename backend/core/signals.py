@@ -1,15 +1,20 @@
 # core/signals.py
+import logging
 from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
 from django.contrib.auth import get_user_model
 from django.contrib.auth.signals import user_logged_in, user_logged_out, user_login_failed
 from django.contrib.auth.models import update_last_login
+from django.db import transaction, IntegrityError
 
-# ✅ Import models directly without circular import
-from core.models import Ticket, TicketAssignment, TicketResolution, UserProfile, AuditLog, Role
+from core.models import (
+    Ticket, TicketAssignment, TicketResolution,
+    UserProfile, AuditLog, Role, Invite
+)
 from core.utils.audit import create_audit
 
 User = get_user_model()
+logger = logging.getLogger(__name__)
 
 
 # =====================================================
@@ -34,7 +39,7 @@ def log_ticket_events(sender, instance, created, **kwargs):
             details=f"Ticket #{instance.id} created with category {instance.category}.",
         )
     else:
-        if instance.has_changed("status"):
+        if hasattr(instance, "has_changed") and instance.has_changed("status"):
             action_map = {
                 sender.Status.RESOLVED: AuditLog.Action.TICKET_RESOLVED,
                 sender.Status.CLOSED: AuditLog.Action.TICKET_CLOSED,
@@ -46,7 +51,7 @@ def log_ticket_events(sender, instance, created, **kwargs):
                 performed_by=performed_by,
                 details=f"Ticket #{instance.id} status changed to {instance.status}.",
             )
-        elif instance.has_changed("escalation_level"):
+        elif hasattr(instance, "has_changed") and instance.has_changed("escalation_level"):
             create_audit(
                 AuditLog.Action.TICKET_ESCALATED,
                 performed_by=performed_by,
@@ -85,18 +90,13 @@ def log_ticket_unassignment(sender, instance, **kwargs):
     )
 
 
-# =====================================================
-# ✅ Ticket Resolution signals
-# =====================================================
 @receiver(post_save, sender=TicketResolution)
 def log_ticket_resolution(sender, instance, created, **kwargs):
     if created:
-        # Auto-update ticket status if needed
         if instance.ticket.status not in {Ticket.Status.RESOLVED, Ticket.Status.CLOSED}:
             instance.ticket.status = Ticket.Status.RESOLVED
             instance.ticket.save(update_fields=["status", "updated_at"])
 
-        # Audit resolution event
         create_audit(
             AuditLog.Action.TICKET_RESOLVED,
             performed_by=instance.resolved_by,
@@ -107,38 +107,65 @@ def log_ticket_resolution(sender, instance, created, **kwargs):
 
 
 # =====================================================
-# 👤 User & Profile signals
+# 👤 User & Profile signals (Invite-aware)
 # =====================================================
 @receiver(post_save, sender=User)
 def create_user_profile(sender, instance, created, **kwargs):
-    """Automatically create a UserProfile for each new user"""
-    if created:
-        if instance.is_superuser:
-            # ✅ Get or create the University Admin role
-            default_role, _ = Role.objects.get_or_create(
-                name="University Admin",
-                defaults={"description": "Full administrative privileges"},
-            )
-            profile = UserProfile.objects.create(
-                user=instance,
-                role=default_role,
-                is_email_verified=True,
-                created_by_admin=True,  # 🚨 bypass email verification
-            )
-        else:
-            # ✅ Default fallback role for normal users
-            default_role, _ = Role.objects.get_or_create(
-                name="Student",
-                defaults={"description": "Default role for students"},
-            )
-            profile = UserProfile.objects.create(user=instance, role=default_role)
+    """
+    Create UserProfile safely (no duplicates) and handle role assignment.
+    Marks Invite as used automatically if the user registers via an invite.
+    """
+    if not created:
+        return
 
-        create_audit(
-            AuditLog.Action.USER_PROFILE_CREATED,
-            performed_by=instance,
-            target_user=instance,
-            details=f"UserProfile created for {instance.email} with role {profile.role.name}.",
-        )
+    try:
+        with transaction.atomic():
+            # ✅ Check if user was invited
+            invite = Invite.objects.filter(email=instance.email, is_used=False).first()
+
+            if invite:
+                role = invite.role
+                invite.is_used = True
+                invite.save(update_fields=["is_used"])
+            else:
+                # fallback role
+                if instance.is_superuser:
+                    role, _ = Role.objects.get_or_create(
+                        name="University Admin",
+                        defaults={"description": "Full administrative privileges"},
+                    )
+                else:
+                    role, _ = Role.objects.get_or_create(
+                        name="Student",
+                        defaults={"description": "Default role for students"},
+                    )
+
+            profile, created_profile = UserProfile.objects.get_or_create(
+                user=instance,
+                defaults={
+                    "role": role,
+                    "is_email_verified": True,
+                    "created_by_admin": instance.is_superuser,
+                },
+            )
+
+    except IntegrityError:
+        logger.warning("Race condition detected when creating UserProfile for %s", instance.email)
+        profile = UserProfile.objects.filter(user=instance).first()
+        if not profile:
+            raise
+
+    # ✅ Ensure role consistency
+    if profile and not getattr(profile, "role", None):
+        profile.role = role
+        profile.save(update_fields=["role"])
+
+    create_audit(
+        AuditLog.Action.USER_PROFILE_CREATED,
+        performed_by=instance,
+        target_user=instance,
+        details=f"Profile created for {instance.email} with role {role.name}.",
+    )
 
 
 # =====================================================
@@ -146,11 +173,7 @@ def create_user_profile(sender, instance, created, **kwargs):
 # =====================================================
 @receiver(user_logged_in)
 def log_user_login(sender, request, user, **kwargs):
-    """Log login and update last_login field"""
-    # ✅ Update last_login timestamp
     update_last_login(sender, user)
-
-    # ✅ Audit logging
     create_audit(
         AuditLog.Action.LOGIN,
         performed_by=user,

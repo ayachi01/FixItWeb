@@ -3,7 +3,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from .models import (
     UserProfile, Invite, Location, Ticket,
-    TicketImage, TicketResolution , AuditLog
+    TicketImage, TicketResolution, AuditLog
 )
 
 # ✅ Always use get_user_model for AUTH_USER_MODEL
@@ -88,14 +88,24 @@ class UserProfileAdmin(admin.ModelAdmin):
 
 
 # -----------------------------
-# Other Models
+# Invite Admin
 # -----------------------------
 @admin.register(Invite)
 class InviteAdmin(admin.ModelAdmin):
-    list_display = ('email', 'role', 'created_at', 'expires_at', 'is_used', 'requires_admin_approval')
-    search_fields = ('email', 'role')
+    list_display = ('email', 'role', 'created_by', 'created_at', 'expires_at', 'is_used', 'is_valid')
+    search_fields = ('email', 'role__name')
+    readonly_fields = ('token', 'created_at', 'expires_at')
+
+    def is_valid(self, obj):
+        """Show whether the invite is still usable."""
+        return obj.can_be_used()
+    is_valid.boolean = True
+    is_valid.short_description = "Still Valid?"
 
 
+# -----------------------------
+# Other Models
+# -----------------------------
 @admin.register(Location)
 class LocationAdmin(admin.ModelAdmin):
     list_display = ('building_name', 'floor_number', 'room_identifier')
@@ -124,9 +134,6 @@ class TicketImageAdmin(admin.ModelAdmin):
 class TicketResolutionAdmin(admin.ModelAdmin):
     list_display = ('ticket', 'resolved_by', 'timestamp')
     search_fields = ('ticket__id',)
-
-
-
 
 
 @admin.register(AuditLog)

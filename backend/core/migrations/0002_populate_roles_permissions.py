@@ -5,6 +5,7 @@ def populate_roles_permissions(apps, schema_editor):
     Role = apps.get_model("core", "Role")
     Permission = apps.get_model("core", "Permission")
     DomainRoleMapping = apps.get_model("core", "DomainRoleMapping")
+    Location = apps.get_model("core", "Location")
 
     # ---- Roles + descriptions ----
     roles_info = {
@@ -48,18 +49,59 @@ def populate_roles_permissions(apps, schema_editor):
 
     # ---- Domain → Role Mapping ----
     domain_map = {
-        "student.pirmaed.com": roles["Student"],
-        "faculty.pirmaed.com": roles["Faculty"],
-        "admin.pirmaed.com": roles["Admin Staff"],
+        "pirmaed.com": roles["Student"],
     }
 
     for domain, role in domain_map.items():
         DomainRoleMapping.objects.update_or_create(domain=domain, defaults={"role": role})
 
+    # ---- Initial Locations (32 entries) ----
+    initial_locations = [
+        {"building_name": "PTC", "floor_number": "1", "room_identifier": "Main"},
+        {"building_name": "MBA Hall", "floor_number": "1", "room_identifier": "101"},
+        {"building_name": "MBA Hall", "floor_number": "2", "room_identifier": "201"},
+        {"building_name": "MBA - Engineering", "floor_number": "1", "room_identifier": "101"},
+        {"building_name": "MBA - Engineering", "floor_number": "2", "room_identifier": "201"},
+        {"building_name": "Riverside Building", "floor_number": "1", "room_identifier": "101"},
+        {"building_name": "Riverside Building", "floor_number": "2", "room_identifier": "201"},
+        {"building_name": "Gymnasium", "floor_number": "1", "room_identifier": "Hall"},
+        {"building_name": "Student Plaza (SP)", "floor_number": "1", "room_identifier": "Main"},
+        {"building_name": "Phinma Garden", "floor_number": "1", "room_identifier": "Garden"},
+        {"building_name": "North Hall", "floor_number": "1", "room_identifier": "101"},
+        {"building_name": "North Hall", "floor_number": "2", "room_identifier": "201"},
+        {"building_name": "CMA", "floor_number": "1", "room_identifier": "101"},
+        {"building_name": "CHS", "floor_number": "1", "room_identifier": "101"},
+        {"building_name": "BASIC ED", "floor_number": "1", "room_identifier": "101"},
+        {"building_name": "CSDL", "floor_number": "1", "room_identifier": "101"},
+        {"building_name": "ITS", "floor_number": "1", "room_identifier": "101"},
+        {"building_name": "FVR", "floor_number": "1", "room_identifier": "101"},
+        {"building_name": "OP", "floor_number": "1", "room_identifier": "101"},
+        {"building_name": "ATRIUM", "floor_number": "1", "room_identifier": "Lobby"},
+        {"building_name": "Phinma Ave", "floor_number": "1", "room_identifier": "Entrance"},
+        {"building_name": "Main Entrance Gate", "floor_number": "Ground", "room_identifier": "Gate"},
+        {"building_name": "Vehicle Entrance", "floor_number": "Ground", "room_identifier": "Gate"},
+        {"building_name": "Old Stage", "floor_number": "1", "room_identifier": "Stage"},
+        {"building_name": "Library", "floor_number": "1", "room_identifier": "101"},
+        {"building_name": "Library", "floor_number": "2", "room_identifier": "201"},
+        {"building_name": "Admin Building", "floor_number": "1", "room_identifier": "101"},
+        {"building_name": "Admin Building", "floor_number": "2", "room_identifier": "201"},
+        {"building_name": "Engineering Block", "floor_number": "1", "room_identifier": "101"},
+        {"building_name": "Engineering Block", "floor_number": "2", "room_identifier": "201"},
+        {"building_name": "Cafeteria", "floor_number": "1", "room_identifier": "Main"},
+        {"building_name": "Auditorium", "floor_number": "1", "room_identifier": "Main Hall"},
+    ]
+
+    for loc in initial_locations:
+        Location.objects.update_or_create(
+            building_name=loc["building_name"],
+            floor_number=loc["floor_number"],
+            room_identifier=loc["room_identifier"],
+        )
+
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('core', '0001_initial'),  # your previous migration
+        ('core', '0001_initial'),
     ]
 
     operations = [
