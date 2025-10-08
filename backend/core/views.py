@@ -88,6 +88,9 @@ import json
 # ==========================
 # UserViewSet
 # ==========================
+
+
+
 class UserViewSet(viewsets.ModelViewSet):
     """
     Production-ready UserViewSet:
@@ -143,11 +146,14 @@ class UserViewSet(viewsets.ModelViewSet):
 
     def retrieve(self, request, pk=None):
         try:
-            profile = UserProfile.objects.select_related("user", "role").get(pk=pk)
+            # Match by related user id
+            profile = UserProfile.objects.select_related("user", "role").get(user__id=pk)
         except UserProfile.DoesNotExist:
             return Response({"detail": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+
         if not self._is_system_admin(request.user) and profile.user != request.user:
             return Response({"detail": "Forbidden"}, status=status.HTTP_403_FORBIDDEN)
+
         serializer = self.get_serializer(profile)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -155,27 +161,33 @@ class UserViewSet(viewsets.ModelViewSet):
         admin_check = self._require_admin_or_403(request)
         if admin_check:
             return admin_check
+
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+
         with transaction.atomic():
             profile = serializer.save()
             profile.created_by_admin = True
             profile.save()
+
             create_audit(
                 "User Created (admin)",
                 performed_by=request.user,
                 target_user=profile.user,
                 details=f"Admin-created user {profile.user.email}",
             )
+
         return Response(self.get_serializer(profile).data, status=status.HTTP_201_CREATED)
 
     def update(self, request, pk=None):
         try:
-            profile = UserProfile.objects.select_related("user", "role").get(pk=pk)
+            # Match by related user id
+            profile = UserProfile.objects.select_related("user", "role").get(user__id=pk)
         except UserProfile.DoesNotExist:
             return Response({"detail": "User not found"}, status=status.HTTP_404_NOT_FOUND)
 
         data = request.data.copy()
+
         if not self._is_system_admin(request.user):
             if profile.user != request.user:
                 return Response({"detail": "Forbidden"}, status=status.HTTP_403_FORBIDDEN)
@@ -191,36 +203,56 @@ class UserViewSet(viewsets.ModelViewSet):
 
         serializer = self.get_serializer(profile, data=data, partial=True)
         serializer.is_valid(raise_exception=True)
+
         with transaction.atomic():
             profile = serializer.save()
+
+            # ✅ Update the related User model (so name/email changes persist)
+            user = profile.user
+            name = data.get("full_name")
+            if name:
+                parts = name.split(" ", 1)
+                user.first_name = parts[0]
+                user.last_name = parts[1] if len(parts) > 1 else ""
+            if "email" in data:
+                user.email = data["email"]
+            user.save()
+
             if self._is_system_admin(request.user):
                 create_audit(
                     "User Updated",
                     performed_by=request.user,
-                    target_user=profile.user,
-                    details=f"Profile updated for {profile.user.email}",
+                    target_user=user,
+                    details=f"Profile updated for {user.email}",
                 )
+
         return Response(self.get_serializer(profile).data, status=status.HTTP_200_OK)
+
 
     def destroy(self, request, pk=None):
         admin_check = self._require_admin_or_403(request)
         if admin_check:
             return admin_check
+
         try:
-            profile = UserProfile.objects.select_related("user").get(pk=pk)
+            # Match by related user id
+            profile = UserProfile.objects.select_related("user").get(user__id=pk)
         except UserProfile.DoesNotExist:
             return Response({"detail": "User not found"}, status=status.HTTP_404_NOT_FOUND)
 
         user = profile.user
+
         create_audit(
             "User Deleted",
             performed_by=request.user,
             target_user=user,
             details=f"User {user.email} deleted",
         )
+
         with transaction.atomic():
             profile.delete()
             user.delete()
+
         return Response({"message": "User deleted successfully"}, status=status.HTTP_200_OK)
 
     def get_queryset(self):
@@ -851,6 +883,19 @@ class RoleViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = RoleSerializer
     permission_classes = [IsAuthenticated]
 
+
+
+
+
+
+
+
+
+
+
+
+
+
 # ==================================================
 #                  User Profile & Auth (Session Management)
 # ==================================================
@@ -861,10 +906,15 @@ class RoleViewSet(viewsets.ReadOnlyModelViewSet):
 # - Auth Views: Integrate with UserViewSet for registration/invites; use AuditLog for events.
 # - All use JWT for authentication, with cookie-based refresh for security.
 
+
+
 class UserProfileView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        """
+        Retrieve the currently logged-in user's profile and permissions.
+        """
         profile = UserProfile.objects.select_related("user", "role").get(user=request.user)
         features = []
 
@@ -879,19 +929,21 @@ class UserProfileView(APIView):
         if profile.is_admin_level:
             features.extend(["reportsView", "escalate", "closeTickets"])
 
+        # System-level roles get extra features
         if profile.role and profile.role.name.lower() in ["super admin", "university admin"]:
             features.extend(["systemSettings", "aiReports"])
 
-        features = list(dict.fromkeys(features))  # remove duplicates while preserving order
+        # Remove duplicates while preserving order
+        features = list(dict.fromkeys(features))
 
+        # Include student data if user has a StudentProfile
         student_data = None
-        if getattr(profile, "student_profile", None):
-            sp = profile.student_profile
+        student_profile = getattr(profile, "student_profile", None)
+        if student_profile:
             student_data = {
-                "full_name": f"{sp.user_profile.user.first_name} {sp.user_profile.user.last_name}".strip(),
-                "course": sp.course_code,
-                "year_level": sp.year_level,
-                "student_id": sp.student_id,
+                "course": student_profile.course,
+                "year_level": student_profile.year_level,
+                "student_id": student_profile.student_id,
             }
 
         return Response({
@@ -914,6 +966,61 @@ class UserProfileView(APIView):
             "allowed_categories": profile.allowed_categories(),
             "student_profile": student_data,
         })
+
+    def patch(self, request):
+        """
+        Allow updating the user's profile and student info.
+        """
+        try:
+            profile = UserProfile.objects.select_related("user").get(user=request.user)
+        except UserProfile.DoesNotExist:
+            return Response({"error": "Profile not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        data = request.data
+        user = profile.user
+
+        # --- Update user fields ---
+        user.first_name = data.get("first_name", user.first_name)
+        user.last_name = data.get("last_name", user.last_name)
+        user.email = data.get("email", user.email)
+        user.save()
+
+        # --- Update profile fields ---
+        role_id = data.get("role_id")
+        if role_id:
+            try:
+                role = Role.objects.get(id=role_id)
+                profile.role = role
+            except Role.DoesNotExist:
+                return Response({"error": "Invalid role ID."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if "is_email_verified" in data:
+            profile.is_email_verified = data.get("is_email_verified", profile.is_email_verified)
+        profile.save()
+
+        # --- Update or create student profile ---
+        student_data = data.get("student_profile")
+        if student_data:
+            sp, _ = StudentProfile.objects.get_or_create(user_profile=profile)
+            sp.course = student_data.get("course", sp.course)
+            sp.year_level = student_data.get("year_level", sp.year_level)
+            sp.student_id = student_data.get("student_id", sp.student_id)
+            sp.save()
+
+        return Response({"detail": "Profile updated successfully."}, status=status.HTTP_200_OK)
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 class EmailLoginView(TokenObtainPairView):
     serializer_class = EmailTokenObtainPairSerializer
