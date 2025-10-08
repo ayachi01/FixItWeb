@@ -907,7 +907,6 @@ class RoleViewSet(viewsets.ReadOnlyModelViewSet):
 # - All use JWT for authentication, with cookie-based refresh for security.
 
 
-
 class UserProfileView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -941,9 +940,14 @@ class UserProfileView(APIView):
         student_profile = getattr(profile, "student_profile", None)
         if student_profile:
             student_data = {
-                "course": student_profile.course,
-                "year_level": student_profile.year_level,
                 "student_id": student_profile.student_id,
+                "course_code": student_profile.course_code,
+                "course_name": student_profile.course_name,
+                "course": f"{student_profile.course_code or ''} - {student_profile.course_name or ''}".strip(" -"),
+                "year_level": student_profile.year_level,
+                "section": student_profile.section,
+                "college": student_profile.college,
+                "enrollment_year": student_profile.enrollment_year,
             }
 
         return Response({
@@ -1002,13 +1006,16 @@ class UserProfileView(APIView):
         student_data = data.get("student_profile")
         if student_data:
             sp, _ = StudentProfile.objects.get_or_create(user_profile=profile)
-            sp.course = student_data.get("course", sp.course)
-            sp.year_level = student_data.get("year_level", sp.year_level)
             sp.student_id = student_data.get("student_id", sp.student_id)
+            sp.course_code = student_data.get("course_code", sp.course_code)
+            sp.course_name = student_data.get("course_name", sp.course_name)
+            sp.year_level = student_data.get("year_level", sp.year_level)
+            sp.section = student_data.get("section", sp.section)
+            sp.college = student_data.get("college", sp.college)
+            sp.enrollment_year = student_data.get("enrollment_year", sp.enrollment_year)
             sp.save()
 
         return Response({"detail": "Profile updated successfully."}, status=status.HTTP_200_OK)
-
 
 
 
