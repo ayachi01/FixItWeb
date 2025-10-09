@@ -1,12 +1,25 @@
 // 📂 src/components/TicketCard.tsx
+import { useState } from "react";
 import type { Ticket } from "../api/ticket";
+import { api } from "../api/client";
+import { toast } from "react-hot-toast";
 
 interface Props {
   ticket: Ticket;
-  mode?: "myTickets" | "assigned"; // determines which actions to show
+  mode?: "myTickets" | "assigned";
+  onUpdate?: () => void; // optional callback after proof upload or resolve
 }
 
-export default function TicketCard({ ticket, mode = "assigned" }: Props) {
+export default function TicketCard({
+  ticket,
+  mode = "assigned",
+  onUpdate,
+}: Props) {
+  const [showProofModal, setShowProofModal] = useState(false);
+  const [proofImage, setProofImage] = useState<File | null>(null);
+  const [resolutionNote, setResolutionNote] = useState("");
+  const [uploading, setUploading] = useState(false);
+
   const canResolve =
     ticket.can_fix &&
     ["ASSIGNED", "REOPENED"].includes(ticket.status.toUpperCase());
@@ -36,8 +49,43 @@ export default function TicketCard({ ticket, mode = "assigned" }: Props) {
 
   const formatDate = (dateStr: string) => new Date(dateStr).toLocaleString();
 
+  // -----------------------------
+  // 📤 Handle Proof Upload
+  // -----------------------------
+  const handleUploadProof = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!proofImage || !resolutionNote.trim()) {
+      toast.error("Please provide both a proof image and a resolution note.");
+      return;
+    }
+
+    setUploading(true);
+    const formData = new FormData();
+    formData.append("ticket", String(ticket.id)); // ✅ required by backend
+    formData.append("proof_image", proofImage);
+    formData.append("resolution_note", resolutionNote);
+
+    try {
+      await api.post(`/tickets/${ticket.id}/resolve/`, formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      toast.success("Proof uploaded successfully!");
+      setShowProofModal(false);
+      setProofImage(null);
+      setResolutionNote("");
+      onUpdate?.();
+    } catch (error: any) {
+      console.error(error);
+      toast.error(
+        error.response?.data?.error || "Failed to upload proof. Try again."
+      );
+    } finally {
+      setUploading(false);
+    }
+  };
+
   return (
-    <div className="border rounded-lg p-4 shadow hover:shadow-lg transition duration-200 bg-white">
+    <div className="border rounded-lg p-4 shadow hover:shadow-lg transition duration-200 bg-white relative">
       {/* Header */}
       <div className="flex justify-between items-start mb-3">
         <h3 className="font-semibold text-lg">{ticket.title}</h3>
@@ -89,7 +137,10 @@ export default function TicketCard({ ticket, mode = "assigned" }: Props) {
       {mode === "assigned" && (
         <div className="flex gap-2 flex-wrap mb-3">
           {canResolve && (
-            <button className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 transition">
+            <button
+              onClick={() => setShowProofModal(true)}
+              className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 transition"
+            >
               Resolve
             </button>
           )}
@@ -98,7 +149,10 @@ export default function TicketCard({ ticket, mode = "assigned" }: Props) {
               Reopen
             </button>
           )}
-          <button className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition">
+          <button
+            onClick={() => setShowProofModal(true)}
+            className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
+          >
             Upload Proof
           </button>
           <button className="px-3 py-1 bg-gray-600 text-white rounded hover:bg-gray-700 transition">
@@ -109,7 +163,10 @@ export default function TicketCard({ ticket, mode = "assigned" }: Props) {
 
       {mode === "myTickets" && (
         <div className="flex gap-2 flex-wrap mb-3">
-          <button className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition">
+          <button
+            onClick={() => setShowProofModal(true)}
+            className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
+          >
             Upload Proof
           </button>
           <button className="px-3 py-1 bg-gray-600 text-white rounded hover:bg-gray-700 transition">
@@ -139,6 +196,47 @@ export default function TicketCard({ ticket, mode = "assigned" }: Props) {
         Created: {formatDate(ticket.created_at)} | Updated:{" "}
         {formatDate(ticket.updated_at)}
       </p>
+
+      {/* Upload Proof Modal */}
+      {showProofModal && (
+        <div className="absolute inset-0 bg-black bg-opacity-40 flex justify-center items-center z-10">
+          <div className="bg-white p-5 rounded-lg w-96 shadow-lg relative">
+            <h3 className="text-lg font-semibold mb-3">Upload Proof</h3>
+            <form onSubmit={handleUploadProof} className="space-y-3">
+              <textarea
+                className="w-full border rounded p-2 text-sm"
+                placeholder="Enter resolution note..."
+                value={resolutionNote}
+                onChange={(e) => setResolutionNote(e.target.value)}
+                rows={3}
+              />
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(e) =>
+                  setProofImage(e.target.files ? e.target.files[0] : null)
+                }
+              />
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowProofModal(false)}
+                  className="px-3 py-1 bg-gray-500 text-white rounded hover:bg-gray-600 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={uploading}
+                  className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 transition disabled:opacity-50"
+                >
+                  {uploading ? "Uploading..." : "Submit Proof"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
