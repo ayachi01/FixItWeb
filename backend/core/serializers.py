@@ -514,12 +514,46 @@ class AssignmentSerializer(serializers.ModelSerializer):
 # ====================
 # Ticket Resolution Serializer
 # ====================
+
+
 class TicketResolutionSerializer(serializers.ModelSerializer):
-    resolved_by = UserSerializer(read_only=True)
+    # Optional: include resolver's display name
+    resolved_by_name = serializers.CharField(
+        source="resolved_by.get_full_name", read_only=True
+    )
 
     class Meta:
         model = TicketResolution
-        fields = ["id", "resolved_by", "proof_image", "resolution_note", "timestamp"]
+        fields = [
+            "id",
+            "ticket",
+            "resolved_by",
+            "resolved_by_name",
+            "proof_image",
+            "resolution_note",
+            "timestamp",
+        ]
+        read_only_fields = ["id", "resolved_by", "resolved_by_name", "timestamp"]
+
+    def create(self, validated_data):
+        """Automatically set the resolved_by user from request context."""
+        validated_data["resolved_by"] = self.context["request"].user
+        return super().create(validated_data)
+
+    def validate(self, attrs):
+        """Custom validation to ensure proof and note logic align with model.clean()."""
+        user = self.context["request"].user
+        if not user or not hasattr(user, "profile"):
+            raise serializers.ValidationError("User profile is required.")
+
+        profile = user.profile
+        if not profile.can_fix:
+            raise serializers.ValidationError("You are not allowed to resolve tickets.")
+
+        if getattr(profile, "requires_proof", False) and not attrs.get("proof_image"):
+            raise serializers.ValidationError("Proof image is required for this user.")
+        return attrs
+
 
 # ====================
 # Ticket Serializer
@@ -627,6 +661,8 @@ class TicketSerializer(serializers.ModelSerializer):
             TicketImage.objects.create(ticket=ticket, image_url=img, uploaded_by=request.user)
 
         return ticket
+    
+
 
 
 
