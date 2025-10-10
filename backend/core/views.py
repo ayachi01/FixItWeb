@@ -447,6 +447,9 @@ class UserViewSet(viewsets.ModelViewSet):
         reset_code.mark_used()
         create_audit("Password Reset Confirmed", user, user, details=f"Password reset successful for {user.email}")
         return Response({"message": "Password has been reset successfully"}, status=status.HTTP_200_OK)
+    
+
+
 
 
 
@@ -657,13 +660,17 @@ class InviteViewSet(viewsets.ModelViewSet):
 # ==================================================
 # views.py
 # ==================================================
-
+from django.db.models import Count, Avg, Q, F, DurationField, ExpressionWrapper, Prefetch
+from django.db.models.functions import TruncMonth, TruncDay
 
 
 # ==============================
 # Ticket ViewSet (Updated)
 # ==============================
-
+from django.db.models import Count
+from django.db.models.functions import TruncMonth
+from rest_framework.decorators import action
+from rest_framework.response import Response
 
 
 class TicketViewSet(viewsets.ModelViewSet):
@@ -975,6 +982,120 @@ class TicketViewSet(viewsets.ModelViewSet):
         return Response(
             TicketCommentSerializer(comment).data, status=status.HTTP_201_CREATED
         )
+    
+    
+
+    @action(detail=False, methods=["get"], url_path="analytics")
+    def analytics(self, request):
+        """
+        Provides meaningful, correlation-ready analytics for admin/assigners.
+        Includes summaries, performance metrics, and time trends.
+        """
+        user = request.user
+        profile = getattr(user, "profile", None)
+        if not (getattr(profile, "is_admin_level", False) or getattr(profile, "can_assign", False)):
+            return Response({"error": "Not authorized to view analytics."}, status=403)
+
+        tickets = Ticket.objects.select_related("location").prefetch_related("assignments")
+
+        # --------------------------------------------------
+        # 1️⃣ Summary Counts
+        # --------------------------------------------------
+        total_tickets = tickets.count()
+        resolved_count = tickets.filter(status=Ticket.Status.RESOLVED).count()
+        open_count = tickets.exclude(
+            status__in=[Ticket.Status.RESOLVED, Ticket.Status.CLOSED, Ticket.Status.CANCELLED]
+        ).count()
+        completion_rate = round((resolved_count / total_tickets) * 100, 2) if total_tickets else 0
+
+        # --------------------------------------------------
+        # 2️⃣ Time-based Trends (Monthly)
+        # --------------------------------------------------
+        monthly_trend = (
+            tickets.annotate(month=TruncMonth("created_at"))
+            .values("month")
+            .annotate(count=Count("id"))
+            .order_by("month")
+        )
+
+        # --------------------------------------------------
+        # 3️⃣ Resolution Performance (avg duration for resolved tickets)
+        # --------------------------------------------------
+        # ⚠️ Some models don’t have resolved_at — use updated_at as fallback
+        if hasattr(Ticket, "resolved_at"):
+            duration_expr = ExpressionWrapper(
+                F("resolved_at") - F("created_at"), output_field=DurationField()
+            )
+            resolved_qs = tickets.filter(resolved_at__isnull=False)
+        else:
+            duration_expr = ExpressionWrapper(
+                F("updated_at") - F("created_at"), output_field=DurationField()
+            )
+            resolved_qs = tickets.filter(status=Ticket.Status.RESOLVED)
+
+        avg_resolution = resolved_qs.annotate(duration=duration_expr).aggregate(avg_time=Avg("duration"))
+        avg_resolution_hours = (
+            round(avg_resolution["avg_time"].total_seconds() / 3600, 2)
+            if avg_resolution["avg_time"]
+            else None
+        )
+
+        # --------------------------------------------------
+        # 4️⃣ Top Locations & Categories
+        # --------------------------------------------------
+        top_locations = (
+            tickets.values("location__building_name")
+            .annotate(count=Count("id"))
+            .order_by("-count")[:5]
+        )
+        top_categories = (
+            tickets.values("category")
+            .annotate(count=Count("id"))
+            .order_by("-count")[:5]
+        )
+
+        # --------------------------------------------------
+        # 5️⃣ Fixer Performance (resolved tickets per user)
+        # --------------------------------------------------
+        fixer_stats = (
+            resolved_qs.values("assignments__user__email")
+            .annotate(
+                resolved_count=Count("id"),
+                avg_time=Avg(duration_expr),
+            )
+            .order_by("-resolved_count")
+        )
+        for fixer in fixer_stats:
+            if fixer.get("avg_time"):
+                fixer["avg_time_hours"] = round(fixer["avg_time"].total_seconds() / 3600, 2)
+            fixer.pop("avg_time", None)
+
+        # --------------------------------------------------
+        # 6️⃣ Status Summary
+        # --------------------------------------------------
+        status_summary = (
+            tickets.values("status")
+            .annotate(count=Count("id"))
+            .order_by("status")
+        )
+
+        # --------------------------------------------------
+        # 🧩 Response
+        # --------------------------------------------------
+        return Response({
+            "overview": {
+                "total_tickets": total_tickets,
+                "resolved": resolved_count,
+                "open": open_count,
+                "completion_rate": completion_rate,
+                "avg_resolution_hours": avg_resolution_hours,
+            },
+            "status_summary": list(status_summary),
+            "monthly_trend": list(monthly_trend),
+            "top_locations": list(top_locations),
+            "top_categories": list(top_categories),
+            "fixer_performance": list(fixer_stats),
+        })
 
 
 
