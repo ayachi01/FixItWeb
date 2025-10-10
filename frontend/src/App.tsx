@@ -12,6 +12,9 @@ import ForgotPasswordOTP from "./pages/Auth/ForgotPasswordOTP";
 import VerifyEmailPage from "./pages/Auth/VerifyEmailPage";
 import InviteRegisterPage from "./pages/Dashboard/InviteRegisterPage"; // ✅ Invite registration page
 
+// 🏠 Public landing page (for visitors before login)
+import HomePage from "./pages/Dashboard/HomePage"; // ✅ New homepage
+
 // 🔒 Layout wrapper (only checks if user is logged in)
 import ProtectedRoute from "./components/ProtectedRoute";
 import Layout from "./components/Dashboard/DashboardLayout";
@@ -24,7 +27,6 @@ import FixerAssignedTicketsPage from "./pages/Dashboard/MyAssignedTicketsPage"; 
 import AdminDashboardPage from "./pages/Dashboard/DashboardPage";
 import AllTicketsPage from "./pages/Dashboard/AllTicketsPage"; // View all tickets university administrators and maintenance officer
 import TicketDetailPage from "./pages/Dashboard/TicketDetailPage"; // View ticket details
-
 import EditTicketPage from "./pages/Dashboard/EditTicketPage"; // Edit ticket details
 import UsersPage from "./pages/Dashboard/UsersPage"; // Manage users used by HR and Registrar
 import UserDetailPage from "./pages/Dashboard/UserDetailPage"; // View user details
@@ -41,28 +43,14 @@ import InvitesListPage from "./pages/Dashboard/InvitesListPage"; // Optional pag
 export default function App() {
   const { user } = useAuthStore();
 
-  // 🔓 Default redirect: always push logged-in users to main dashboard
-  const getDefaultDashboard = () => {
-    if (!user) return <Navigate to="/login" replace />;
-    return <Navigate to="/dashboard/main" replace />;
-  };
-
   return (
     <BrowserRouter>
       <Routes>
-        {/* Root redirect */}
+        {/* 🏠 Public routes */}
         <Route
           path="/"
-          element={
-            user ? (
-              <Navigate to="/dashboard" replace />
-            ) : (
-              <Navigate to="/login" replace />
-            )
-          }
+          element={user ? <Navigate to="/dashboard" replace /> : <HomePage />}
         />
-
-        {/* Public authentication routes */}
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/forgot-password" element={<ForgotPasswordChoice />} />
@@ -78,54 +66,43 @@ export default function App() {
         />
         <Route path="/invite/:token" element={<InviteRegisterPage />} />
 
-        {/* 🔒 Protected area */}
+        {/* 🔒 Protected routes (dashboard) */}
         <Route
-          path="/"
+          path="/dashboard/*"
           element={
             <ProtectedRoute>
               <Layout />
             </ProtectedRoute>
           }
         >
-          {/* Dashboard default */}
-          <Route path="dashboard" element={getDefaultDashboard()} />
+          {/* Default redirect for dashboard */}
+          <Route index element={<Navigate to="main" replace />} />
 
           {/* 🚪 Feature pages */}
+          <Route path="main" element={<AdminDashboardPage />} />
+          <Route path="submit-ticket" element={<SubmitTicketPage />} />
+          <Route path="my-tickets" element={<MyTicketsPage />} />
+          <Route path="assigned-tickets" element={<AssignedTicketsPage />} />
           <Route
-            path="dashboard/submit-ticket"
-            element={<SubmitTicketPage />}
-          />
-          <Route path="dashboard/my-tickets" element={<MyTicketsPage />} />
-          <Route
-            path="dashboard/assigned-tickets"
-            element={<AssignedTicketsPage />}
-          />
-          <Route
-            path="dashboard/my-assigned-tickets"
+            path="my-assigned-tickets"
             element={<FixerAssignedTicketsPage />}
           />
-          <Route path="dashboard/main" element={<AdminDashboardPage />} />
-          <Route path="dashboard/tickets" element={<AllTicketsPage />} />
-          <Route path="dashboard/tickets/:id" element={<TicketDetailPage />} />
-          <Route
-            path="dashboard/tickets/:id/edit"
-            element={<EditTicketPage />}
-          />
-          <Route path="dashboard/users" element={<UsersPage />} />
-          <Route path="dashboard/users/:id" element={<UserDetailPage />} />
-          <Route path="dashboard/roles" element={<RolesManagementPage />} />
-          <Route path="dashboard/audit-logs" element={<AuditLogsPage />} />
-          <Route path="dashboard/settings" element={<SystemSettingsPage />} />
-          <Route path="dashboard/reports" element={<ReportsPage />} />
-          <Route
-            path="dashboard/notifications"
-            element={<NotificationsPage />}
-          />
-
-          {/* ✅ Invite management routes */}
-          <Route path="dashboard/invite" element={<InviteUserPage />} />
-          <Route path="dashboard/invites" element={<InvitesListPage />} />
+          <Route path="tickets" element={<AllTicketsPage />} />
+          <Route path="tickets/:id" element={<TicketDetailPage />} />
+          <Route path="tickets/:id/edit" element={<EditTicketPage />} />
+          <Route path="users" element={<UsersPage />} />
+          <Route path="users/:id" element={<UserDetailPage />} />
+          <Route path="roles" element={<RolesManagementPage />} />
+          <Route path="audit-logs" element={<AuditLogsPage />} />
+          <Route path="settings" element={<SystemSettingsPage />} />
+          <Route path="reports" element={<ReportsPage />} />
+          <Route path="notifications" element={<NotificationsPage />} />
+          <Route path="invite" element={<InviteUserPage />} />
+          <Route path="invites" element={<InvitesListPage />} />
         </Route>
+
+        {/* Catch-all for unknown routes */}
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
   );
