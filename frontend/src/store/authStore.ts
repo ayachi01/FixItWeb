@@ -1,3 +1,4 @@
+// 📂 src/store/authStore.ts
 import { create } from "zustand";
 import {
   login as loginApi,
@@ -5,14 +6,14 @@ import {
   getProfile,
 } from "../api/auth";
 
-// Role type
+// ✅ Role type
 export interface Role {
   id: number | null;
   name: string | null;
   description: string | null;
 }
 
-// Permissions type
+// ✅ Permissions type
 export interface Permissions {
   can_report: boolean;
   can_fix: boolean;
@@ -22,7 +23,7 @@ export interface Permissions {
   allowed_categories: string[];
 }
 
-// Full user type
+// ✅ Full user type
 export interface User {
   id: number;
   email: string;
@@ -37,8 +38,10 @@ export interface User {
     student_id: string;
   } | null;
   roleName?: string;
+  isSuperuser?: boolean; // ✅ Added for superuser accounts
 }
 
+// ✅ Auth store interface
 interface AuthState {
   user: User | null;
   access: string | null;
@@ -51,20 +54,24 @@ interface AuthState {
   restoreSession: () => void;
 }
 
-export const useAuthStore = create<AuthState>((set) => ({
+export const useAuthStore = create<AuthState>((set, get) => ({
   user: JSON.parse(localStorage.getItem("user") || "null"),
   access: localStorage.getItem("access_token"),
   loading: false,
   error: null,
 
+  // 🔑 Login action
   login: async (email, password) => {
     set({ loading: true, error: null });
     try {
       const data = await loginApi(email, password);
       localStorage.setItem("access_token", data.access);
       set({ access: data.access });
-      await useAuthStore.getState().fetchProfile();
-      const currentUser = useAuthStore.getState().user;
+
+      // Fetch user profile after login
+      await get().fetchProfile();
+
+      const currentUser = get().user;
       if (currentUser && !currentUser.is_email_verified) {
         throw new Error("Please verify your email before logging in.");
       }
@@ -75,9 +82,11 @@ export const useAuthStore = create<AuthState>((set) => ({
     }
   },
 
+  // 🔹 Fetch user profile
   fetchProfile: async () => {
     try {
       const profile = await getProfile();
+
       const normalizedRole: Role =
         typeof profile.role === "string"
           ? { id: null, name: profile.role, description: null }
@@ -97,17 +106,20 @@ export const useAuthStore = create<AuthState>((set) => ({
         role: normalizedRole,
         roleName: normalizedRole?.name?.toLowerCase() || "",
         permissions: normalizedPermissions,
+        isSuperuser: profile.is_superuser ?? false, // ✅ Normalize superuser
       };
 
       set({ user: normalizedProfile });
       localStorage.setItem("user", JSON.stringify(normalizedProfile));
     } catch {
+      // ❌ Clear session on failure
       localStorage.removeItem("access_token");
       localStorage.removeItem("user");
       set({ user: null, access: null });
     }
   },
 
+  // 🔓 Logout
   logout: async () => {
     try {
       await logoutApi();
@@ -118,11 +130,14 @@ export const useAuthStore = create<AuthState>((set) => ({
     }
   },
 
+  // 🔄 Restore session from localStorage
   restoreSession: () => {
     const token = localStorage.getItem("access_token");
     const storedUser = localStorage.getItem("user");
+
     if (token && storedUser) {
       const parsedUser = JSON.parse(storedUser);
+
       const normalizedPermissions: Permissions = {
         can_report: parsedUser.permissions?.can_report ?? false,
         can_fix: parsedUser.permissions?.can_fix ?? false,
@@ -131,9 +146,14 @@ export const useAuthStore = create<AuthState>((set) => ({
         is_admin_level: parsedUser.permissions?.is_admin_level ?? false,
         allowed_categories: parsedUser.permissions?.allowed_categories || [],
       };
+
       set({
         access: token,
-        user: { ...parsedUser, permissions: normalizedPermissions },
+        user: {
+          ...parsedUser,
+          permissions: normalizedPermissions,
+          isSuperuser: parsedUser.isSuperuser ?? false, // ✅ Ensure superuser flag is restored
+        },
       });
     }
   },
