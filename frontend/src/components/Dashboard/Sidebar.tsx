@@ -1,4 +1,5 @@
 // 📂 src/components/Sidebar.tsx
+import React from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuthStore } from "../../store/authStore";
 import {
@@ -20,8 +21,10 @@ interface MenuItem {
   label: string;
   path: string;
   icon: React.ReactNode;
+  roles?: string[]; // Roles allowed to see this menu (optional)
 }
 
+// Menu items with role restrictions
 const menuItems: MenuItem[] = [
   {
     label: "Submit Ticket",
@@ -37,11 +40,13 @@ const menuItems: MenuItem[] = [
     label: "My Unassigned Tickets",
     path: "/dashboard/assigned-tickets",
     icon: <ClipboardCheck size={18} />,
+    roles: ["University Admin", "Maintenance Officer"],
   },
   {
     label: "My Assigned Tickets",
     path: "/dashboard/my-assigned-tickets",
     icon: <ClipboardCheck size={18} />,
+    roles: ["Support", "Janitorial Staff", "Utility Worker", "Security Guard"],
   },
   {
     label: "Dashboard",
@@ -52,38 +57,55 @@ const menuItems: MenuItem[] = [
     label: "All Tickets",
     path: "/dashboard/tickets",
     icon: <Ticket size={18} />,
+    roles: ["University Admin", "Maintenance Officer"],
   },
-  { label: "Reports", path: "/dashboard/reports", icon: <File size={18} /> },
+  {
+    label: "Reports",
+    path: "/dashboard/reports",
+    icon: <File size={18} />,
+    roles: ["University Admin"],
+  },
   {
     label: "Notifications",
     path: "/dashboard/notifications",
     icon: <Bell size={18} />,
   },
+  // 🔒 Sensitive links
   {
     label: "Manage Users",
     path: "/dashboard/users",
     icon: <Users size={18} />,
+    roles: ["HR", "Registrar", "University Admin"],
   },
   {
     label: "Roles Management",
     path: "/dashboard/roles",
     icon: <Key size={18} />,
+    roles: ["University Admin"],
   },
-  { label: "Invite User", path: "/dashboard/invite", icon: <Key size={18} /> },
+  {
+    label: "Invite User",
+    path: "/dashboard/invite",
+    icon: <Key size={18} />,
+    roles: ["HR", "Registrar", "University Admin"],
+  },
   {
     label: "All Invites",
     path: "/dashboard/invites",
     icon: <FileText size={18} />,
+    roles: ["HR", "Registrar", "University Admin"],
   },
   {
     label: "Audit Logs",
     path: "/dashboard/audit-logs",
     icon: <ShieldCheck size={18} />,
+    roles: ["University Admin"],
   },
   {
     label: "System Settings",
     path: "/dashboard/settings",
     icon: <Settings size={18} />,
+    roles: ["University Admin"],
   },
 ];
 
@@ -95,21 +117,29 @@ export default function Sidebar() {
   if (!user) return null;
 
   const renderMenu = () =>
-    menuItems.map((item) => {
-      const isActive = location.pathname.startsWith(item.path);
-      return (
-        <button
-          key={item.path}
-          onClick={() => navigate(item.path)}
-          className={`flex items-center w-full px-4 py-2 rounded hover:bg-gray-700 text-left transition-colors duration-150 ${
-            isActive ? "bg-gray-700 font-semibold" : ""
-          }`}
-        >
-          {item.icon}
-          <span className="ml-2">{item.label}</span>
-        </button>
-      );
-    });
+    menuItems
+      .filter((item) => {
+        // ✅ Superuser sees everything
+        if (user.isSuperuser) return true;
+
+        // Otherwise, filter by roles (match role.name)
+        return !item.roles || item.roles.includes(user.role?.name || "");
+      })
+      .map((item) => {
+        const isActive = location.pathname.startsWith(item.path);
+        return (
+          <button
+            key={item.path}
+            onClick={() => navigate(item.path)}
+            className={`flex items-center w-full px-4 py-2 rounded hover:bg-gray-700 text-left transition-colors duration-150 ${
+              isActive ? "bg-gray-700 font-semibold" : ""
+            }`}
+          >
+            {item.icon}
+            <span className="ml-2">{item.label}</span>
+          </button>
+        );
+      });
 
   const handleLogout = async () => {
     await logout();
