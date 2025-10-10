@@ -17,24 +17,25 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import Layout from "./components/Dashboard/DashboardLayout";
 
 // 📊 Dashboard Pages (all accessible once logged in)
-import SubmitTicketPage from "./pages/Dashboard/SubmitTicketPage";
-import AssignedTicketsPage from "./pages/Dashboard/MyUnassignTicketsPage";
-import MyTicketsPage from "./pages/Dashboard/MyTicketsPage";
-import FixerAssignedTicketsPage from "./pages/Dashboard/MyAssignedTicketsPage";
+import SubmitTicketPage from "./pages/Dashboard/SubmitTicketPage"; // Submit new ticket
+import AssignedTicketsPage from "./pages/Dashboard/MyUnassignTicketsPage"; // View tickets assigned to user used by university administrators and maintenance supervisors offer
+import MyTicketsPage from "./pages/Dashboard/MyTicketsPage"; // View tickets submitted by user
+import FixerAssignedTicketsPage from "./pages/Dashboard/MyAssignedTicketsPage"; // View tickets assigned to fixer this is used by fixers to view tickets assigned to them
 import AdminDashboardPage from "./pages/Dashboard/DashboardPage";
-import AllTicketsPage from "./pages/Dashboard/AllTicketsPage";
-import TicketDetailPage from "./pages/Dashboard/TicketDetailPage";
-import EditTicketPage from "./pages/Dashboard/EditTicketPage";
-import UsersPage from "./pages/Dashboard/UsersPage";
-import UserDetailPage from "./pages/Dashboard/UserDetailPage";
-import RolesManagementPage from "./pages/Dashboard/RolesManagementPage";
-import AuditLogsPage from "./pages/Dashboard/AuditLogsPage";
-import SystemSettingsPage from "./pages/Dashboard/SystemSettingsPage";
-import ReportsPage from "./pages/Dashboard/ReportsPage";
-import NotificationsPage from "./pages/Dashboard/NotificationsPage";
+import AllTicketsPage from "./pages/Dashboard/AllTicketsPage"; // View all tickets university administrators and maintenance officer
+import TicketDetailPage from "./pages/Dashboard/TicketDetailPage"; // View ticket details
+
+import EditTicketPage from "./pages/Dashboard/EditTicketPage"; // Edit ticket details
+import UsersPage from "./pages/Dashboard/UsersPage"; // Manage users used by HR and Registrar
+import UserDetailPage from "./pages/Dashboard/UserDetailPage"; // View user details
+import RolesManagementPage from "./pages/Dashboard/RolesManagementPage"; // Manage roles and permissions
+import AuditLogsPage from "./pages/Dashboard/AuditLogsPage"; // View audit logs
+import SystemSettingsPage from "./pages/Dashboard/SystemSettingsPage"; // System configuration
+import ReportsPage from "./pages/Dashboard/ReportsPage"; // Analytics and reports
+import NotificationsPage from "./pages/Dashboard/NotificationsPage"; // User notifications
 
 // ✅ Invite management pages
-import InviteUserPage from "./pages/Dashboard/InviteUserPage";
+import InviteUserPage from "./pages/Dashboard/InviteUserPage"; // Invite new staff members to the system
 import InvitesListPage from "./pages/Dashboard/InvitesListPage"; // Optional page to list all invites
 
 export default function App() {
