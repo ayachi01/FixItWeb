@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '/core/services/image_picker_service.dart';
@@ -10,9 +11,14 @@ class ReportViewModel extends ChangeNotifier {
   // Controllers
   final TextEditingController dateCtrl = TextEditingController();
   final TextEditingController timeCtrl = TextEditingController();
+  CameraController? _controller;
+  List<CameraDescription> _cameras = [];
+  Future<void>? _initializeControllerFuture;
 
   // Constructor
   ReportViewModel(this._imagePicker);
+
+  Future<void>? get initializeControllerFuture => _initializeControllerFuture;
 
   // State variables
   DateTime? selectedDate;
@@ -20,12 +26,14 @@ class ReportViewModel extends ChangeNotifier {
   File? selectedImage;
   bool _isTorchOn = false;
   bool get isTorchOn => _isTorchOn;
+  CameraController? get controller => _controller;
 
   // Dispose controllers
   @override
   void dispose() {
     dateCtrl.dispose();
     timeCtrl.dispose();
+    _controller?.dispose();
     super.dispose();
   }
 
@@ -89,4 +97,51 @@ class ReportViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  // Setup Camera
+  Future<void> setupCamera() async {
+    if (_controller != null) return;
+    _cameras = await availableCameras();
+
+    if (_cameras.isNotEmpty) {
+      _controller = CameraController(
+        _cameras.first,
+        ResolutionPreset.low,
+        enableAudio: false,
+      );
+
+      _initializeControllerFuture = _controller!.initialize();
+      await _initializeControllerFuture;
+      notifyListeners();
+    }
+  }
+
+  // Dispose Camera
+  Future<void> disposeCamera() async {
+    try {
+      if (_controller != null && _controller!.value.isStreamingImages) {
+        await _controller!.stopImageStream();
+      }
+      await _controller?.dispose();
+    } catch (e) {
+      print("Error disposing camera: $e");
+    }
+    _controller = null;
+    _initializeControllerFuture = null;
+    notifyListeners();
+  }
+
+  Future<void> pauseCamera() async {
+    if(_controller != null && _controller!.value.isStreamingImages) {
+      await _controller?.stopImageStream();
+      notifyListeners();
+    }
+  }
+
+  Future<void> resumeCamera() async {
+    if (_controller != null && !_controller!.value.isStreamingImages) {
+      await _controller!.startImageStream((CameraImage image) {
+      });
+      notifyListeners();
+    }
+  }
 }

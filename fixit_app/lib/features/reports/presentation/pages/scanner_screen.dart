@@ -1,13 +1,35 @@
 import 'package:flutter/material.dart';
-import 'scanning_screen.dart';
+import 'package:camera/camera.dart';
 import '/features/reports/presentation/viewmodels/report_viewmodel.dart';
 import 'package:provider/provider.dart';
 
-class ScannerScreen extends StatelessWidget {
+class ScannerScreen extends StatefulWidget {
   const ScannerScreen({super.key});
 
   @override
+  State<ScannerScreen> createState() => _ScannerScreenState();
+}
+
+class _ScannerScreenState extends State<ScannerScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // initialize camera
+    Future.microtask(() => context.read<ReportViewModel>().setupCamera());
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    // release camera
+    context.read<ReportViewModel>().disposeCamera();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final reportVM = context.watch<ReportViewModel>();
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Scan Issue'),
@@ -31,24 +53,25 @@ class ScannerScreen extends StatelessWidget {
                   border: Border.all(color: Colors.grey.shade400, width: 2),
                   borderRadius: BorderRadius.circular(16),
                 ),
-                child: const Center(
-                  child: Icon(Icons.camera_alt, size: 60, color: Colors.grey),
+                child: FutureBuilder<void>(
+                  future: reportVM.initializeControllerFuture,
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.done &&
+                        reportVM.controller != null) {
+                      return ClipRRect(
+                        borderRadius: BorderRadius.circular(14),
+                        child: CameraPreview(reportVM.controller!),
+                      );
+                    } else if (snapshot.hasError) {
+                      return Center(child: Text("Camera Error: ${snapshot.error}"));
+                    } else {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                  },
                 ),
               ),
             ),
           ),
-          const SizedBox(height: 24),
-          IconButton(
-            icon: const Icon(Icons.qr_code_scanner, size: 48),
-            iconSize: 48,
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const ScanningScreen()),
-              );
-            },
-          ),
-          const SizedBox(height: 24),
         ],
       ),
     );
