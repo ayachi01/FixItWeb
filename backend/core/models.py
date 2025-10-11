@@ -852,6 +852,7 @@ class AuditLog(models.Model):
         TICKET_RESOLVED = "Ticket Resolved", "Ticket Resolved"
         TICKET_CLOSED = "Ticket Closed", "Ticket Closed"
         TICKET_REOPENED = "Ticket Reopened", "Ticket Reopened"
+        TICKET_CANCELLED = "Ticket Cancelled", "Ticket Cancelled"
         TICKET_ESCALATED = "Ticket Escalated", "Ticket Escalated"
 
     action = models.CharField(max_length=50, choices=Action.choices, db_index=True)
