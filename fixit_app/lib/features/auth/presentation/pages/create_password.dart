@@ -50,7 +50,7 @@ class _CreatePasswordState extends State<CreatePassword> {
         // ✅ Redirect to login after success
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => LoginForm()), // ✅ FIXED (no const)
+          MaterialPageRoute(builder: (_) => LoginForm()),
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -212,7 +212,9 @@ class _CreatePasswordState extends State<CreatePassword> {
                 child: WelcomeButton(
                   text: _isLoading ? "Saving..." : "Change Password",
                   isPrimary: true,
-                  onPressed: _isLoading ? null : _handleChangePassword, // ✅ cleaner
+                  onPressed: () {
+                    if (!_isLoading) _handleChangePassword();
+                  },
                 ),
               ),
             ],

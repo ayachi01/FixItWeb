@@ -60,7 +60,6 @@ class _VerifyEmailState extends State<VerifyEmail> {
       try {
         final response = await _apiService.verifyOtp(widget.email, otpCode);
 
-        // ✅ Match backend’s expected key/response
         final message = response['message']?.toString().toLowerCase() ?? '';
         final error = response['error']?.toString() ?? '';
 
@@ -72,7 +71,6 @@ class _VerifyEmailState extends State<VerifyEmail> {
             ),
           );
 
-          // ✅ Go to CreatePassword using the same OTP code
           Navigator.push(
             context,
             MaterialPageRoute(
@@ -85,7 +83,9 @@ class _VerifyEmailState extends State<VerifyEmail> {
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(error.isNotEmpty ? error : (response['message'] ?? "Verification failed.")),
+              content: Text(error.isNotEmpty
+                  ? error
+                  : (response['message'] ?? "Verification failed.")),
               backgroundColor: Colors.red,
             ),
           );
@@ -111,7 +111,8 @@ class _VerifyEmailState extends State<VerifyEmail> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(response['message'] ?? "Code resent to your email."),
+          content:
+              Text(response['message'] ?? "Code resent to your email."),
           backgroundColor: Colors.green,
         ),
       );
@@ -214,7 +215,7 @@ class _VerifyEmailState extends State<VerifyEmail> {
                 const SizedBox(height: 15),
 
                 GestureDetector(
-                  onTap: _isResending ? null : _handleResendCode,
+                  onTap: _isResending ? null : () => _handleResendCode(),
                   child: Center(
                     child: Text(
                       _isResending ? "Resending..." : "Resend code",
@@ -236,7 +237,8 @@ class _VerifyEmailState extends State<VerifyEmail> {
                   child: WelcomeButton(
                     text: _isVerifying ? "Verifying..." : "Confirm",
                     isPrimary: true,
-                    onPressed: _isVerifying ? () {} : _handleVerifyCode,
+                    onPressed:
+                        _isVerifying ? null : () => _handleVerifyCode(),
                   ),
                 ),
               ],
