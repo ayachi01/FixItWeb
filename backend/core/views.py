@@ -72,6 +72,8 @@ from core.utils.email_utils import deliver_code, send_verification_email
 from core.utils.security import generate_otp
 
 import json
+from django.http import HttpResponse, JsonResponse
+import requests
 
 # ==================================================
 #                  User Management (Core)
@@ -355,6 +357,7 @@ class UserViewSet(viewsets.ModelViewSet):
     def create_user(self, request):
         return self.register_self_service(request)
 
+     
     # -------------------- OTP Verification --------------------
     @action(detail=False, methods=['post'], permission_classes=[AllowAny], throttle_classes=[OTPThrottle])
     def verify_otp(self, request):
@@ -386,6 +389,7 @@ class UserViewSet(viewsets.ModelViewSet):
         profile.save()
         create_audit("OTP Verified", user, user, details=f"OTP verified, account activated for {email}")
         return Response({'message': 'Email verified, account activated. You can now log in.'}, status=status.HTTP_200_OK)
+
 
     @action(detail=False, methods=['post'], permission_classes=[AllowAny], throttle_classes=[OTPThrottle])
     def resend_otp(self, request):
@@ -448,13 +452,6 @@ class UserViewSet(viewsets.ModelViewSet):
         create_audit("Password Reset Confirmed", user, user, details=f"Password reset successful for {user.email}")
         return Response({"message": "Password has been reset successfully"}, status=status.HTTP_200_OK)
     
-
-
-
-
-
-
-
 
 
 
@@ -1646,3 +1643,27 @@ class AuditLogsAPIView(APIView):
         logs = AuditLog.objects.all().order_by("-timestamp")
         serializer = AuditLogSerializer(logs, many=True)
         return Response(serializer.data)
+    
+
+
+
+
+def proxy_avatar(request):
+    """
+    Proxy an external image to bypass CORS for web apps.
+    Usage: /api/proxy-avatar/?url=https://i.pravatar.cc/300
+    """
+    image_url = request.GET.get("url")
+    if not image_url:
+        return JsonResponse({"error": "Missing URL parameter"}, status=400)
+
+    try:
+        resp = requests.get(image_url, timeout=5)
+        if resp.status_code != 200:
+            return JsonResponse({"error": "Failed to fetch image"}, status=400)
+
+        content_type = resp.headers.get("Content-Type", "image/jpeg")
+        return HttpResponse(resp.content, content_type=content_type)
+
+    except requests.RequestException:
+        return JsonResponse({"error": "Could not fetch image"}, status=500)

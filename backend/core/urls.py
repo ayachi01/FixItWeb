@@ -20,6 +20,9 @@ from .views import (
     InviteViewSet,
 )
 
+from .views import proxy_avatar
+
+
 # -------------------- Router --------------------
 router = DefaultRouter()
 router.register(r'users', UserViewSet, basename='user')
@@ -82,4 +85,7 @@ urlpatterns = [
     path("tickets/<int:pk>/close/", close_ticket, name="close_ticket"),
     path("tickets/<int:pk>/reopen/", reopen_ticket, name="reopen_ticket"),
     path("tickets/analytics/", analytics_tickets, name="tickets_analytics"),  # ✅ Added line
+
+    path("proxy-avatar/", proxy_avatar, name="proxy-avatar"),
+
 ]
