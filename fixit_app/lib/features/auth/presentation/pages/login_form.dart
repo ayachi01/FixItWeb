@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '/features/auth/presentation/pages/forgot_password.dart';
+import '/features/auth/presentation/pages/forgot_password.dart'; // ✅ This contains VerifyEmail
 import '/features/dashboard/presentation/pages/homepage.dart';
 import '/features/auth/presentation/pages/signup_form.dart';
 import '/core/widgets/welcome_button.dart';
@@ -18,7 +18,7 @@ class _LoginFormState extends State<LoginForm> {
   // Controllers
   final emailController = TextEditingController();
   final passwordController = TextEditingController();
-  
+
   bool obscurePassword = true;
 
   @override
@@ -37,7 +37,6 @@ class _LoginFormState extends State<LoginForm> {
                 Center(
                   child: Column(
                     children: [
-
                       // Logo
                       Image.asset(
                         'assets/images/logo.png',
@@ -64,9 +63,9 @@ class _LoginFormState extends State<LoginForm> {
                 const SizedBox(height: 8),
 
                 // Subtitle
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4.5),
-                  child: const Text(
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 4.5),
+                  child: Text(
                     "Making campus maintenance simple and efficient.",
                     style: TextStyle(
                       fontFamily: 'Poppins-SemiBold',
@@ -81,19 +80,14 @@ class _LoginFormState extends State<LoginForm> {
                 const SizedBox(height: 50),
 
                 // Email Title
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      "Email",
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontFamily: 'Inter',
-                        color: Color(0XFF000000),
-                      ),
-                      textAlign: TextAlign.start,
-                    ),
-                  ],
+                const Text(
+                  "Email",
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontFamily: 'Inter',
+                    color: Color(0XFF000000),
+                  ),
+                  textAlign: TextAlign.start,
                 ),
                 const SizedBox(height: 8),
 
@@ -113,19 +107,14 @@ class _LoginFormState extends State<LoginForm> {
                 const SizedBox(height: 20),
 
                 // Password Title
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      "Password",
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontFamily: 'Inter',
-                        color: Color(0XFF000000),
-                      ),
-                      textAlign: TextAlign.start,
-                    ),
-                  ],
+                const Text(
+                  "Password",
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontFamily: 'Inter',
+                    color: Color(0XFF000000),
+                  ),
+                  textAlign: TextAlign.start,
                 ),
                 const SizedBox(height: 8),
 
@@ -165,10 +154,22 @@ class _LoginFormState extends State<LoginForm> {
                     padding: const EdgeInsets.symmetric(vertical: 15),
                     child: GestureDetector(
                       onTap: () {
+                        if (emailController.text.trim().isEmpty) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text("Please enter your email first."),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                          return;
+                        }
+
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (context) => ForgotPasswordScreen(),
+                            builder: (context) => VerifyEmail(
+                              email: emailController.text.trim(), // ✅ passes email correctly
+                            ),
                           ),
                         );
                       },
@@ -199,8 +200,7 @@ class _LoginFormState extends State<LoginForm> {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (context) => HomePage(
-                            ),
+                            builder: (context) => const HomePage(),
                           ),
                         );
                       }

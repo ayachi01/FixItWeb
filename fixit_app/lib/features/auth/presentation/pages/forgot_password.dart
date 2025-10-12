@@ -1,20 +1,131 @@
 import 'package:flutter/material.dart';
-import '/core/widgets/welcome_button.dart';
-import '/features/auth/presentation/pages/verify_email.dart';
+import '/core/api_service.dart';
 import '/core/theme/input_decoration.dart';
+import '/core/widgets/welcome_button.dart';
+import '/features/auth/presentation/pages/create_password.dart';
 
-class ForgotPasswordScreen extends StatefulWidget {
-  const ForgotPasswordScreen({super.key});
+class VerifyEmail extends StatefulWidget {
+  final String email;
+
+  const VerifyEmail({super.key, required this.email});
 
   @override
-  State<ForgotPasswordScreen> createState() => _ForgotPasswordScreenState();
+  State<VerifyEmail> createState() => _VerifyEmailState();
 }
 
-class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
-  // Form Key
-  final _forgotPasswordKey = GlobalKey<FormState>();
-  // Controller
-  final emailController = TextEditingController();
+class _VerifyEmailState extends State<VerifyEmail> {
+  final _verifyEmailKey = GlobalKey<FormState>();
+  final _otpControllers = List.generate(6, (_) => TextEditingController());
+  final _focusNodes = List.generate(6, (_) => FocusNode());
+  final ApiService _apiService = ApiService();
+
+  bool _isVerifying = false;
+  bool _isResending = false;
+
+  @override
+  void dispose() {
+    for (var c in _otpControllers) {
+      c.dispose();
+    }
+    for (var f in _focusNodes) {
+      f.dispose();
+    }
+    super.dispose();
+  }
+
+  void _onOtpChanged(String value, int index) {
+    if (value.length == 1 && index < 5) {
+      FocusScope.of(context).requestFocus(_focusNodes[index + 1]);
+    } else if (value.isEmpty && index > 0) {
+      FocusScope.of(context).requestFocus(_focusNodes[index - 1]);
+    }
+  }
+
+  Future<void> _handleVerifyCode() async {
+    if (_verifyEmailKey.currentState!.validate()) {
+      final otpCode = _otpControllers.map((c) => c.text).join();
+
+      if (otpCode.length < 6) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Please enter all 6 digits."),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
+      setState(() => _isVerifying = true);
+
+      try {
+        final response = await _apiService.verifyOtp(widget.email, otpCode);
+
+        // ✅ Match backend’s expected key/response
+        final message = response['message']?.toString().toLowerCase() ?? '';
+        final error = response['error']?.toString() ?? '';
+
+        if (message.contains('verified') || message.contains('success')) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("Verification successful!"),
+              backgroundColor: Colors.green,
+            ),
+          );
+
+          // ✅ Go to CreatePassword using the same OTP code
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => CreatePassword(
+                email: widget.email,
+                code: otpCode,
+              ),
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(error.isNotEmpty ? error : (response['message'] ?? "Verification failed.")),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Verification failed: $e"),
+            backgroundColor: Colors.red,
+          ),
+        );
+      } finally {
+        setState(() => _isVerifying = false);
+      }
+    }
+  }
+
+  Future<void> _handleResendCode() async {
+    setState(() => _isResending = true);
+
+    try {
+      final response = await _apiService.resendOtp(widget.email);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(response['message'] ?? "Code resent to your email."),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Failed to resend code: $e"),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      setState(() => _isResending = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -23,28 +134,27 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       body: SafeArea(
         top: false,
         child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 90),
           child: Form(
-            key: _forgotPasswordKey,
+            key: _verifyEmailKey,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-
-                // Image
+                // 📧 Mail Image
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 70),
+                  padding: const EdgeInsets.symmetric(horizontal: 75),
                   child: Image.asset(
-                    'assets/images/mailbox.png',
-                    height: 300,
+                    'assets/images/mail.png',
                     fit: BoxFit.contain,
                     alignment: Alignment.topCenter,
                   ),
                 ),
 
-                // Title
-                Center(
-                  child: const Text(
-                    "Forgot Password",
+                const SizedBox(height: 100),
+
+                const Center(
+                  child: Text(
+                    "Verify Your Email",
                     style: TextStyle(
                       fontSize: 35,
                       fontFamily: 'KantumruyPro',
@@ -56,76 +166,84 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
                 const SizedBox(height: 15),
 
-                // Description
-                const Text(
-                  "Please enter the email address associated with your account.",
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontFamily: 'Poppins-SemiBold',
-                    fontWeight: FontWeight.w600,
-                    color: Color(0XFF4D4D4D),
+                const Center(
+                  child: Text(
+                    "Please enter the 6-digit code sent to your email.",
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontFamily: 'Poppins-SemiBold',
+                      fontWeight: FontWeight.w600,
+                      color: Color(0XFF4D4D4D),
+                    ),
+                    textAlign: TextAlign.center,
                   ),
-                  textAlign: TextAlign.center,
                 ),
 
-                const SizedBox(height: 20),
+                const SizedBox(height: 30),
 
-                // Email Title
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      "Email",
-                      style: TextStyle(
+                // 🔢 OTP Fields
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 20),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: List.generate(6, (index) {
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 5),
+                        child: SizedBox(
+                          width: 50,
+                          height: 60,
+                          child: TextFormField(
+                            controller: _otpControllers[index],
+                            focusNode: _focusNodes[index],
+                            textAlign: TextAlign.center,
+                            keyboardType: TextInputType.number,
+                            maxLength: 1,
+                            decoration: inputDecoration("").copyWith(
+                              counterText: "",
+                            ),
+                            onChanged: (value) => _onOtpChanged(value, index),
+                            validator: (value) =>
+                                value == null || value.isEmpty ? '' : null,
+                          ),
+                        ),
+                      );
+                    }),
+                  ),
+                ),
+
+                const SizedBox(height: 15),
+
+                GestureDetector(
+                  onTap: _isResending ? null : _handleResendCode,
+                  child: Center(
+                    child: Text(
+                      _isResending ? "Resending..." : "Resend code",
+                      style: const TextStyle(
                         fontSize: 16,
                         fontFamily: 'Inter',
-                        color: Color(0XFF000000),
+                        fontWeight: FontWeight.w700,
+                        color: Color(0XFF4F774A),
                       ),
-                      textAlign: TextAlign.start,
                     ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-
-                // Email Field
-                TextFormField(
-                  controller: emailController,
-                  keyboardType: TextInputType.emailAddress,
-                  decoration: inputDecoration("name@example.com"),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return "Please enter your email!";
-                    }
-                    return null;
-                  },
+                  ),
                 ),
 
-                const SizedBox(height: 190),
+                const SizedBox(height: 150),
 
-               // Confirm Button
                 SizedBox(
                   width: double.infinity,
                   height: 56,
                   child: WelcomeButton(
-                    text: "Confirm",
+                    text: _isVerifying ? "Verifying..." : "Confirm",
                     isPrimary: true,
-                    onPressed: () {
-                      if (_forgotPasswordKey.currentState!.validate()) {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const VerifyEmail(),
-                          ),
-                        );
-                      }
-                    },
+                    onPressed: _isVerifying ? () {} : _handleVerifyCode,
                   ),
                 ),
               ],
             ),
-            ),
           ),
+        ),
       ),
-     );
+    );
   }
 }

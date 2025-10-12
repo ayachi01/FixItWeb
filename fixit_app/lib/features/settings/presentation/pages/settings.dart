@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
-import '/core/widgets/profile_avatar.dart';
 import 'package:provider/provider.dart';
-import 'package:fixit/core/services/image_picker_service.dart';
+
+import '/core/widgets/profile_avatar.dart';
+import '/core/services/image_picker_service.dart';
 import '/features/settings/presentation/pages/user_profile.dart';
 import '/features/auth/presentation/pages/login_form.dart';
 import '/features/auth/presentation/pages/create_password.dart';
@@ -20,7 +21,7 @@ class Settings extends StatefulWidget {
   final TextEditingController? lastNameController;
   final TextEditingController? emailController;
 
-  Settings({
+  const Settings({
     super.key,
     this.firstNameController,
     this.lastNameController,
@@ -37,7 +38,10 @@ class _SettingsState extends State<Settings> {
 
   @override
   Widget build(BuildContext context) {
-    final firstName = widget.firstNameController?.text ?? "User";
+    final firstName = widget.firstNameController?.text.isNotEmpty == true
+        ? widget.firstNameController!.text
+        : "User";
+    final email = widget.emailController?.text ?? '';
 
     return Scaffold(
       backgroundColor: const Color(0XFFF8F8F8),
@@ -45,7 +49,7 @@ class _SettingsState extends State<Settings> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        automaticallyImplyLeading: false, // No back button
+        automaticallyImplyLeading: false,
         toolbarHeight: 70,
         title: const Text(
           'Settings',
@@ -64,62 +68,55 @@ class _SettingsState extends State<Settings> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Header row
               Row(
                 children: [
-                  ProfileAvatar(
-                    imageURL: "https://i.pravatar.cc/300", // Temporary
+                  const ProfileAvatar(
+                    imageURL: "https://i.pravatar.cc/300",
                     radius: 30,
                   ),
                   const SizedBox(width: 10),
-
-                  RichText(
-                    text: TextSpan(
-                      text: "Welcome, \n",
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontFamily: 'KantumruyPro-Regular',
-                        color: Color(0XFFB0B0B0),
-                      ),
-                      children: [
-                        TextSpan(
-                          text: firstName,
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontFamily: 'KantumruyPro-Regular',
-                            color: Colors.black,
+                  Expanded(
+                    child: RichText(
+                      text: TextSpan(
+                        text: "Welcome, \n",
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontFamily: 'KantumruyPro-Regular',
+                          color: Color(0XFFB0B0B0),
+                        ),
+                        children: [
+                          TextSpan(
+                            text: firstName,
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontFamily: 'KantumruyPro-Regular',
+                              color: Colors.black,
+                            ),
                           ),
-                        ),
-                        const TextSpan(
-                          text: "!",
-                          style: TextStyle(color: Colors.black),
-                        ),
-                      ],
+                          const TextSpan(
+                            text: "!",
+                            style: TextStyle(color: Colors.black),
+                          ),
+                        ],
+                      ),
                     ),
-                    // Logout
                   ),
-                  Padding(
-                    padding: const EdgeInsets.only(left: 150),
-                    child: GestureDetector(
-                      onTap: () {
-                        Navigator.canPop(context)
-                            ? Navigator.pop(context)
-                            : null;
-                        // ? Error pa: Navigator.pushReplacementNamed(context, MaterialPageRoute(builder: (_) => LoginForm()));
-                      },
-                      child: Icon(Icons.logout, color: Colors.black),
-                    ),
+                  IconButton(
+                    icon: const Icon(Icons.logout, color: Colors.black),
+                    onPressed: () {
+                      Navigator.pushAndRemoveUntil(
+                        context,
+                        MaterialPageRoute(builder: (_) => const LoginForm()),
+                        (route) => false,
+                      );
+                    },
                   ),
                 ],
               ),
               const SizedBox(height: 20),
 
-              // Divider
-              const Divider(
-                color: Color(0XFFBEBEBE),
-                thickness: 0.5,
-                indent: 10,
-                endIndent: 10,
-              ),
+              const Divider(color: Color(0XFFBEBEBE), thickness: 0.5),
               const SizedBox(height: 20),
 
               Padding(
@@ -128,181 +125,77 @@ class _SettingsState extends State<Settings> {
                   mainAxisAlignment: MainAxisAlignment.start,
                   children: [
                     // User Profile
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.account_circle,
-                          color: Colors.black,
-                          size: 24,
-                        ),
-                        const SizedBox(width: 15),
-                        GestureDetector(
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => UserProfile(
-                                  firstNameController:
-                                      widget.firstNameController,
-                                  lastNameController: widget.lastNameController,
-                                  emailController: widget.emailController,
-                                ),
-                              ),
-                            );
-                          },
-                          child: Text(
-                            'User Profile',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontFamily: 'KantumruyPro-Regular',
+                    _settingsItem(
+                      icon: Icons.account_circle,
+                      label: 'User Profile',
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => UserProfile(
+                              firstNameController: widget.firstNameController,
+                              lastNameController: widget.lastNameController,
+                              emailController: widget.emailController,
                             ),
                           ),
-                        ),
-                      ],
+                        );
+                      },
                     ),
-                    const SizedBox(height: 20),
-                    // Divider
-                    const Divider(
-                      color: Color(0XFFBEBEBE),
-                      thickness: 0.5,
-                      indent: 10,
-                      endIndent: 10,
-                    ),
-                    const SizedBox(height: 20),
+                    _divider(),
 
                     // Change Password
-                    Row(
-                      children: [
-                        Icon(Icons.lock, color: Colors.black, size: 24),
-                        const SizedBox(width: 15),
-                        GestureDetector(
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => CreatePassword(),
-                              ),
-                            );
-                          },
-                          child: Text(
-                            'Change Password',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontFamily: 'KantumruyPro-Regular',
-                            ),
+                    _settingsItem(
+                      icon: Icons.lock,
+                      label: 'Change Password',
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                CreatePassword(email: email, code: ''),
                           ),
-                        ),
-                      ],
+                        );
+                      },
                     ),
-                    const SizedBox(height: 20),
-                    // Divider
-                    const Divider(
-                      color: Color(0XFFBEBEBE),
-                      thickness: 0.5,
-                      indent: 10,
-                      endIndent: 10,
-                    ),
-                    const SizedBox(height: 20),
+                    _divider(),
 
                     // FAQs
-                    Row(
-                      children: [
-                        Icon(Icons.help, color: Colors.black, size: 24),
-                        const SizedBox(width: 15),
-                        GestureDetector(
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(builder: (context) => FAQs()),
-                            );
-                          },
-                          child: Text(
-                            'FAQs',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontFamily: 'KantumruyPro-Regular',
-                            ),
-                          ),
-                        ),
-                      ],
+                    _settingsItem(
+                      icon: Icons.help,
+                      label: 'FAQs',
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const FAQs()),
+                        );
+                      },
                     ),
-                    const SizedBox(height: 20),
-                    // Divider
-                    const Divider(
-                      color: Color(0XFFBEBEBE),
-                      thickness: 0.5,
-                      indent: 10,
-                      endIndent: 10,
-                    ),
-                    const SizedBox(height: 20),
+                    _divider(),
 
                     // About Us
-                    Row(
-                      children: [
-                        Icon(Icons.info, color: Colors.black, size: 24),
-                        const SizedBox(width: 15),
-                        GestureDetector(
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => AboutUs(),
-                              ),
-                            );
-                          },
-                          child: Text(
-                            'About Us',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontFamily: 'KantumruyPro-Regular',
-                            ),
-                          ),
-                        ),
-                      ],
+                    _settingsItem(
+                      icon: Icons.info,
+                      label: 'About Us',
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const AboutUs()),
+                        );
+                      },
                     ),
-                    const SizedBox(height: 20),
-                    // Divider
-                    const Divider(
-                      color: Color(0XFFBEBEBE),
-                      thickness: 0.5,
-                      indent: 10,
-                      endIndent: 10,
-                    ),
-                    const SizedBox(height: 20),
+                    _divider(),
 
                     // Privacy Policy
-                    Row(
-                      children: [
-                        Icon(Icons.privacy_tip, color: Colors.black, size: 24),
-                        const SizedBox(width: 15),
-                        GestureDetector(
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => PrivacyPolicy(),
-                              ),
-                            );
-                          },
-                          child: Text(
-                            'Privacy Policy',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontFamily: 'KantumruyPro-Regular',
-                            ),
-                          ),
-                        ),
-                      ],
+                    _settingsItem(
+                      icon: Icons.privacy_tip,
+                      label: 'Privacy Policy',
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const PrivacyPolicy()),
+                        );
+                      },
                     ),
-                    const SizedBox(height: 20),
-                    // Divider
-                    const Divider(
-                      color: Color(0XFFBEBEBE),
-                      thickness: 0.5,
-                      indent: 10,
-                      endIndent: 10,
-                    ),
-                    const SizedBox(height: 20),
                   ],
                 ),
               ),
@@ -311,61 +204,80 @@ class _SettingsState extends State<Settings> {
         ),
       ),
 
-      // Bottom Navigation Bar
       bottomNavigationBar: BottomNavBar(
         currentIndex: _selectedIndex,
         onTap: (index) async {
-          setState(() {
-            _selectedIndex = index;
-          });
+          if (index == _selectedIndex) return;
+          setState(() => _selectedIndex = index);
 
-          // Navigate to My Reports Page
-          if (index == 0) {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => HomePage()),
-            );
-          }
-
-          // Navigate to My Reports Page
-          if (index == 1) {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => MyReportsPage()),
-            );
-          }
-
-          // Navigate to CreateReport Page for temporary testing
-          if (index == 2) {
-            final newReport = await Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => ChangeNotifierProvider(
-                  create: (_) => ReportViewModel(ImagePickerService()),
-                  child: const CreateReport(),
+          switch (index) {
+            case 0:
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (_) => const HomePage()),
+              );
+              break;
+            case 1:
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (_) => const MyReportsPage()),
+              );
+              break;
+            case 2:
+              final newReport = await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => ChangeNotifierProvider(
+                    create: (_) => ReportViewModel(ImagePickerService()),
+                    child: const CreateReport(),
+                  ),
                 ),
-              ),
-            );
-
-            if (newReport != null) {
-              setState(() {
-                ticketCards.add(TicketCard(report: newReport));
-              });
-            }
-          }
-
-          // Navigate to Settings Page
-          if (index == 3) {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) =>
-                    Settings(firstNameController: widget.firstNameController),
-              ),
-            );
+              );
+              if (newReport != null) {
+                setState(() {
+                  ticketCards.add(TicketCard(report: newReport));
+                });
+              }
+              break;
+            case 3:
+              // Already on settings, do nothing
+              break;
           }
         },
       ),
     );
   }
+
+  Widget _settingsItem({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return Row(
+      children: [
+        Icon(icon, color: Colors.black, size: 24),
+        const SizedBox(width: 15),
+        GestureDetector(
+          onTap: onTap,
+          child: Text(
+            label,
+            style: const TextStyle(
+              fontSize: 18,
+              fontFamily: 'KantumruyPro-Regular',
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _divider() => const Padding(
+        padding: EdgeInsets.symmetric(vertical: 20),
+        child: Divider(
+          color: Color(0XFFBEBEBE),
+          thickness: 0.5,
+          indent: 10,
+          endIndent: 10,
+        ),
+      );
 }

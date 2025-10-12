@@ -38,16 +38,16 @@ class _HomePageState extends State<HomePage> {
     final firstName = widget.firstNameController?.text ?? "User";
 
     return Scaffold(
-      resizeToAvoidBottomInset:
-          false, // keep FAB in place when keyboard is shown
+      resizeToAvoidBottomInset: false,
       backgroundColor: const Color(0XFFF8F8F8),
 
       // AppBar
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        automaticallyImplyLeading: false, // No back button
+        automaticallyImplyLeading: false,
         toolbarHeight: 120,
+
         // Title
         title: RichText(
           text: TextSpan(
@@ -70,18 +70,19 @@ class _HomePageState extends State<HomePage> {
               ),
               const TextSpan(
                 text: "!",
-                style: const TextStyle(color: Color(0XFF386641)),
+                style: TextStyle(color: Color(0XFF386641)),
               ),
             ],
           ),
         ),
 
-        // Avatar
+        // Avatar (using backend proxy to fix CORS)
         actions: [
           Container(
             margin: const EdgeInsets.only(right: 16),
             child: ProfileAvatar(
-              imageURL: "https://i.pravatar.cc/300", // Temporary URL
+              imageURL:
+                  "http://192.168.5.137:8000/api/proxy-avatar/?url=https://i.pravatar.cc/300",
               radius: 27,
             ),
           ),
@@ -123,7 +124,6 @@ class _HomePageState extends State<HomePage> {
                   ),
                 ),
               ),
-
               const SizedBox(height: 30),
 
               // Empty State
@@ -153,7 +153,6 @@ class _HomePageState extends State<HomePage> {
                     ],
                   ),
                 )
-              // Ticket Cards
               else
                 Column(children: ticketCards),
             ],
@@ -179,7 +178,6 @@ class _HomePageState extends State<HomePage> {
             _selectedIndex = index;
           });
 
-          // Navigate to My Reports Page
           if (index == 1) {
             Navigator.push(
               context,
@@ -187,7 +185,6 @@ class _HomePageState extends State<HomePage> {
             );
           }
 
-          // Navigate to CreateReport Page for temporary testing
           if (index == 2) {
             final newReport = await Navigator.push(
               context,
@@ -206,7 +203,6 @@ class _HomePageState extends State<HomePage> {
             }
           }
 
-          // Navigate to Settings Page
           if (index == 3) {
             Navigator.push(
               context,

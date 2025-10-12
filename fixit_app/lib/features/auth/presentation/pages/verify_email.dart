@@ -1,20 +1,131 @@
 import 'package:flutter/material.dart';
+import '/core/api_service.dart';
 import '/core/theme/input_decoration.dart';
 import '/core/widgets/welcome_button.dart';
 import '/features/auth/presentation/pages/create_password.dart';
 
 class VerifyEmail extends StatefulWidget {
-  const VerifyEmail({super.key});
+  final String email;
+
+  const VerifyEmail({super.key, required this.email});
 
   @override
   State<VerifyEmail> createState() => _VerifyEmailState();
 }
 
 class _VerifyEmailState extends State<VerifyEmail> {
-  // Form Key
   final _verifyEmailKey = GlobalKey<FormState>();
-  // Controller
-  final emailController = TextEditingController();
+  final _otpControllers = List.generate(6, (_) => TextEditingController());
+  final _focusNodes = List.generate(6, (_) => FocusNode());
+  final ApiService _apiService = ApiService();
+
+  bool _isVerifying = false;
+  bool _isResending = false;
+
+  @override
+  void dispose() {
+    for (var c in _otpControllers) {
+      c.dispose();
+    }
+    for (var f in _focusNodes) {
+      f.dispose();
+    }
+    super.dispose();
+  }
+
+  void _onOtpChanged(String value, int index) {
+    if (value.length == 1 && index < 5) {
+      FocusScope.of(context).requestFocus(_focusNodes[index + 1]);
+    } else if (value.isEmpty && index > 0) {
+      FocusScope.of(context).requestFocus(_focusNodes[index - 1]);
+    }
+  }
+
+  Future<void> _handleVerifyCode() async {
+    if (_verifyEmailKey.currentState!.validate()) {
+      final otpCode = _otpControllers.map((c) => c.text).join();
+
+      if (otpCode.length < 6) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Please enter all 6 digits."),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
+      setState(() => _isVerifying = true);
+
+      try {
+        final response = await _apiService.verifyOtp(widget.email, otpCode);
+
+        // ✅ Match backend’s expected key/response
+        final message = response['message']?.toString().toLowerCase() ?? '';
+        final error = response['error']?.toString() ?? '';
+
+        if (message.contains('verified') || message.contains('success')) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("Verification successful!"),
+              backgroundColor: Colors.green,
+            ),
+          );
+
+          // ✅ Go to CreatePassword using the same OTP code
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => CreatePassword(
+                email: widget.email,
+                code: otpCode,
+              ),
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(error.isNotEmpty ? error : (response['message'] ?? "Verification failed.")),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Verification failed: $e"),
+            backgroundColor: Colors.red,
+          ),
+        );
+      } finally {
+        setState(() => _isVerifying = false);
+      }
+    }
+  }
+
+  Future<void> _handleResendCode() async {
+    setState(() => _isResending = true);
+
+    try {
+      final response = await _apiService.resendOtp(widget.email);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(response['message'] ?? "Code resent to your email."),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Failed to resend code: $e"),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      setState(() => _isResending = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -29,8 +140,7 @@ class _VerifyEmailState extends State<VerifyEmail> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-
-                // Mail Image
+                // 📧 Mail Image
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 75),
                   child: Image.asset(
@@ -40,10 +150,10 @@ class _VerifyEmailState extends State<VerifyEmail> {
                   ),
                 ),
 
-                const SizedBox(height: 120),
-                // Title
-                Center(
-                  child: const Text(
+                const SizedBox(height: 100),
+
+                const Center(
+                  child: Text(
                     "Verify Your Email",
                     style: TextStyle(
                       fontSize: 35,
@@ -56,10 +166,9 @@ class _VerifyEmailState extends State<VerifyEmail> {
 
                 const SizedBox(height: 15),
 
-                // Description
-                Center(
-                  child: const Text(
-                    "Please enter the 4 digit code sent to your email.",
+                const Center(
+                  child: Text(
+                    "Please enter the 6-digit code sent to your email.",
                     style: TextStyle(
                       fontSize: 14,
                       fontFamily: 'Poppins-SemiBold',
@@ -70,102 +179,64 @@ class _VerifyEmailState extends State<VerifyEmail> {
                   ),
                 ),
 
-                const SizedBox(height: 20),
+                const SizedBox(height: 30),
 
-                // Text Fields
+                // 🔢 OTP Fields
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 20),
                   child: Row(
-                    children: [
-
-                      // Text Field 1
-                      SizedBox(
-                        width: 70,
-                        height: 60,
-                        child: TextFormField(
-                          keyboardType: TextInputType.number,
-                          decoration: inputDecoration(""),
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: List.generate(6, (index) {
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 5),
+                        child: SizedBox(
+                          width: 50,
+                          height: 60,
+                          child: TextFormField(
+                            controller: _otpControllers[index],
+                            focusNode: _focusNodes[index],
+                            textAlign: TextAlign.center,
+                            keyboardType: TextInputType.number,
+                            maxLength: 1,
+                            decoration: inputDecoration("").copyWith(
+                              counterText: "",
+                            ),
+                            onChanged: (value) => _onOtpChanged(value, index),
+                            validator: (value) =>
+                                value == null || value.isEmpty ? '' : null,
+                          ),
                         ),
-                      ),
-                  
-                      const SizedBox(width: 10),
-
-                      // Text Field 2
-                      SizedBox(
-                        width: 70,
-                        height: 60,
-                        child: TextFormField(
-                          keyboardType: TextInputType.number,
-                          decoration: inputDecoration(""),
-                        ),
-                      ),
-                  
-                      const SizedBox(width: 10),
-
-                      // Text Field 3
-                      SizedBox(
-                        width: 70,
-                        height: 60,
-                        child: TextFormField(
-                          keyboardType: TextInputType.number,
-                          decoration: inputDecoration(""),
-                        ),
-                      ),
-                  
-                      const SizedBox(width: 10),
-
-                      // Text Field 4
-                      SizedBox(
-                        width: 70,
-                        height: 60,
-                        child: TextFormField(
-                          keyboardType: TextInputType.number,
-                          decoration: inputDecoration(""),
-                        ),
-                      ),
-                    ],
+                      );
+                    }),
                   ),
                 ),
 
                 const SizedBox(height: 15),
 
-                   // Resend Code
-                    GestureDetector(
-                      onTap: () {
-                      },
-                      child: 
-                      Center(
-                        child: const Text(
-                          "Resend code",
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontFamily: 'Inter',
-                            fontWeight: FontWeight.w700,
-                            color: Color(0XFF4F774A),
-                          ),
-                        ),
+                GestureDetector(
+                  onTap: _isResending ? null : _handleResendCode,
+                  child: Center(
+                    child: Text(
+                      _isResending ? "Resending..." : "Resend code",
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontFamily: 'Inter',
+                        fontWeight: FontWeight.w700,
+                        color: Color(0XFF4F774A),
                       ),
                     ),
+                  ),
+                ),
 
-                    const SizedBox(height: 165),
+                const SizedBox(height: 150),
 
-               // Confirm Button
                 SizedBox(
                   width: double.infinity,
                   height: 56,
                   child: WelcomeButton(
-                    text: "Confirm",
+                    text: _isVerifying ? "Verifying..." : "Confirm",
                     isPrimary: true,
-                    onPressed: () {
-                      if (_verifyEmailKey.currentState!.validate()) {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const CreatePassword(),
-                          ),
-                        );
-                      }
-                    },
+                    onPressed: _isVerifying ? () {} : _handleVerifyCode,
                   ),
                 ),
               ],

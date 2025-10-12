@@ -1,9 +1,18 @@
 import 'package:flutter/material.dart';
 import '/core/widgets/welcome_button.dart';
 import '/core/theme/input_decoration.dart';
+import '/core/api_service.dart';
+import '/features/auth/presentation/pages/login_form.dart';
 
 class CreatePassword extends StatefulWidget {
-  const CreatePassword({super.key});
+  final String email; // ✅ Required email from previous step
+  final String code; // ✅ Required reset code or OTP
+
+  const CreatePassword({
+    super.key,
+    required this.email,
+    required this.code,
+  });
 
   @override
   State<CreatePassword> createState() => _CreatePasswordState();
@@ -14,6 +23,54 @@ class _CreatePasswordState extends State<CreatePassword> {
   final passwordController = TextEditingController();
   final confirmPasswordController = TextEditingController();
   bool obscurePassword = true;
+  bool _isLoading = false;
+
+  final ApiService _apiService = ApiService();
+
+  Future<void> _handleChangePassword() async {
+    if (!_createPasswordKey.currentState!.validate()) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      final response = await _apiService.confirmPasswordReset(
+        widget.email,
+        widget.code,
+        passwordController.text.trim(),
+      );
+
+      if (response.containsKey('message')) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(response['message']),
+            backgroundColor: Colors.green,
+          ),
+        );
+
+        // ✅ Redirect to login after success
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => LoginForm()), // ✅ FIXED (no const)
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Unexpected response from server."),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString().replaceAll("Exception: ", "")),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -26,8 +83,7 @@ class _CreatePasswordState extends State<CreatePassword> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-
-              // Lock Image
+              // 🔒 Lock Image
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 83),
                 child: Image.asset(
@@ -38,7 +94,8 @@ class _CreatePasswordState extends State<CreatePassword> {
               ),
 
               const SizedBox(height: 70),
-              // Title
+
+              // 🧭 Title
               const Center(
                 child: Text(
                   "Create New Password",
@@ -49,23 +106,24 @@ class _CreatePasswordState extends State<CreatePassword> {
                   ),
                 ),
               ),
+
               const SizedBox(height: 10),
 
-              // Description
+              // 📝 Description
               const Text(
-                "Your new password must be different from previously used password.",
+                "Your new password must be different from previously used passwords.",
                 style: TextStyle(
-                      fontSize: 14,
-                      fontFamily: 'Poppins-SemiBold',
-                      fontWeight: FontWeight.w600,
-                      color: Color(0XFF4D4D4D),
-                    ),
-                    textAlign: TextAlign.center,
+                  fontSize: 14,
+                  fontFamily: 'Poppins-SemiBold',
+                  fontWeight: FontWeight.w600,
+                  color: Color(0XFF4D4D4D),
+                ),
+                textAlign: TextAlign.center,
               ),
 
               const SizedBox(height: 40),
 
-              // Password Title
+              // 🔑 Password Title
               const Text(
                 "Password",
                 style: TextStyle(
@@ -74,6 +132,7 @@ class _CreatePasswordState extends State<CreatePassword> {
                   color: Color(0XFF000000),
                 ),
               ),
+
               const SizedBox(height: 8),
 
               // Password Field
@@ -88,16 +147,16 @@ class _CreatePasswordState extends State<CreatePassword> {
                           : Icons.visibility,
                       color: Colors.grey,
                     ),
-                    onPressed: () {
-                      setState(() {
-                        obscurePassword = !obscurePassword;
-                      });
-                    },
+                    onPressed: () =>
+                        setState(() => obscurePassword = !obscurePassword),
                   ),
                 ),
                 validator: (value) {
                   if (value == null || value.isEmpty) {
                     return "Please enter your password!";
+                  }
+                  if (value.length < 8) {
+                    return "Password must be at least 8 characters.";
                   }
                   return null;
                 },
@@ -114,6 +173,7 @@ class _CreatePasswordState extends State<CreatePassword> {
                   color: Color(0XFF000000),
                 ),
               ),
+
               const SizedBox(height: 8),
 
               // Confirm Password Field
@@ -128,11 +188,8 @@ class _CreatePasswordState extends State<CreatePassword> {
                           : Icons.visibility,
                       color: Colors.grey,
                     ),
-                    onPressed: () {
-                      setState(() {
-                        obscurePassword = !obscurePassword;
-                      });
-                    },
+                    onPressed: () =>
+                        setState(() => obscurePassword = !obscurePassword),
                   ),
                 ),
                 validator: (value) {
@@ -145,25 +202,17 @@ class _CreatePasswordState extends State<CreatePassword> {
                   return null;
                 },
               ),
+
               const SizedBox(height: 100),
 
-              // Change Password Button
+              // ✅ Change Password Button
               SizedBox(
                 width: double.infinity,
                 height: 56,
                 child: WelcomeButton(
-                  text: "Change Password",
+                  text: _isLoading ? "Saving..." : "Change Password",
                   isPrimary: true,
-                  onPressed: () {
-                    if (_createPasswordKey.currentState!.validate()) {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const CreatePassword(),
-                        ),
-                      );
-                    }
-                  },
+                  onPressed: _isLoading ? null : _handleChangePassword, // ✅ cleaner
                 ),
               ),
             ],
