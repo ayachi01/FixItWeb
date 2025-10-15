@@ -91,23 +91,20 @@ export default function TicketCard({
         <h3 className="font-semibold text-lg">{ticket.title}</h3>
         <div className="flex gap-1 flex-wrap">
           <span
-            className={`px-2 py-1 rounded text-white text-xs ${
-              statusColor[ticket.status.toUpperCase()]
-            }`}
+            className={`px-2 py-1 rounded text-white text-xs ${statusColor[ticket.status.toUpperCase()]
+              }`}
           >
             {ticket.status.replace("_", " ")}
           </span>
           <span
-            className={`px-2 py-1 rounded text-white text-xs ${
-              urgencyColor[ticket.urgency.toUpperCase()]
-            }`}
+            className={`px-2 py-1 rounded text-white text-xs ${urgencyColor[ticket.urgency.toUpperCase()]
+              }`}
           >
             {ticket.urgency}
           </span>
           <span
-            className={`px-2 py-1 rounded text-white text-xs ${
-              escalationColor[ticket.escalation_level.toUpperCase()]
-            }`}
+            className={`px-2 py-1 rounded text-white text-xs ${escalationColor[ticket.escalation_level.toUpperCase()]
+              }`}
           >
             {ticket.escalation_level.replace("_", " ")}
           </span>

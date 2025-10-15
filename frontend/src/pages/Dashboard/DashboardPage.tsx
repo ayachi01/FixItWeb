@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { getAllTickets } from "../../api/ticket";
 import { getAllUsers } from "../../api/users";
 import { useAuthStore } from "../../store/authStore";
@@ -13,6 +14,7 @@ import {
   ArcElement,
 } from "chart.js";
 import { Bar, Pie } from "react-chartjs-2";
+import { Bell } from "lucide-react";
 
 ChartJS.register(
   CategoryScale,
@@ -26,19 +28,23 @@ ChartJS.register(
 
 export default function Dashboard() {
   const { user } = useAuthStore();
+  const navigate = useNavigate();
   const [ticketCount, setTicketCount] = useState(0);
-  const [pendingCount, setPendingCount] = useState(0);
+  const [resolvedCount, setResolvedCount] = useState(0);
   const [userCount, setUserCount] = useState(0);
-  const [ticketsByStatus, setTicketsByStatus] = useState<any>({});
   const [ticketsByCategory, setTicketsByCategory] = useState<any>({});
+  const [reportsOverTime, setReportsOverTime] = useState<any>({});
   const [loading, setLoading] = useState(true);
+  const [notifications, setNotifications] = useState([
+    "New report submitted by Jenny Wilson",
+    "Flickering lights issue marked as Resolved",
+  ]);
 
   useEffect(() => {
     async function loadData() {
       if (!user?.permissions) return setLoading(false);
 
       try {
-        // Only fetch tickets if user has ticket-related permissions
         let tickets: any[] = [];
         if (
           user.permissions.can_report ||
@@ -48,37 +54,8 @@ export default function Dashboard() {
           tickets = await getAllTickets();
           setTicketCount(tickets.length);
 
-          const pendingTickets = tickets.filter(
-            (t: any) =>
-              t.status === "Created" ||
-              t.status === "Assigned" ||
-              t.status === "In Progress"
-          );
-          setPendingCount(pendingTickets.length);
-
-          // Prepare chart data safely
-          const statusCounts: Record<string, number> = {};
-          tickets.forEach((t: any) => {
-            statusCounts[t.status] = (statusCounts[t.status] || 0) + 1;
-          });
-          setTicketsByStatus({
-            labels: Object.keys(statusCounts),
-            datasets: [
-              {
-                label: "Tickets by Status",
-                data: Object.values(statusCounts),
-                backgroundColor: [
-                  "#4f46e5",
-                  "#f59e0b",
-                  "#10b981",
-                  "#ef4444",
-                  "#3b82f6",
-                  "#8b5cf6",
-                  "#ec4899",
-                ],
-              },
-            ],
-          });
+          const resolved = tickets.filter((t: any) => t.status === "Resolved");
+          setResolvedCount(resolved.length);
 
           const categoryCounts: Record<string, number> = {};
           tickets.forEach((t: any) => {
@@ -88,26 +65,39 @@ export default function Dashboard() {
             labels: Object.keys(categoryCounts),
             datasets: [
               {
-                label: "Tickets by Category",
                 data: Object.values(categoryCounts),
                 backgroundColor: [
-                  "#f87171",
-                  "#34d399",
-                  "#60a5fa",
-                  "#fbbf24",
-                  "#a78bfa",
-                  "#f472b6",
-                  "#4ade80",
-                  "#facc15",
-                  "#38bdf8",
-                  "#fb7185",
+                  "#8B5CF6",
+                  "#3B82F6",
+                  "#10B981",
+                  "#F97316",
+                  "#EF4444",
+                  "#6B7280",
                 ],
+              },
+            ],
+          });
+
+          const monthCounts: Record<string, number> = {};
+          tickets.forEach((t: any) => {
+            const month = new Date(t.createdAt).toLocaleString("default", {
+              month: "long",
+            });
+            monthCounts[month] = (monthCounts[month] || 0) + 1;
+          });
+          setReportsOverTime({
+            labels: Object.keys(monthCounts),
+            datasets: [
+              {
+                label: "Reports",
+                data: Object.values(monthCounts),
+                backgroundColor: "#047857",
+                borderRadius: 6,
               },
             ],
           });
         }
 
-        // Only fetch users if user has admin permissions
         if (
           user.permissions.is_admin_level ||
           user.permissions.can_manage_users
@@ -127,71 +117,89 @@ export default function Dashboard() {
 
   if (!user) return <p>Loading user info...</p>;
 
-  const permissions = user.permissions || {};
+  const handleNotificationClick = () => {
+    navigate("/dashboard/notifications");
+  };
 
   return (
-    <div className="p-6">
-      <h1 className="text-2xl font-bold mb-6">📊 Dashboard</h1>
+    <div className="p-8 min-h-screen bg-white">
+      {/* 🔝 Top Bar */}
+      <div className="flex justify-between items-center mb-8">
+        <h1 className="text-2xl font-bold">Dashboard</h1>
+
+        <div className="flex items-center gap-4">
+          {/* 🔔 Notification Icon */}
+          <button
+            onClick={handleNotificationClick}
+            className="relative p-2 border-2 border-black rounded-md hover:bg-gray-100 transition duration-200 shadow-sm"
+          >
+            <Bell className="w-6 h-6 text-black" />
+            {notifications.length > 0 && (
+              <span className="absolute top-1 right-1 bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full">
+                {notifications.length}
+              </span>
+            )}
+          </button>
+        </div>
+
+      </div>
 
       {loading ? (
         <p>Loading stats...</p>
       ) : (
         <>
-          {/* --- Counts --- */}
-          <div className="grid grid-cols-3 gap-4 mb-6">
-            {(permissions.can_report ||
-              permissions.can_fix ||
-              permissions.can_assign) && (
-              <div className="bg-white shadow rounded p-4 text-center">
-                <h2 className="text-lg font-semibold">Total Tickets</h2>
-                <p className="text-3xl">{ticketCount}</p>
-              </div>
-            )}
+          {/* 🌟 Top Statistic Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+            <div className="bg-gradient-to-br from-yellow-300 to-yellow-500 text-white p-6 rounded-xl shadow-lg">
+              <h2 className="text-4xl font-bold mb-1">{userCount}</h2>
+              <p className="text-sm uppercase tracking-wide">Total Users</p>
+            </div>
 
-            {(permissions.is_admin_level || permissions.can_manage_users) && (
-              <div className="bg-white shadow rounded p-4 text-center">
-                <h2 className="text-lg font-semibold">Users</h2>
-                <p className="text-3xl">{userCount}</p>
-              </div>
-            )}
+            <div className="bg-gradient-to-br from-orange-400 to-orange-600 text-white p-6 rounded-xl shadow-lg">
+              <h2 className="text-4xl font-bold mb-1">{ticketCount}</h2>
+              <p className="text-sm uppercase tracking-wide">Total Reports</p>
+            </div>
 
-            {(permissions.can_fix || permissions.can_assign) && (
-              <div className="bg-white shadow rounded p-4 text-center">
-                <h2 className="text-lg font-semibold">Pending Tickets</h2>
-                <p className="text-3xl">{pendingCount}</p>
-              </div>
-            )}
+            <div className="bg-gradient-to-br from-green-600 to-green-800 text-white p-6 rounded-xl shadow-lg">
+              <h2 className="text-4xl font-bold mb-1">{resolvedCount}</h2>
+              <p className="text-sm uppercase tracking-wide">Resolved Issues</p>
+            </div>
           </div>
 
-          {/* --- Charts --- */}
-          <div className="grid grid-cols-2 gap-6">
-            {(permissions.can_fix ||
-              permissions.can_assign ||
-              permissions.can_report) &&
-              ticketsByStatus.labels?.length > 0 && (
-                <div className="bg-white shadow rounded p-4">
-                  <h2 className="text-lg font-semibold mb-2 text-center">
-                    Tickets by Status
-                  </h2>
-                  <Bar data={ticketsByStatus} options={{ responsive: true }} />
-                </div>
-              )}
+          {/* 📊 Charts Section */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="bg-white rounded-xl shadow-md p-6 border">
+              <h2 className="text-lg font-bold mb-4">Reports By Category</h2>
+              <div className="h-[300px]">
+                <Pie
+                  data={ticketsByCategory}
+                  options={{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                      legend: { position: "right" },
+                    },
+                  }}
+                />
+              </div>
+            </div>
 
-            {(permissions.can_fix ||
-              permissions.can_assign ||
-              permissions.can_report) &&
-              ticketsByCategory.labels?.length > 0 && (
-                <div className="bg-white shadow rounded p-4">
-                  <h2 className="text-lg font-semibold mb-2 text-center">
-                    Tickets by Category
-                  </h2>
-                  <Pie
-                    data={ticketsByCategory}
-                    options={{ responsive: true }}
-                  />
-                </div>
-              )}
+            <div className="bg-white rounded-xl shadow-md p-6 border">
+              <h2 className="text-lg font-bold mb-4">Reports Over Time</h2>
+              <div className="h-[300px]">
+                <Bar
+                  data={reportsOverTime}
+                  options={{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                  }}
+                />
+              </div>
+            </div>
           </div>
+
+
         </>
       )}
     </div>

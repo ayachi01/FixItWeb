@@ -1,5 +1,5 @@
 // 📂 src/App.tsx
-import React from "react"; // ✅ Required for JSX.Element type
+import React from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Suspense, lazy } from "react";
 import { useAuthStore } from "./store/authStore";
@@ -30,16 +30,14 @@ const SubmitTicketPage = lazy(
   () => import("./pages/Dashboard/SubmitTicketPage")
 );
 const AssignedTicketsPage = lazy(
-  () => import("./pages/Dashboard/MyUnassignTicketsPage")
+  () => import("./pages/Dashboard/All Tickets")
 );
-const MyTicketsPage = lazy(() => import("./pages/Dashboard/MyTicketsPage"));
 const FixerAssignedTicketsPage = lazy(
   () => import("./pages/Dashboard/MyAssignedTicketsPage")
 );
 const AdminDashboardPage = lazy(
   () => import("./pages/Dashboard/DashboardPage")
 );
-const AllTicketsPage = lazy(() => import("./pages/Dashboard/AllTicketsPage"));
 const TicketDetailPage = lazy(
   () => import("./pages/Dashboard/TicketDetailPage")
 );
@@ -53,7 +51,6 @@ const AuditLogsPage = lazy(() => import("./pages/Dashboard/AuditLogsPage"));
 const SystemSettingsPage = lazy(
   () => import("./pages/Dashboard/SystemSettingsPage")
 );
-const ReportsPage = lazy(() => import("./pages/Dashboard/ReportsPage"));
 const NotificationsPage = lazy(
   () => import("./pages/Dashboard/NotificationsPage")
 );
@@ -68,7 +65,7 @@ function RoleProtected({
   children,
 }: {
   allowedRoles: string[];
-  children: React.ReactElement; // ✅ Fixed JSX namespace error
+  children: React.ReactElement;
 }) {
   return (
     <ProtectedRoute allowedRoles={allowedRoles}>{children}</ProtectedRoute>
@@ -113,20 +110,19 @@ export default function App() {
           >
             <Route index element={<Navigate to="main" replace />} />
 
-            {/* 🚪 Feature pages */}
+            {/* 🚪 Dashboard + Pages */}
             <Route path="main" element={<AdminDashboardPage />} />
             <Route path="submit-ticket" element={<SubmitTicketPage />} />
-            <Route path="my-tickets" element={<MyTicketsPage />} />
+
             <Route path="assigned-tickets" element={<AssignedTicketsPage />} />
             <Route
               path="my-assigned-tickets"
               element={<FixerAssignedTicketsPage />}
             />
-            <Route path="tickets" element={<AllTicketsPage />} />
             <Route path="tickets/:id" element={<TicketDetailPage />} />
             <Route path="tickets/:id/edit" element={<EditTicketPage />} />
 
-            {/* Users management restricted by role */}
+            {/* 👥 Users management (role restricted) */}
             <Route
               path="users"
               element={
@@ -148,7 +144,7 @@ export default function App() {
               }
             />
 
-            {/* Roles management restricted to admins */}
+            {/* 🧩 Roles management (admin only) */}
             <Route
               path="roles"
               element={
@@ -160,7 +156,7 @@ export default function App() {
               }
             />
 
-            {/* Audit logs restricted to admins */}
+            {/* 🪵 Audit logs (admin only) */}
             <Route
               path="audit-logs"
               element={
@@ -172,7 +168,7 @@ export default function App() {
               }
             />
 
-            {/* System settings restricted to University Admin */}
+            {/* ⚙️ System settings (University Admin only) */}
             <Route
               path="settings"
               element={
@@ -182,13 +178,13 @@ export default function App() {
               }
             />
 
-            <Route path="reports" element={<ReportsPage />} />
+            {/* 🔔 Notifications & Invites */}
             <Route path="notifications" element={<NotificationsPage />} />
             <Route path="invite" element={<InviteUserPage />} />
             <Route path="invites" element={<InvitesListPage />} />
           </Route>
 
-          {/* Catch-all for unknown routes */}
+          {/* 🚫 Unknown routes fallback */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>

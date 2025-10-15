@@ -31,6 +31,9 @@ export default function UsersPage() {
     currentUser?.permissions.can_manage_users;
 
   const [users, setUsers] = useState<User[]>([]);
+  const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
+  const [roles, setRoles] = useState<Role[]>([]);
+  const [selectedRole, setSelectedRole] = useState<string>("All");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
@@ -45,15 +48,15 @@ export default function UsersPage() {
     try {
       setLoading(true);
       const res = await api.get("/users/", { params: { page } });
-
       const data = res.data;
+
       if (Array.isArray(data)) {
-        // Backend returns plain array
         setUsers(data);
+        setFilteredUsers(data);
         setTotalPages(1);
       } else {
-        // Backend returns paginated response
         setUsers(data.results || []);
+        setFilteredUsers(data.results || []);
         setTotalPages(data.total_pages || 1);
       }
 
@@ -65,21 +68,36 @@ export default function UsersPage() {
     }
   }, [page, isAuthorized]);
 
+  // 🔹 Fetch all roles
+  const fetchRoles = async () => {
+    try {
+      const res = await api.get("/roles/");
+      setRoles(res.data);
+    } catch {
+      console.error("Failed to fetch roles");
+    }
+  };
+
   useEffect(() => {
     if (!isAuthorized) {
       navigate("/dashboard");
       return;
     }
     fetchUsers();
+    fetchRoles();
   }, [isAuthorized, navigate, fetchUsers, location.key]);
 
-  const handleEdit = (id: number) => {
-    navigate(`/dashboard/users/${id}`);
-  };
+  // 🔹 Filter users when role changes
+  useEffect(() => {
+    if (selectedRole === "All") {
+      setFilteredUsers(users);
+    } else {
+      setFilteredUsers(users.filter((u) => u.role?.name === selectedRole));
+    }
+  }, [selectedRole, users]);
 
-  const handleCreate = () => {
-    navigate("/dashboard/users/create");
-  };
+  const handleEdit = (id: number) => navigate(`/dashboard/users/${id}`);
+  const handleCreate = () => navigate("/dashboard/users/create");
 
   const handleDelete = async (id: number) => {
     const userToDelete = users.find((u) => u.id === id);
@@ -87,8 +105,7 @@ export default function UsersPage() {
 
     if (
       !window.confirm(
-        `Are you sure you want to delete "${
-          userToDelete.full_name || userToDelete.email
+        `Are you sure you want to delete "${userToDelete.full_name || userToDelete.email
         }"?`
       )
     )
@@ -115,16 +132,36 @@ export default function UsersPage() {
 
   return (
     <div className="p-4">
+      {/* Header with Filter and Create Button */}
       <div className="flex justify-between items-center mb-4">
         <h1 className="text-2xl font-bold">👥 Manage Users</h1>
-        <button
-          onClick={handleCreate}
-          className="flex items-center px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600"
-        >
-          <Plus size={16} className="mr-1" /> Create User
-        </button>
+
+        <div className="flex items-center gap-3">
+          {/* 🔹 Role Filter Dropdown */}
+          <select
+            value={selectedRole}
+            onChange={(e) => setSelectedRole(e.target.value)}
+            className="border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+          >
+            <option value="All">All Roles</option>
+            {roles.map((role) => (
+              <option key={role.id} value={role.name}>
+                {role.name}
+              </option>
+            ))}
+          </select>
+
+          {/* ➕ Create User Button */}
+          <button
+            onClick={handleCreate}
+            className="flex items-center px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600"
+          >
+            <Plus size={16} className="mr-1" /> Create User
+          </button>
+        </div>
       </div>
 
+      {/* Users Table */}
       <div className="overflow-x-auto bg-white shadow rounded-lg">
         <table className="w-full text-left border-collapse">
           <thead className="bg-gray-200">
@@ -139,14 +176,14 @@ export default function UsersPage() {
             </tr>
           </thead>
           <tbody>
-            {users.length === 0 && (
+            {filteredUsers.length === 0 && (
               <tr>
-                <td colSpan={7} className="p-4 text-center">
-                  No users found.
+                <td colSpan={7} className="p-4 text-center text-gray-500">
+                  No users found for this role.
                 </td>
               </tr>
             )}
-            {users.map((u) => (
+            {filteredUsers.map((u) => (
               <tr key={u.id} className="border-t hover:bg-gray-50">
                 <td className="p-2">{u.id}</td>
                 <td className="p-2">{u.full_name || "--"}</td>
@@ -164,11 +201,10 @@ export default function UsersPage() {
                   <button
                     onClick={() => handleDelete(u.id)}
                     disabled={deletingId === u.id}
-                    className={`flex items-center px-2 py-1 rounded ${
-                      deletingId === u.id
+                    className={`flex items-center px-2 py-1 rounded ${deletingId === u.id
                         ? "bg-red-300 text-white cursor-not-allowed"
                         : "bg-red-100 text-red-700 hover:bg-red-200"
-                    }`}
+                      }`}
                   >
                     {deletingId === u.id ? (
                       <span className="animate-spin mr-1 border-2 border-white border-t-transparent rounded-full w-4 h-4" />
