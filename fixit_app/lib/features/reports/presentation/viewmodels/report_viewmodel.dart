@@ -1,16 +1,15 @@
-import 'dart:io';
+import 'dart:io' show File;
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
 import '/core/services/image_picker_service.dart';
 
 class ReportViewModel extends ChangeNotifier {
   // Services
   final ImagePickerService _imagePicker;
 
-  // Controllers
-  final TextEditingController dateCtrl = TextEditingController();
-  final TextEditingController timeCtrl = TextEditingController();
+  // Camera
   CameraController? _controller;
   List<CameraDescription> _cameras = [];
   Future<void>? _initializeControllerFuture;
@@ -21,9 +20,8 @@ class ReportViewModel extends ChangeNotifier {
   Future<void>? get initializeControllerFuture => _initializeControllerFuture;
 
   // State variables
-  DateTime? selectedDate;
-  TimeOfDay? selectedTime;
   File? selectedImage;
+  Uint8List? selectedImageBytes; 
   bool _isTorchOn = false;
   bool get isTorchOn => _isTorchOn;
   CameraController? get controller => _controller;
@@ -31,71 +29,46 @@ class ReportViewModel extends ChangeNotifier {
   // Dispose controllers
   @override
   void dispose() {
-    dateCtrl.dispose();
-    timeCtrl.dispose();
     _controller?.dispose();
     super.dispose();
   }
 
-  // Date Picker
-  Future<void> pickDate(BuildContext context) async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: selectedDate ?? DateTime.now(),
-      firstDate: DateTime(2024),
-      lastDate: DateTime(2030),
-    );
+  Map<String, String> get currentDateTime {
+    final now = DateTime.now();
 
-    if (picked != null) {
-      selectedDate = picked;
-      dateCtrl.text =
-          "${picked.day.toString().padLeft(2, '0')}-${picked.month.toString().padLeft(2, '0')}-${picked.year}";
-      notifyListeners();
-    }
-  }
+    final formattedDate =
+        "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
+    
+    final formattedTime =
+      "${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}";
 
-  // Time Picker
-  Future<void> pickTime(BuildContext context) async {
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: selectedTime ?? TimeOfDay.now(),
-    );
-
-    if (picked != null) {
-      selectedTime = picked;
-      timeCtrl.text = picked.format(context);
-      notifyListeners();
-    }
-  }
-
-  // Formatted Date
-  String get formattedDate {
-    if (selectedDate == null) return "";
-    return "${selectedDate!.day.toString().padLeft(2, '0')}-"
-        "${selectedDate!.month.toString().padLeft(2, '0')}-"
-        "${selectedDate!.year}";
-  }
-
-  // Formatted Time
-  String get formattedTime {
-    if (selectedTime == null) return "";
-    return timeCtrl.text;
+    return {
+      "date": formattedDate,
+      "time": formattedTime,
+    };
   }
 
   // Image Picker
   Future<void> pickFromGallery() async {
-    final XFile? image = await _imagePicker.pickImageFromGallery();
-    if (image != null) {
+  final XFile? image = await _imagePicker.pickImageFromGallery();
+  if (image != null) {
+    if (kIsWeb) {
+      selectedImageBytes = await image.readAsBytes();
+    } else {
       selectedImage = File(image.path);
-      notifyListeners();
     }
-  }
-
-  // Remove Image
-  void removeImage() {
-    selectedImage = null;
     notifyListeners();
   }
+}
+
+
+  // Remove Image
+ void removeImage() {
+  selectedImage = null;
+  selectedImageBytes = null;
+  notifyListeners();
+}
+
 
   // Setup Camera
   Future<void> setupCamera() async {
@@ -131,7 +104,7 @@ class ReportViewModel extends ChangeNotifier {
   }
 
   Future<void> pauseCamera() async {
-    if(_controller != null && _controller!.value.isStreamingImages) {
+    if (_controller != null && _controller!.value.isStreamingImages) {
       await _controller?.stopImageStream();
       notifyListeners();
     }
@@ -139,8 +112,7 @@ class ReportViewModel extends ChangeNotifier {
 
   Future<void> resumeCamera() async {
     if (_controller != null && !_controller!.value.isStreamingImages) {
-      await _controller!.startImageStream((CameraImage image) {
-      });
+      await _controller!.startImageStream((CameraImage image) {});
       notifyListeners();
     }
   }

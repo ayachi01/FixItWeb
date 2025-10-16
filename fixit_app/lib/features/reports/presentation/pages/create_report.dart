@@ -1,8 +1,9 @@
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '/core/theme/input_decoration.dart';
 import '/core/widgets/welcome_button.dart';
-import '/core/widgets/ticket_card.dart';
 import '/features/reports/presentation/viewmodels/report_viewmodel.dart';
 
 class CreateReport extends StatefulWidget {
@@ -20,12 +21,14 @@ class CreateReportState extends State<CreateReport> {
   final incidentType = TextEditingController();
   final description = TextEditingController();
   final building = TextEditingController();
+  final category = TextEditingController();
+  final urgency = TextEditingController();
 
   // State variables
-  DateTime? selectedDate;
-  TimeOfDay? pickTime;
   String? _selectedOption = "Public";
-  String? dropDownValue;
+  String? buildingDropDownValue;
+  String? categoryDropDownValue;
+  String? urgencyDropDownValue;
 
   // Dispose controllers
   @override
@@ -33,6 +36,8 @@ class CreateReportState extends State<CreateReport> {
     incidentType.dispose();
     description.dispose();
     building.dispose();
+    category.dispose();
+    urgency.dispose();
     super.dispose();
   }
 
@@ -74,7 +79,7 @@ class CreateReportState extends State<CreateReport> {
                 ),
                 const SizedBox(height: 8),
 
-                // Incident Type
+                // Incident Type Input
                 TextFormField(
                   controller: incidentType,
                   keyboardType: TextInputType.text,
@@ -89,24 +94,92 @@ class CreateReportState extends State<CreateReport> {
                 ),
                 const SizedBox(height: 20),
 
-                // Description Title
-                const Text(
-                  "Description",
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontFamily: 'Inter',
-                    color: Color(0XFF000000),
-                  ),
-                ),
+                // Building Dropdown
+                const Text("Building",
+                    style: TextStyle(fontSize: 16, fontFamily: 'Inter')),
                 const SizedBox(height: 8),
+                DropdownButtonFormField<String>(
+                  value: buildingDropDownValue,
+                  hint: const Text('Select Building'),
+                  onChanged: (String? newValue) {
+                    setState(() => buildingDropDownValue = newValue!);
+                  },
+                  items: const [
+                    DropdownMenuItem(value: 'PTC', child: Text('PTC')),
+                    DropdownMenuItem(value: 'MBA', child: Text('MBA')),
+                    DropdownMenuItem(value: 'CMA', child: Text('CMA')),
+                    DropdownMenuItem(value: 'NH', child: Text('NH')),
+                    DropdownMenuItem(value: 'RS', child: Text('RS')),
+                    DropdownMenuItem(value: 'BE', child: Text('BE')),
+                  ],
+                  decoration: inputDecoration(""),
+                  validator: (value) =>
+                      value == null ? "Please select a building!" : null,
+                ),
+                const SizedBox(height: 20),
+
+                // Category Dropdown
+                const Text("Category",
+                    style: TextStyle(fontSize: 16, fontFamily: 'Inter')),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<String>(
+                  value: categoryDropDownValue,
+                  hint: const Text('Select Category'),
+                  onChanged: (String? newValue) {
+                    setState(() => categoryDropDownValue = newValue!);
+                  },
+                  items: const [
+                    DropdownMenuItem(value: 'Cleaning', child: Text('Cleaning')),
+                    DropdownMenuItem(value: 'Plumbing', child: Text('Plumbing')),
+                    DropdownMenuItem(
+                        value: 'Electrical', child: Text('Electrical')),
+                    DropdownMenuItem(
+                        value: 'Structural', child: Text('Structural')),
+                    DropdownMenuItem(value: 'HVAC', child: Text('HVAC')),
+                    DropdownMenuItem(
+                        value: 'Technology', child: Text('Technology')),
+                    DropdownMenuItem(
+                        value: 'Equipment', child: Text('Equipment')),
+                    DropdownMenuItem(
+                        value: 'Disturbance', child: Text('Disturbance')),
+                    DropdownMenuItem(value: 'Security', child: Text('Security')),
+                    DropdownMenuItem(value: 'Parking', child: Text('Parking')),
+                  ],
+                  decoration: inputDecoration(""),
+                  validator: (value) =>
+                      value == null ? "Please select a category!" : null,
+                ),
+                const SizedBox(height: 20),
+
+                // Urgency Dropdown
+                const Text("Urgency",
+                    style: TextStyle(fontSize: 16, fontFamily: 'Inter')),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<String>(
+                  value: urgencyDropDownValue,
+                  hint: const Text('Select Urgency'),
+                  onChanged: (String? newValue) {
+                    setState(() => urgencyDropDownValue = newValue!);
+                  },
+                  items: const [
+                    DropdownMenuItem(value: 'Standard', child: Text('Standard')),
+                    DropdownMenuItem(value: 'Urgent', child: Text('Urgent')),
+                  ],
+                  decoration: inputDecoration(""),
+                  validator: (value) =>
+                      value == null ? "Please select urgency!" : null,
+                ),
+                const SizedBox(height: 20),
 
                 // Description
+                const Text("Description",
+                    style: TextStyle(fontSize: 16, fontFamily: 'Inter')),
+                const SizedBox(height: 8),
                 TextFormField(
                   controller: description,
                   keyboardType: TextInputType.text,
                   maxLength: 50,
                   decoration: inputDecoration("Enter Description"),
-                  // Validator
                   validator: (value) {
                     if (value == null || value.isEmpty) {
                       return "Please enter description!";
@@ -116,178 +189,10 @@ class CreateReportState extends State<CreateReport> {
                 ),
                 const SizedBox(height: 15),
 
-                // Building Title
-                const Text(
-                  "Building",
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontFamily: 'Inter',
-                    color: Color(0XFF000000),
-                  ),
-                ),
-                const SizedBox(height: 8),
-
-                // Building Title
-                DropdownButtonFormField<String>(
-                  value: dropDownValue,
-                  hint: const Text('Select Building'),
-                  onChanged: (String? newValue) {
-                    setState(() {
-                      dropDownValue = newValue!;
-                    });
-                  },
-
-                  // Drop Down Items
-                  items: const [
-                    // PTC
-                    DropdownMenuItem<String>(value: 'PTC', child: Text('PTC')),
-                    // MBA
-                    DropdownMenuItem<String>(value: 'MBA', child: Text('MBA')),
-                    // CMA
-                    DropdownMenuItem<String>(value: 'CMA', child: Text('CMA')),
-                    // NH
-                    DropdownMenuItem<String>(value: 'NH', child: Text('NH')),
-                    // RS
-                    DropdownMenuItem<String>(value: 'RS', child: Text('RS')),
-                    // BE
-                    DropdownMenuItem<String>(value: 'BE', child: Text('BE')),
-                  ],
-                  decoration: inputDecoration(""),
-                  // Validator
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return "Please select an option!";
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 20),
-
-                // Date Title
-                const Text(
-                  "Date",
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontFamily: 'Inter',
-                    color: Color(0XFF000000),
-                  ),
-                ),
-                const SizedBox(height: 8),
-
-                // Date
-                Consumer<ReportViewModel>(
-                  builder: (context, vm, child) {
-                    return TextFormField(
-                      readOnly: true,
-                      controller: vm.dateCtrl,
-                      decoration: inputDecoration("Enter Date").copyWith(
-                        suffixIcon: IconButton(
-                          onPressed: () => vm.pickDate(context),
-                          icon: const Icon(Icons.calendar_month),
-                          color: Colors.black,
-                        ),
-                      ),
-                      // Validator
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return "Please select a date!";
-                        }
-                        return null;
-                      },
-                    );
-                  },
-                ),
-                const SizedBox(height: 20),
-
-                // Time Title
-                const Text(
-                  "Time",
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontFamily: 'Inter',
-                    color: Color(0XFF000000),
-                  ),
-                ),
-                const SizedBox(height: 8),
-
-                // Time
-                Consumer<ReportViewModel>(
-                  builder: (context, vm, child) {
-                    return TextFormField(
-                      controller: vm.timeCtrl,
-                      readOnly: true,
-                      decoration: inputDecoration("Enter Time").copyWith(
-                        suffixIcon: IconButton(
-                          onPressed: () => vm.pickTime(context),
-                          icon: const Icon(Icons.access_time_outlined),
-                          color: Colors.black,
-                        ),
-                      ),
-                      // Validator
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return "Please select a time!";
-                        }
-                        return null;
-                      },
-                    );
-                  },
-                ),
-                const SizedBox(height: 20),
-
-                // Visibility with Radio Buttons
-                const Text(
-                  "Visibility:",
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontFamily: 'Inter',
-                    color: Color(0XFF000000),
-                  ),
-                ),
-                Row(
-                  children: [
-                    SizedBox(
-                      width: 150,
-                      child: RadioListTile<String>(
-                        title: const Text(
-                          // Public
-                          "Public",
-                          style: TextStyle(fontSize: 16, fontFamily: 'Inter'),
-                        ),
-                        value: "Public",
-                        groupValue: _selectedOption,
-                        onChanged: (value) {
-                          setState(() => _selectedOption = value);
-                        },
-                        dense: true,
-                        contentPadding: EdgeInsets.zero,
-                      ),
-                    ),
-                    SizedBox(
-                      width: 150,
-                      child: RadioListTile<String>(
-                        title: const Text(
-                          // Private
-                          "Private",
-                          style: TextStyle(fontSize: 16, fontFamily: 'Inter'),
-                        ),
-                        value: "Private",
-                        groupValue: _selectedOption,
-                        onChanged: (value) {
-                          setState(() => _selectedOption = value);
-                        },
-                        dense: true,
-                        contentPadding: EdgeInsets.zero,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 20),
-
-                // Add Clear Image
+                // 📸 Image Picker (Step 5)
                 Container(
                   width: double.infinity,
-                  height: 150,
+                  height: 180,
                   decoration: BoxDecoration(
                     border: Border.all(color: Colors.grey),
                     borderRadius: BorderRadius.circular(8),
@@ -295,78 +200,68 @@ class CreateReportState extends State<CreateReport> {
                   child: Center(
                     child: Consumer<ReportViewModel>(
                       builder: (context, vm, child) {
-                        return Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            if (vm.selectedImage == null) ...[
-                              // Show button only if no image is selected
-                              MaterialButton(
-                                onPressed: () {
-                                  vm.pickFromGallery();
-                                },
-                                textColor: Colors.black,
-                                padding: const EdgeInsets.all(16),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: const [
-                                    Icon(Icons.add_a_photo),
-                                    SizedBox(width: 8),
-                                    Text(
-                                      "Add clear image of the issue",
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        fontFamily: 'Inter',
-                                      ),
+                        // --- show image if selected ---
+                        if ((kIsWeb && vm.selectedImageBytes != null) ||
+                            (!kIsWeb && vm.selectedImage != null)) {
+                          return Stack(
+                            alignment: Alignment.topRight,
+                            children: [
+                              kIsWeb
+                                  ? Image.memory(
+                                      vm.selectedImageBytes!,
+                                      height: 150,
+                                      fit: BoxFit.cover,
+                                    )
+                                  : Image.file(
+                                      vm.selectedImage!,
+                                      height: 150,
+                                      fit: BoxFit.cover,
                                     ),
-                                  ],
+                              Positioned(
+                                right: 4,
+                                top: 4,
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withOpacity(0.7),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: IconButton(
+                                    icon: const Icon(Icons.clear,
+                                        color: Colors.red, size: 18),
+                                    onPressed: vm.removeImage,
+                                  ),
                                 ),
                               ),
-                            ] else ...[
-                              // Show image if selected
-                              // Remove button on image
-                              Stack(
-                                alignment: Alignment.topRight,
-                                children: [
-                                  Image.file(
-                                    vm.selectedImage!,
-                                    height: 115,
-                                    fit: BoxFit.cover,
-                                  ),
-                                  Positioned(
-                                    right: 0,
-                                    top: 0,
-                                    child: Container(
-                                      margin: const EdgeInsets.all(4),
-                                      decoration: BoxDecoration(
-                                        color: Colors.transparent,
-                                        shape: BoxShape.circle,
-                                        border: Border.all(
-                                          color: Colors.black,
-                                          width: 1,
-                                        ),
-                                      ),
-                                      child: IconButton(
-                                        icon: const Icon(Icons.clear),
-                                        color: Colors.red,
-                                        iconSize: 16,
-                                        padding: EdgeInsets.zero,
-                                        onPressed: () {
-                                          vm.removeImage();
-                                        },
-                                      ),
-                                    ),
-                                  ),
-                                ],
+                            ],
+                          );
+                        }
+
+                        // --- show add button if no image ---
+                        return MaterialButton(
+                          onPressed: vm.pickFromGallery,
+                          textColor: Colors.black,
+                          padding: const EdgeInsets.all(16),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: const [
+                              Icon(Icons.add_a_photo),
+                              SizedBox(width: 8),
+                              Text(
+                                "Add clear image of the issue",
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontFamily: 'Inter',
+                                ),
                               ),
                             ],
-                          ],
+                          ),
                         );
                       },
                     ),
                   ),
                 ),
 
-                // Submit Report Button
+                // Submit Button
                 Center(
                   child: Padding(
                     padding: const EdgeInsets.only(top: 30),
@@ -378,25 +273,23 @@ class CreateReportState extends State<CreateReport> {
                         isPrimary: true,
                         onPressed: () {
                           if (_createReportKey.currentState!.validate()) {
+                            final vm = context.read<ReportViewModel>();
                             final reportData = {
                               'id':
                                   'RPT-${DateTime.now().millisecondsSinceEpoch}',
                               'title': incidentType.text,
                               'description': description.text,
-                              'location': dropDownValue ?? '',
-                              'date': context
-                                  .read<ReportViewModel>()
-                                  .formattedDate,
-                              'time': context
-                                  .read<ReportViewModel>()
-                                  .formattedTime,
+                              'location': buildingDropDownValue ?? '',
+                              'category': categoryDropDownValue ?? '',
+                              'urgency': urgencyDropDownValue ?? '',
+                              'date': DateTime.now().toString().split(' ')[0],
+                              'time': TimeOfDay.now().format(context),
                               'visibility': _selectedOption ?? '',
-                              'image':
-                                  context
-                                      .read<ReportViewModel>()
-                                      .selectedImage
-                                      ?.path ??
-                                  '',
+                              'image': kIsWeb
+                                  ? (vm.selectedImageBytes != null
+                                      ? "web_image_bytes"
+                                      : '')
+                                  : (vm.selectedImage?.path ?? ''),
                               'status': '',
                               'statusColor': '',
                               'like': 0,
