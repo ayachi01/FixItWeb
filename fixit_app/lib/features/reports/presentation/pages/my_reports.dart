@@ -1,3 +1,4 @@
+import 'package:fixit/core/api_service.dart';
 import 'package:fixit/core/services/image_picker_service.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -27,8 +28,66 @@ class MyReportsPage extends StatefulWidget {
 }
 
 class _MyReportsPageState extends State<MyReportsPage> {
-  List<Widget> ticketCards = [];
+  final ApiService _apiService = ApiService();
+  List<Map<String, dynamic>> _tickets = [];
+  bool _isLoading = false;
+  String? _errorMessage;
   int _selectedIndex = 1;
+  String _searchQuery = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadMyReports();
+  }
+
+  Future<void> _loadMyReports() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final data = await _apiService.getMyTickets();
+      setState(() {
+        _tickets = data;
+      });
+    } catch (e) {
+      setState(() {
+        _errorMessage = e.toString();
+      });
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  // Safely format location for both Map and int values
+  String formatLocation(dynamic location) {
+    if (location is Map<String, dynamic>) {
+      final building = location['building_name'] ?? 'Unknown';
+      final floor = location['floor_number'] ?? '';
+      final room = location['room_identifier'] ?? '';
+      return "$building $floor $room".trim();
+    } else if (location != null) {
+      return "Location ID: $location";
+    } else {
+      return "N/A";
+    }
+  }
+
+  List<Map<String, dynamic>> get _filteredTickets {
+    if (_searchQuery.isEmpty) return _tickets;
+    return _tickets.where((ticket) {
+      final title = (ticket['title'] ?? '').toString().toLowerCase();
+      final status = (ticket['status'] ?? '').toString().toLowerCase();
+      final locationText = formatLocation(ticket['location']).toLowerCase();
+      return title.contains(_searchQuery.toLowerCase()) ||
+          status.contains(_searchQuery.toLowerCase()) ||
+          locationText.contains(_searchQuery.toLowerCase());
+    }).toList();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -66,45 +125,83 @@ class _MyReportsPageState extends State<MyReportsPage> {
           ),
         ),
       ),
+
       body: SafeArea(
         top: false,
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-              child: TextField(
-                decoration: InputDecoration(
-                  hintText: 'Search ticket',
-                  prefixIcon: const Icon(Icons.search),
-                  suffixIcon: const Icon(Icons.filter_list),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 20),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(25),
+        child: RefreshIndicator(
+          onRefresh: _loadMyReports,
+          child: Column(
+            children: [
+              Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                child: TextField(
+                  onChanged: (value) {
+                    setState(() => _searchQuery = value);
+                  },
+                  decoration: InputDecoration(
+                    hintText: 'Search ticket',
+                    prefixIcon: const Icon(Icons.search),
+                    suffixIcon: const Icon(Icons.filter_list),
+                    contentPadding:
+                        const EdgeInsets.symmetric(horizontal: 20),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(25),
+                    ),
                   ),
                 ),
               ),
-            ),
-            const SizedBox(height: 10),
+              const SizedBox(height: 10),
 
-            Expanded(
-              child: ticketCards.isEmpty
-                  ? Center(
-                      child: Text(
-                        "No Reports Found",
-                        style: TextStyle(
-                          fontSize: 18,
-                          color: Colors.grey[600],
+              Expanded(
+                child: _isLoading
+                    ? const Center(
+                        child: CircularProgressIndicator(
+                          color: Color(0xFF386641),
                         ),
-                      ),
-                    )
-                  : ListView.builder(
-                      itemCount: ticketCards.length,
-                      itemBuilder: (context, index) {
-                        return ticketCards[index];
-                      },
-                    ),
-            ),
-          ],
+                      )
+                    : _errorMessage != null
+                        ? Center(
+                            child: Text(
+                              "⚠️ $_errorMessage",
+                              style: const TextStyle(color: Colors.redAccent),
+                              textAlign: TextAlign.center,
+                            ),
+                          )
+                        : _filteredTickets.isEmpty
+                            ? Center(
+                                child: Text(
+                                  "No Reports Found",
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    color: Colors.grey[600],
+                                  ),
+                                ),
+                              )
+                            : ListView.builder(
+                                itemCount: _filteredTickets.length,
+                                itemBuilder: (context, index) {
+                                  final report = _filteredTickets[index];
+
+                                  final ticketData = {
+                                    "id": report['id'],
+                                    "title": report['title'] ?? "Untitled Ticket",
+                                    "status": report['status'] ?? "Unknown",
+                                    "description":
+                                        report['description'] ?? "No details",
+                                    "location": formatLocation(report['location']),
+                                    "created_at": report['created_at'],
+                                    "updated_at": report['updated_at'],
+                                    "priority": report['priority'] ?? "Normal",
+                                    "images": report['images'] ?? [], // ✅ added to display images
+                                  };
+
+                                  return TicketCard(report: ticketData);
+                                },
+                              ),
+              ),
+            ],
+          ),
         ),
       ),
 
@@ -133,13 +230,12 @@ class _MyReportsPageState extends State<MyReportsPage> {
           }
 
           if (index == 1) {
-            Navigator.push(
+            Navigator.pushReplacement(
               context,
               MaterialPageRoute(builder: (context) => const MyReportsPage()),
             );
           }
 
-          // Navigate to CreateReport Page for temporary testing
           if (index == 2) {
             final newReport = await Navigator.push(
               context,
@@ -153,20 +249,21 @@ class _MyReportsPageState extends State<MyReportsPage> {
 
             if (newReport != null) {
               setState(() {
-                ticketCards.add(TicketCard(report: newReport));
+                _tickets.insert(0, newReport);
               });
             }
           }
 
-          // Navigate to Settings Page
           if (index == 3) {
             Navigator.push(
               context,
-              MaterialPageRoute(builder: (context) => Settings(
-                firstNameController: widget.firstNameController,
-                lastNameController: widget.lastNameController,
-                emailController: widget.emailController,
-              )),
+              MaterialPageRoute(
+                builder: (context) => Settings(
+                  firstNameController: widget.firstNameController,
+                  lastNameController: widget.lastNameController,
+                  emailController: widget.emailController,
+                ),
+              ),
             );
           }
         },

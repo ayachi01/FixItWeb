@@ -495,11 +495,31 @@ from rest_framework import serializers
 # ====================
 class TicketImageSerializer(serializers.ModelSerializer):
     uploaded_by = UserSerializer(read_only=True)
+    image_url = serializers.SerializerMethodField()
 
     class Meta:
         model = TicketImage
         fields = ["id", "image_url", "uploaded_by", "timestamp"]
         read_only_fields = ["id", "uploaded_by", "timestamp"]
+
+    def get_image_url(self, obj):
+        """
+        Always return a full absolute URL for the image.
+        Works on Flutter web, Android, and iOS.
+        """
+        request = self.context.get("request")
+        if obj.image_url:
+            try:
+                if request is not None:
+                    # ✅ Example: http://192.168.5.137:8000/media/ticket_images/photo.jpg
+                    return request.build_absolute_uri(obj.image_url.url)
+                # fallback if no request context
+                from django.conf import settings
+                return f"{settings.MEDIA_URL}{obj.image_url.name}"
+            except Exception:
+                return None
+        return None
+
 
 # ====================
 # Assignment Serializer

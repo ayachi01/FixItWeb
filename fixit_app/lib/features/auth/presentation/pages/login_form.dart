@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
-import '/features/auth/presentation/pages/forgot_password.dart'; // ✅ This contains VerifyEmail
+import '/features/auth/presentation/pages/forgot_password.dart';
 import '/features/dashboard/presentation/pages/homepage.dart';
 import '/features/auth/presentation/pages/signup_form.dart';
 import '/core/widgets/welcome_button.dart';
 import '/core/theme/input_decoration.dart';
+import '/core/api_service.dart';
 
 class LoginForm extends StatefulWidget {
   const LoginForm({super.key});
@@ -13,18 +14,76 @@ class LoginForm extends StatefulWidget {
 }
 
 class _LoginFormState extends State<LoginForm> {
-  // Form Key
   final _loginFormKey = GlobalKey<FormState>();
-  // Controllers
   final emailController = TextEditingController();
   final passwordController = TextEditingController();
+  final ApiService apiService = ApiService(); // ✅ shared instance
 
   bool obscurePassword = true;
+  bool isLoading = false;
+
+  // ====================================================
+  // 🔐 Handle Login (uses ApiService for token storage)
+  // ====================================================
+  Future<void> _handleLogin() async {
+    if (!_loginFormKey.currentState!.validate()) return;
+
+    final email = emailController.text.trim();
+    final password = passwordController.text.trim();
+    setState(() => isLoading = true);
+
+    try {
+      final response = await apiService.emailLogin(email, password);
+
+      if (response is! Map) {
+        throw Exception("Unexpected response type: ${response.runtimeType}");
+      }
+
+      final accessToken = response["access"] ?? "";
+      final refreshToken = response["refresh"] ?? "";
+
+      if (accessToken.isNotEmpty && refreshToken.isNotEmpty) {
+        // ✅ Save both tokens using ApiService
+        await apiService.saveTokens(accessToken, refreshToken);
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Login successful!"),
+            backgroundColor: Colors.green,
+          ),
+        );
+
+        // ✅ Go to home page
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const HomePage()),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              response['message'] ?? response['detail'] ?? 'Login failed.',
+            ),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Error: $e"),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      setState(() => isLoading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0XFFF8F8F8),
+      backgroundColor: const Color(0xFFF8F8F8),
       body: SafeArea(
         top: false,
         child: SingleChildScrollView(
@@ -37,16 +96,12 @@ class _LoginFormState extends State<LoginForm> {
                 Center(
                   child: Column(
                     children: [
-                      // Logo
                       Image.asset(
                         'assets/images/logo.png',
                         height: 200,
                         fit: BoxFit.contain,
                       ),
-
                       const SizedBox(height: 12),
-
-                      // Login Title
                       const Text(
                         "Login",
                         style: TextStyle(
@@ -59,10 +114,7 @@ class _LoginFormState extends State<LoginForm> {
                     ],
                   ),
                 ),
-
                 const SizedBox(height: 8),
-
-                // Subtitle
                 const Padding(
                   padding: EdgeInsets.symmetric(horizontal: 4.5),
                   child: Text(
@@ -71,27 +123,23 @@ class _LoginFormState extends State<LoginForm> {
                       fontFamily: 'Poppins-SemiBold',
                       fontWeight: FontWeight.w600,
                       fontSize: 14,
-                      color: Color(0XFF4D4D4D),
+                      color: Color(0xFF4D4D4D),
                     ),
                     textAlign: TextAlign.center,
                   ),
                 ),
-
                 const SizedBox(height: 50),
 
-                // Email Title
+                // Email Input
                 const Text(
                   "Email",
                   style: TextStyle(
                     fontSize: 16,
                     fontFamily: 'Inter',
-                    color: Color(0XFF000000),
+                    color: Color(0xFF000000),
                   ),
-                  textAlign: TextAlign.start,
                 ),
                 const SizedBox(height: 8),
-
-                // Email Field
                 TextFormField(
                   controller: emailController,
                   keyboardType: TextInputType.emailAddress,
@@ -100,25 +148,25 @@ class _LoginFormState extends State<LoginForm> {
                     if (value == null || value.isEmpty) {
                       return "Please enter your email!";
                     }
+                    if (!value.contains('@')) {
+                      return "Enter a valid email!";
+                    }
                     return null;
                   },
                 ),
 
                 const SizedBox(height: 20),
 
-                // Password Title
+                // Password Input
                 const Text(
                   "Password",
                   style: TextStyle(
                     fontSize: 16,
                     fontFamily: 'Inter',
-                    color: Color(0XFF000000),
+                    color: Color(0xFF000000),
                   ),
-                  textAlign: TextAlign.start,
                 ),
                 const SizedBox(height: 8),
-
-                // Password Field
                 TextFormField(
                   controller: passwordController,
                   obscureText: obscurePassword,
@@ -137,8 +185,6 @@ class _LoginFormState extends State<LoginForm> {
                       },
                     ),
                   ),
-
-                  // Validator
                   validator: (value) {
                     if (value == null || value.isEmpty) {
                       return "Please enter your password!";
@@ -147,7 +193,6 @@ class _LoginFormState extends State<LoginForm> {
                   },
                 ),
 
-                // Forgot Password
                 Align(
                   alignment: Alignment.centerRight,
                   child: Padding(
@@ -168,7 +213,7 @@ class _LoginFormState extends State<LoginForm> {
                           context,
                           MaterialPageRoute(
                             builder: (context) => VerifyEmail(
-                              email: emailController.text.trim(), // ✅ passes email correctly
+                              email: emailController.text.trim(),
                             ),
                           ),
                         );
@@ -179,7 +224,7 @@ class _LoginFormState extends State<LoginForm> {
                           fontSize: 16,
                           fontFamily: 'Poppins',
                           fontWeight: FontWeight.w700,
-                          color: Color(0XFF4F774A),
+                          color: Color(0xFF4F774A),
                         ),
                       ),
                     ),
@@ -193,24 +238,15 @@ class _LoginFormState extends State<LoginForm> {
                   width: double.infinity,
                   height: 56,
                   child: WelcomeButton(
-                    text: "Login",
+                    text: isLoading ? "Logging in..." : "Login",
                     isPrimary: true,
-                    onPressed: () {
-                      if (_loginFormKey.currentState!.validate()) {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const HomePage(),
-                          ),
-                        );
-                      }
-                    },
+                    onPressed: isLoading ? null : _handleLogin,
                   ),
                 ),
 
                 const SizedBox(height: 40),
 
-                // Don't have an account row
+                // Sign Up link
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -222,8 +258,6 @@ class _LoginFormState extends State<LoginForm> {
                       ),
                     ),
                     const SizedBox(width: 6),
-
-                    // Sign Up Text Button
                     GestureDetector(
                       onTap: () {
                         Navigator.push(
@@ -239,7 +273,7 @@ class _LoginFormState extends State<LoginForm> {
                           fontSize: 18,
                           fontFamily: 'Inter',
                           fontWeight: FontWeight.w700,
-                          color: Color(0XFF4F774A),
+                          color: Color(0xFF4F774A),
                         ),
                       ),
                     ),

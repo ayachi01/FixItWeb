@@ -14,35 +14,127 @@ class CreateReport extends StatefulWidget {
 }
 
 class CreateReportState extends State<CreateReport> {
-  // Form Key
   final _createReportKey = GlobalKey<FormState>();
 
   // Controllers
   final incidentType = TextEditingController();
   final description = TextEditingController();
-  final building = TextEditingController();
-  final category = TextEditingController();
-  final urgency = TextEditingController();
 
   // State variables
-  String? _selectedOption = "Public";
-  String? buildingDropDownValue;
+  int? selectedLocationId;
   String? categoryDropDownValue;
   String? urgencyDropDownValue;
 
-  // Dispose controllers
+  // Dynamic building list
+  List<Map<String, dynamic>> buildingOptions = [];
+  bool isLoadingBuildings = true;
+
+  // Hardcoded options to match backend enums
+  final List<String> categoryOptions = [
+    "Cleaning",
+    "Plumbing",
+    "Electrical",
+    "Structural",
+    "HVAC",
+    "Technology",
+    "Equipment",
+    "Disturbance",
+    "Security",
+    "Parking",
+  ];
+
+  final List<String> urgencyOptions = [
+    "Standard",
+    "Urgent",
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    print("🟢 [Init] CreateReport initialized");
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _fetchBuildings();
+    });
+  }
+
   @override
   void dispose() {
     incidentType.dispose();
     description.dispose();
-    building.dispose();
-    category.dispose();
-    urgency.dispose();
+    print("🔴 [Dispose] CreateReport disposed");
     super.dispose();
   }
 
+  // -------------------------------
+  // Fetch buildings from backend
+  // -------------------------------
+  Future<void> _fetchBuildings() async {
+    final vm = context.read<ReportViewModel>();
+    try {
+      print("🔹 [Fetch] Fetching buildings...");
+      final buildings = await vm.fetchLocations();
+      print("✅ [Fetch] Fetched buildings: ${buildings.length}");
+      if (!mounted) return;
+      setState(() {
+        buildingOptions = buildings;
+        isLoadingBuildings = false;
+      });
+    } catch (e, st) {
+      print("❌ [Fetch] Error fetching buildings: $e\n$st");
+      if (!mounted) return;
+      setState(() => isLoadingBuildings = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Failed to load buildings: $e")),
+      );
+    }
+  }
+
+  // -------------------------------
+  // Submit report to backend
+  // -------------------------------
+  Future<void> _submitReport(BuildContext context) async {
+    if (!_createReportKey.currentState!.validate()) {
+      print("⚠️ [Submit] Form validation failed");
+      return;
+    }
+
+    final vm = context.read<ReportViewModel>();
+    final Map<String, dynamic> formData = {
+      "title": incidentType.text.trim(),
+      "description": description.text.trim(),
+      "category": categoryDropDownValue,
+      "urgency": urgencyDropDownValue,
+      "location": selectedLocationId,
+    };
+
+    print("🔹 [Submit] Form data: $formData");
+
+    try {
+      await vm.createTicket(formData);
+      print("✅ [Submit] Ticket submitted successfully");
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Ticket submitted successfully")),
+        );
+        Navigator.pop(context);
+      }
+    } catch (e, st) {
+      print("❌ [Submit] Error submitting ticket: $e\n$st");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error submitting ticket: $e")),
+        );
+      }
+    }
+  }
+
+  // -------------------------------
+  // UI
+  // -------------------------------
   @override
   Widget build(BuildContext context) {
+    print("🔹 [Build] Building CreateReport UI");
     return Scaffold(
       appBar: AppBar(
         title: const Text(
@@ -68,29 +160,17 @@ class CreateReportState extends State<CreateReport> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Incident Type Title
-                const Text(
-                  "Incident Type",
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontFamily: 'Inter',
-                    color: Color(0XFF000000),
-                  ),
-                ),
+                // Incident Type
+                const Text("Incident Type",
+                    style: TextStyle(fontSize: 16, fontFamily: 'Inter')),
                 const SizedBox(height: 8),
-
-                // Incident Type Input
                 TextFormField(
                   controller: incidentType,
-                  keyboardType: TextInputType.text,
-                  maxLength: 50,
                   decoration: inputDecoration("Enter Incident Type"),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return "Please enter incident type!";
-                    }
-                    return null;
-                  },
+                  validator: (value) => value == null || value.isEmpty
+                      ? "Please enter incident type!"
+                      : null,
+                  onChanged: (val) => print("🖊️ [Input] Incident Type: $val"),
                 ),
                 const SizedBox(height: 20),
 
@@ -98,24 +178,33 @@ class CreateReportState extends State<CreateReport> {
                 const Text("Building",
                     style: TextStyle(fontSize: 16, fontFamily: 'Inter')),
                 const SizedBox(height: 8),
-                DropdownButtonFormField<String>(
-                  value: buildingDropDownValue,
-                  hint: const Text('Select Building'),
-                  onChanged: (String? newValue) {
-                    setState(() => buildingDropDownValue = newValue!);
-                  },
-                  items: const [
-                    DropdownMenuItem(value: 'PTC', child: Text('PTC')),
-                    DropdownMenuItem(value: 'MBA', child: Text('MBA')),
-                    DropdownMenuItem(value: 'CMA', child: Text('CMA')),
-                    DropdownMenuItem(value: 'NH', child: Text('NH')),
-                    DropdownMenuItem(value: 'RS', child: Text('RS')),
-                    DropdownMenuItem(value: 'BE', child: Text('BE')),
-                  ],
-                  decoration: inputDecoration(""),
-                  validator: (value) =>
-                      value == null ? "Please select a building!" : null,
-                ),
+                isLoadingBuildings
+                    ? const Center(
+                        child: Padding(
+                          padding: EdgeInsets.all(16.0),
+                          child: CircularProgressIndicator(),
+                        ),
+                      )
+                    : DropdownButtonFormField<int>(
+                        value: selectedLocationId,
+                        hint: const Text('Select Location'),
+                        onChanged: (value) {
+                          if (!mounted) return;
+                          print("🏢 [Select] Location ID: $value");
+                          setState(() => selectedLocationId = value);
+                        },
+                        items: buildingOptions.map((loc) {
+                          final displayName =
+                              "${loc['building_name']} - Floor ${loc['floor_number']} - Room ${loc['room_identifier']}";
+                          return DropdownMenuItem<int>(
+                            value: loc['id'],
+                            child: Text(displayName),
+                          );
+                        }).toList(),
+                        decoration: inputDecoration(""),
+                        validator: (value) =>
+                            value == null ? "Please select a location!" : null,
+                      ),
                 const SizedBox(height: 20),
 
                 // Category Dropdown
@@ -125,26 +214,14 @@ class CreateReportState extends State<CreateReport> {
                 DropdownButtonFormField<String>(
                   value: categoryDropDownValue,
                   hint: const Text('Select Category'),
-                  onChanged: (String? newValue) {
-                    setState(() => categoryDropDownValue = newValue!);
+                  onChanged: (value) {
+                    if (!mounted) return;
+                    print("📂 [Select] Category: $value");
+                    setState(() => categoryDropDownValue = value);
                   },
-                  items: const [
-                    DropdownMenuItem(value: 'Cleaning', child: Text('Cleaning')),
-                    DropdownMenuItem(value: 'Plumbing', child: Text('Plumbing')),
-                    DropdownMenuItem(
-                        value: 'Electrical', child: Text('Electrical')),
-                    DropdownMenuItem(
-                        value: 'Structural', child: Text('Structural')),
-                    DropdownMenuItem(value: 'HVAC', child: Text('HVAC')),
-                    DropdownMenuItem(
-                        value: 'Technology', child: Text('Technology')),
-                    DropdownMenuItem(
-                        value: 'Equipment', child: Text('Equipment')),
-                    DropdownMenuItem(
-                        value: 'Disturbance', child: Text('Disturbance')),
-                    DropdownMenuItem(value: 'Security', child: Text('Security')),
-                    DropdownMenuItem(value: 'Parking', child: Text('Parking')),
-                  ],
+                  items: categoryOptions
+                      .map((c) => DropdownMenuItem(value: c, child: Text(c)))
+                      .toList(),
                   decoration: inputDecoration(""),
                   validator: (value) =>
                       value == null ? "Please select a category!" : null,
@@ -158,13 +235,14 @@ class CreateReportState extends State<CreateReport> {
                 DropdownButtonFormField<String>(
                   value: urgencyDropDownValue,
                   hint: const Text('Select Urgency'),
-                  onChanged: (String? newValue) {
-                    setState(() => urgencyDropDownValue = newValue!);
+                  onChanged: (value) {
+                    if (!mounted) return;
+                    print("⏰ [Select] Urgency: $value");
+                    setState(() => urgencyDropDownValue = value);
                   },
-                  items: const [
-                    DropdownMenuItem(value: 'Standard', child: Text('Standard')),
-                    DropdownMenuItem(value: 'Urgent', child: Text('Urgent')),
-                  ],
+                  items: urgencyOptions
+                      .map((u) => DropdownMenuItem(value: u, child: Text(u)))
+                      .toList(),
                   decoration: inputDecoration(""),
                   validator: (value) =>
                       value == null ? "Please select urgency!" : null,
@@ -177,19 +255,16 @@ class CreateReportState extends State<CreateReport> {
                 const SizedBox(height: 8),
                 TextFormField(
                   controller: description,
-                  keyboardType: TextInputType.text,
-                  maxLength: 50,
                   decoration: inputDecoration("Enter Description"),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return "Please enter description!";
-                    }
-                    return null;
-                  },
+                  maxLines: 3,
+                  validator: (value) => value == null || value.isEmpty
+                      ? "Please enter description!"
+                      : null,
+                  onChanged: (val) => print("📝 [Input] Description: $val"),
                 ),
                 const SizedBox(height: 15),
 
-                // 📸 Image Picker (Step 5)
+                // Image Picker
                 Container(
                   width: double.infinity,
                   height: 180,
@@ -200,9 +275,11 @@ class CreateReportState extends State<CreateReport> {
                   child: Center(
                     child: Consumer<ReportViewModel>(
                       builder: (context, vm, child) {
-                        // --- show image if selected ---
-                        if ((kIsWeb && vm.selectedImageBytes != null) ||
-                            (!kIsWeb && vm.selectedImage != null)) {
+                        final hasImage = (kIsWeb && vm.selectedImageBytes != null) ||
+                            (!kIsWeb && vm.selectedImage != null);
+
+                        if (hasImage) {
+                          print("🖼️ [Image] Displaying selected image");
                           return Stack(
                             alignment: Alignment.topRight,
                             children: [
@@ -228,7 +305,10 @@ class CreateReportState extends State<CreateReport> {
                                   child: IconButton(
                                     icon: const Icon(Icons.clear,
                                         color: Colors.red, size: 18),
-                                    onPressed: vm.removeImage,
+                                    onPressed: () {
+                                      print("❌ [Image] Removing selected image");
+                                      vm.removeImage();
+                                    },
                                   ),
                                 ),
                               ),
@@ -236,14 +316,16 @@ class CreateReportState extends State<CreateReport> {
                           );
                         }
 
-                        // --- show add button if no image ---
                         return MaterialButton(
-                          onPressed: vm.pickFromGallery,
+                          onPressed: () {
+                            print("📸 [Image] Picking image from gallery");
+                            vm.pickFromGallery();
+                          },
                           textColor: Colors.black,
                           padding: const EdgeInsets.all(16),
-                          child: Row(
+                          child: const Row(
                             mainAxisSize: MainAxisSize.min,
-                            children: const [
+                            children: [
                               Icon(Icons.add_a_photo),
                               SizedBox(width: 8),
                               Text(
@@ -260,45 +342,16 @@ class CreateReportState extends State<CreateReport> {
                     ),
                   ),
                 ),
+                const SizedBox(height: 30),
 
                 // Submit Button
-                Center(
-                  child: Padding(
-                    padding: const EdgeInsets.only(top: 30),
-                    child: SizedBox(
-                      width: double.infinity,
-                      height: 56,
-                      child: WelcomeButton(
-                        text: "Submit Report",
-                        isPrimary: true,
-                        onPressed: () {
-                          if (_createReportKey.currentState!.validate()) {
-                            final vm = context.read<ReportViewModel>();
-                            final reportData = {
-                              'id':
-                                  'RPT-${DateTime.now().millisecondsSinceEpoch}',
-                              'title': incidentType.text,
-                              'description': description.text,
-                              'location': buildingDropDownValue ?? '',
-                              'category': categoryDropDownValue ?? '',
-                              'urgency': urgencyDropDownValue ?? '',
-                              'date': DateTime.now().toString().split(' ')[0],
-                              'time': TimeOfDay.now().format(context),
-                              'visibility': _selectedOption ?? '',
-                              'image': kIsWeb
-                                  ? (vm.selectedImageBytes != null
-                                      ? "web_image_bytes"
-                                      : '')
-                                  : (vm.selectedImage?.path ?? ''),
-                              'status': '',
-                              'statusColor': '',
-                              'like': 0,
-                            };
-                            Navigator.pop(context, reportData);
-                          }
-                        },
-                      ),
-                    ),
+                SizedBox(
+                  width: double.infinity,
+                  height: 56,
+                  child: WelcomeButton(
+                    text: "Submit Report",
+                    isPrimary: true,
+                    onPressed: () => _submitReport(context),
                   ),
                 ),
                 const SizedBox(height: 20),
