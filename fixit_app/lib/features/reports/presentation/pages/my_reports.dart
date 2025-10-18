@@ -63,7 +63,7 @@ class _MyReportsPageState extends State<MyReportsPage> {
     }
   }
 
-  // Safely format location for both Map and int values
+  // ✅ Safely format location for both Map and int values
   String formatLocation(dynamic location) {
     if (location is Map<String, dynamic>) {
       final building = location['building_name'] ?? 'Unknown';
@@ -133,8 +133,7 @@ class _MyReportsPageState extends State<MyReportsPage> {
           child: Column(
             children: [
               Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                 child: TextField(
                   onChanged: (value) {
                     setState(() => _searchQuery = value);
@@ -143,8 +142,7 @@ class _MyReportsPageState extends State<MyReportsPage> {
                     hintText: 'Search ticket',
                     prefixIcon: const Icon(Icons.search),
                     suffixIcon: const Icon(Icons.filter_list),
-                    contentPadding:
-                        const EdgeInsets.symmetric(horizontal: 20),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 20),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(25),
                     ),
@@ -183,17 +181,18 @@ class _MyReportsPageState extends State<MyReportsPage> {
                                 itemBuilder: (context, index) {
                                   final report = _filteredTickets[index];
 
+                                  // ✅ Include location_name in ticketData
                                   final ticketData = {
                                     "id": report['id'],
                                     "title": report['title'] ?? "Untitled Ticket",
                                     "status": report['status'] ?? "Unknown",
-                                    "description":
-                                        report['description'] ?? "No details",
+                                    "description": report['description'] ?? "No details",
                                     "location": formatLocation(report['location']),
+                                    "location_name": report['location_name'], // ✅ added fix
                                     "created_at": report['created_at'],
                                     "updated_at": report['updated_at'],
                                     "priority": report['priority'] ?? "Normal",
-                                    "images": report['images'] ?? [], // ✅ added to display images
+                                    "images": report['images'] ?? [], // ✅ display images
                                   };
 
                                   return TicketCard(report: ticketData);

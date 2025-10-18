@@ -18,7 +18,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "unsafe-secret-key")
 DEBUG = os.environ.get("DEBUG", "True") == "True"
 
-ALLOWED_HOSTS = ["localhost", "127.0.0.1", "192.168.5.137", "192.168.5.137:8000"]
+ALLOWED_HOSTS = ["localhost", "127.0.0.1", "10.134.119.9", "10.134.119.9:8000"]
 if not DEBUG:
     ALLOWED_HOSTS += ["fixit.university.edu"]  # ✅ replace with your domain
 
@@ -60,7 +60,7 @@ MIDDLEWARE = [
 # -------------------------------------------------------------------
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",  # Frontend dev URL
-    "http://localhost:65145", # need to change
+    "http://localhost:65353", # need to change
 
 ]
 if not DEBUG:
@@ -79,7 +79,7 @@ CORS_ALLOW_HEADERS = [
 # CSRF / Cookie Security
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:5173",
-    "http://localhost:65145",
+    "http://localhost:65353",
    
 
 ]
