@@ -63,7 +63,7 @@ class _MyReportsPageState extends State<MyReportsPage> {
     }
   }
 
-  // ✅ Safely format location for both Map and int values
+  // Safely format location for both Map and int values
   String formatLocation(dynamic location) {
     if (location is Map<String, dynamic>) {
       final building = location['building_name'] ?? 'Unknown';
@@ -181,18 +181,18 @@ class _MyReportsPageState extends State<MyReportsPage> {
                                 itemBuilder: (context, index) {
                                   final report = _filteredTickets[index];
 
-                                  // ✅ Include location_name in ticketData
+                                  // Include location_name in ticketData
                                   final ticketData = {
                                     "id": report['id'],
                                     "title": report['title'] ?? "Untitled Ticket",
                                     "status": report['status'] ?? "Unknown",
                                     "description": report['description'] ?? "No details",
                                     "location": formatLocation(report['location']),
-                                    "location_name": report['location_name'], // ✅ added fix
+                                    "location_name": report['location_name'],
                                     "created_at": report['created_at'],
                                     "updated_at": report['updated_at'],
                                     "priority": report['priority'] ?? "Normal",
-                                    "images": report['images'] ?? [], // ✅ display images
+                                    "images": report['images'] ?? [],
                                   };
 
                                   return TicketCard(report: ticketData);

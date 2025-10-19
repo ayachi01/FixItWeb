@@ -15,19 +15,14 @@ from django.contrib.auth.hashers import make_password, check_password
 from django.contrib.auth.models import AbstractUser, BaseUserManager, PermissionsMixin
 from django.contrib.auth.signals import user_logged_in, user_logged_out, user_login_failed
 
-
-
-
-# Validators
 from core.validators import validate_file_size, validate_image_extension
 
 
 logger = logging.getLogger(__name__)
 
 # ======================
-# 1. USER & AUTHENTICATION
+#  USER & AUTHENTICATION
 # ======================
-
 # =====================================================
 # Custom User Manager
 # =====================================================
@@ -58,6 +53,7 @@ class CustomUserManager(BaseUserManager):
             raise ValueError("Superuser must have is_superuser=True.")
 
         return self.create_user(email, password, **extra_fields)
+
 
 
 # =====================================================
@@ -224,6 +220,9 @@ class UserProfile(models.Model):
 
 
 
+# ======================
+# Student Profile
+# ======================
 class StudentProfile(models.Model):
     """
     Extends UserProfile with student-specific academic details.
@@ -294,6 +293,10 @@ class PasswordResetCodeManager(models.Manager):
             return obj, raw_code
 
 
+
+# ======================
+# Password Reset
+# ======================
 class PasswordResetCode(models.Model):
     """
     OTP for password reset.
@@ -364,27 +367,9 @@ class PasswordResetCode(models.Model):
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 # ==========================
-# ✅ FINAL Invite Model
+#  Invite
 # ==========================
-
-
-
 class Invite(models.Model):
     """
     Invitation system to onboard privileged users (e.g., fixers, moderators, admins).
@@ -394,7 +379,7 @@ class Invite(models.Model):
     email = models.EmailField(db_index=True)
     token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False, db_index=True)
 
-    # ✅ Role from DB (not hardcoded)
+    # Role from DB
     role = models.ForeignKey("Role", on_delete=models.CASCADE, related_name="invites")
 
     created_by = models.ForeignKey(
@@ -422,7 +407,7 @@ class Invite(models.Model):
         super().save(*args, **kwargs)
 
     # =====================================================
-    # ⏳ Expiration & Usage Checks
+    #  Expiration & Usage Checks
     # =====================================================
     @property
     def is_expired(self) -> bool:
@@ -453,14 +438,8 @@ class Invite(models.Model):
 
 
 
-
-
-
-
-
-
 # ======================
-# 3. LOCATIONS
+#  LOCATIONS
 # ======================
 class Location(models.Model):
     id = models.AutoField(primary_key=True)
@@ -481,19 +460,8 @@ class Location(models.Model):
 
 
 
-
-
-
-
-
-
-
-
-
-
-
 # ======================
-# 4. TICKETING
+#  TICKETING
 # ======================
 class Ticket(models.Model):
     class Status(models.TextChoices):
@@ -635,61 +603,43 @@ class Ticket(models.Model):
             changed = True
         if changed and new_level != self.escalation_level:
             with transaction.atomic():
+                self._performed_by = performed_by
                 self.escalation_level = new_level
                 self.save(update_fields=["escalation_level", "updated_at"])
-                create_audit(
-                    action=AuditLog.Action.TICKET_ESCALATED,
-                    performed_by=performed_by,
-                    target_user=self.reporter,
-                    details=f"Ticket #{self.id} escalated to {self.escalation_level}",
-                )
             return True
         return False
 
     def close(self, performed_by=None):
         if self.status != self.Status.CLOSED:
             with transaction.atomic():
+                self._performed_by = performed_by
                 self.status = self.Status.CLOSED
                 self.save(update_fields=["status", "updated_at"])
-                create_audit(
-                    action=AuditLog.Action.TICKET_CLOSED,
-                    performed_by=performed_by,
-                    target_user=self.reporter,
-                    details=f"Ticket #{self.id} closed.",
-                )
         return self
 
     def cancel(self, performed_by=None):
         if self.status != self.Status.CANCELLED:
             with transaction.atomic():
+                self._performed_by = performed_by
                 self.status = self.Status.CANCELLED
                 self.save(update_fields=["status", "updated_at"])
-                create_audit(
-                    action=AuditLog.Action.TICKET_CANCELLED,
-                    performed_by=performed_by,
-                    target_user=self.reporter,
-                    details=f"Ticket #{self.id} cancelled.",
-                )
         return self
 
     def reopen(self, performed_by=None):
         if self.status in {self.Status.CLOSED, self.Status.CANCELLED}:
             with transaction.atomic():
+                self._performed_by = performed_by
                 self.status = self.Status.REOPENED
                 self.save(update_fields=["status", "updated_at"])
-                create_audit(
-                    action=AuditLog.Action.TICKET_REOPENED,
-                    performed_by=performed_by,
-                    target_user=self.reporter,
-                    details=f"Ticket #{self.id} reopened.",
-                )
         return self
 
     def __str__(self):
         return f"Ticket #{self.id} - {self.title} - {self.status} - Escalation: {self.escalation_level}"
 
+
+
 # ======================
-# 5. ASSIGNMENTS
+#  ASSIGNMENTS
 # ======================
 class TicketAssignment(models.Model):
     ticket = models.ForeignKey("Ticket", on_delete=models.CASCADE, related_name="assignments")
@@ -729,8 +679,9 @@ class TicketAssignment(models.Model):
         self.full_clean()
         super().save(*args, **kwargs)
 
-    def mark_accepted(self):
+    def mark_accepted(self, performed_by=None):
         with transaction.atomic():
+            self._performed_by = performed_by
             self.accepted = True
             self.accepted_at = timezone.now()
             self.save(update_fields=["accepted", "accepted_at"])
@@ -739,8 +690,10 @@ class TicketAssignment(models.Model):
     def __str__(self):
         return f"Assignment: {self.user} -> Ticket #{self.ticket.id}"
 
+
+
 # ======================
-# 6. IMAGES
+#  IMAGES
 # ======================
 class TicketImage(models.Model):
     ticket = models.ForeignKey(Ticket, on_delete=models.CASCADE, related_name="images")
@@ -757,8 +710,10 @@ class TicketImage(models.Model):
     def __str__(self):
         return f"Image for Ticket #{self.ticket.id} uploaded by {self.uploaded_by}"
 
+
+
 # ======================
-# 7. RESOLUTIONS
+#  RESOLUTIONS
 # ======================
 class TicketResolution(models.Model):
     ticket = models.ForeignKey(Ticket, on_delete=models.CASCADE, related_name="resolutions")
@@ -797,6 +752,7 @@ class TicketResolution(models.Model):
             super().save(*args, **kwargs)
             if is_new:
                 if self.ticket.status not in {Ticket.Status.RESOLVED, Ticket.Status.CLOSED, Ticket.Status.CANCELLED}:
+                    self.ticket._performed_by = self.resolved_by
                     self.ticket.status = Ticket.Status.RESOLVED
                     self.ticket.save(update_fields=["status", "updated_at"])
 
@@ -804,29 +760,12 @@ class TicketResolution(models.Model):
         return f"Resolution for Ticket #{self.ticket.id} by {self.resolved_by}"
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 # =====================================================
-# 📝 Audit Log
+#  Audit Log
 # =====================================================
 class AuditLog(models.Model):
     class Action(models.TextChoices):
-        # 🔐 Auth / user management
+        #  Auth / user management
         USER_CREATED = "User Created", "User Created"
         USER_PROFILE_CREATED = "User Profile Created", "User Profile Created"
         ROLE_ASSIGNED = "Role Assigned", "Role Assigned"
@@ -843,7 +782,7 @@ class AuditLog(models.Model):
         LOGIN_FAILED = "Login Failed", "Login Failed"
         TOKEN_REFRESHED = "Token Refreshed", "Token Refreshed"
 
-        # 📝 Ticket lifecycle
+        #  Ticket lifecycle
         TICKET_CREATED = "Ticket Created", "Ticket Created"
         TICKET_UPDATED = "Ticket Updated", "Ticket Updated"
         TICKET_ASSIGNED = "Ticket Assigned", "Ticket Assigned"
@@ -855,6 +794,7 @@ class AuditLog(models.Model):
         TICKET_CANCELLED = "Ticket Cancelled", "Ticket Cancelled"
         TICKET_ESCALATED = "Ticket Escalated", "Ticket Escalated"
 
+    # Field with choices and db_index
     action = models.CharField(max_length=50, choices=Action.choices, db_index=True)
 
     performed_by = models.ForeignKey(
@@ -910,180 +850,3 @@ class AuditLog(models.Model):
         """Delete logs older than N days (default: 90)."""
         cutoff = timezone.now() - timedelta(days=days)
         cls.objects.filter(timestamp__lt=cutoff).delete()
-
-
-# =====================================================
-# 🛠️ Helper (safe audit creation)
-# =====================================================
-def create_audit(
-    action: str,
-    performed_by=None,
-    target_user=None,
-    target_invite=None,
-    target_ticket=None,
-    details: str = "",
-    request=None,
-):
-    """Safe audit log creator with action validation + request metadata."""
-    if action not in AuditLog.Action.values:
-        return None
-
-    try:
-        # 🔎 Enrich details with request metadata if provided
-        if request:
-            ip = request.META.get("REMOTE_ADDR", "unknown IP")
-            ua = request.META.get("HTTP_USER_AGENT", "unknown UA")
-            details = f"{details} | IP={ip} | UA={ua}".strip()
-
-        return AuditLog.objects.create(
-            action=action,
-            performed_by=performed_by,
-            target_user=target_user,
-            target_invite=target_invite,
-            target_ticket=target_ticket,
-            details=details or "",
-        )
-    except Exception as e:
-        logger.error(f"[AuditLog] Failed to create log ({action}): {e}")
-        return None
-
-
-# =====================================================
-# 🔔 UserProfile signals
-# =====================================================
-@receiver(post_save, sender=UserProfile)
-def log_user_profile_events(sender, instance, created, **kwargs):
-    if created:
-        create_audit(
-            AuditLog.Action.USER_PROFILE_CREATED,
-            performed_by=None,  # system action
-            target_user=instance.user,
-            details=f"UserProfile created for {instance.user.email} with role {instance.role}.",
-        )
-    elif hasattr(instance, "has_changed") and instance.has_changed("role"):
-        create_audit(
-            AuditLog.Action.ROLE_ASSIGNED,
-            performed_by=getattr(instance, "_performed_by", None),
-            target_user=instance.user,
-            details=f"Role updated to {instance.role} for {instance.user.email}.",
-        )
-
-
-# =====================================================
-# 🔔 Ticket signals
-# =====================================================
-@receiver(post_save, sender=Ticket)
-def log_ticket_events(sender, instance, created, **kwargs):
-    performed_by = getattr(instance, "_performed_by", None)
-
-    if created:
-        create_audit(
-            AuditLog.Action.TICKET_CREATED,
-            performed_by=performed_by or instance.reporter,
-            target_ticket=instance,
-            details=f"Ticket #{instance.id} created with category {instance.category}.",
-        )
-    else:
-        if hasattr(instance, "has_changed") and instance.has_changed("status"):
-            action_map = {
-                sender.Status.RESOLVED: AuditLog.Action.TICKET_RESOLVED,
-                sender.Status.CLOSED: AuditLog.Action.TICKET_CLOSED,
-                sender.Status.REOPENED: AuditLog.Action.TICKET_REOPENED,
-            }
-            action = action_map.get(instance.status, AuditLog.Action.TICKET_UPDATED)
-            create_audit(
-                action,
-                performed_by=performed_by,
-                target_ticket=instance,
-                details=f"Ticket #{instance.id} status changed to {instance.status}.",
-            )
-        elif hasattr(instance, "has_changed") and instance.has_changed("escalation_level"):
-            create_audit(
-                AuditLog.Action.TICKET_ESCALATED,
-                performed_by=performed_by,
-                target_ticket=instance,
-                details=f"Ticket #{instance.id} escalated to {instance.escalation_level}.",
-            )
-
-
-@receiver(post_save, sender=TicketAssignment)
-def log_ticket_assignment(sender, instance, created, **kwargs):
-    performed_by = getattr(instance, "_performed_by", None)
-
-    if created:
-        create_audit(
-            AuditLog.Action.TICKET_ASSIGNED,
-            performed_by=performed_by,
-            target_user=instance.user,
-            target_ticket=instance.ticket,
-            details=f"Ticket #{instance.ticket.id} assigned to {instance.user.email}.",
-        )
-    elif instance.accepted and instance.accepted_at:
-        create_audit(
-            AuditLog.Action.TICKET_ACCEPTED,
-            performed_by=performed_by or instance.user,
-            target_user=instance.user,
-            target_ticket=instance.ticket,
-            details=f"{instance.user.email} accepted Ticket #{instance.ticket.id}.",
-        )
-
-
-@receiver(post_delete, sender=TicketAssignment)
-def log_ticket_unassignment(sender, instance, **kwargs):
-    performed_by = getattr(instance, "_performed_by", None)
-    create_audit(
-        AuditLog.Action.TICKET_UNASSIGNED,
-        performed_by=performed_by,
-        target_user=instance.user,
-        target_ticket=instance.ticket,
-        details=f"Ticket #{instance.ticket.id} unassigned from {instance.user.email}.",
-    )
-
-
-@receiver(post_save, sender=TicketResolution)
-def log_ticket_resolution(sender, instance, created, **kwargs):
-    if created:
-        performed_by = getattr(instance, "_performed_by", None) or instance.resolved_by
-        create_audit(
-            AuditLog.Action.TICKET_RESOLVED,
-            performed_by=performed_by,
-            target_user=instance.resolved_by,
-            target_ticket=instance.ticket,
-            details=f"Ticket #{instance.ticket.id} resolved by {instance.resolved_by.email}.",
-        )
-
-
-# =====================================================
-# 🔐 Auth signal hooks
-# =====================================================
-@receiver(user_logged_in)
-def log_user_login(sender, request, user, **kwargs):
-    create_audit(
-        AuditLog.Action.LOGIN,
-        performed_by=user,
-        details=f"User {user.email} logged in.",
-        request=request,
-    )
-
-
-@receiver(user_logged_out)
-def log_user_logout(sender, request, user, **kwargs):
-    create_audit(
-        AuditLog.Action.LOGOUT,
-        performed_by=user,
-        details=f"User {user.email} logged out.",
-        request=request,
-    )
-
-
-@receiver(user_login_failed)
-def log_user_login_failed(sender, credentials, request, **kwargs):
-    email = credentials.get("email") or credentials.get("username")
-    create_audit(
-        AuditLog.Action.LOGIN_FAILED,
-        details=f"Failed login attempt for {email}.",
-        request=request,
-    )
-
-
-

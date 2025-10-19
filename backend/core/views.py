@@ -1,23 +1,25 @@
-# ==================================================
-#                   Imports
-# ==================================================
+# -------------------- Django --------------------
 from django.conf import settings
+from django.http import HttpResponse, JsonResponse
 from django.utils import timezone
 from django.contrib.auth import get_user_model, authenticate
+from django.contrib.auth.models import update_last_login
 from django.core.mail import send_mail
+from django.shortcuts import get_object_or_404
+from django.db import IntegrityError, transaction
 from django.utils.encoding import force_str, force_bytes
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.contrib.auth.tokens import default_token_generator
 from django.contrib.auth.hashers import make_password
-from django.db import IntegrityError
-from django.shortcuts import get_object_or_404
-from django.contrib.auth.models import update_last_login
 
+# -------------------- Django REST Framework --------------------
 from rest_framework import viewsets, status, generics
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated, AllowAny, IsAdminUser
+
+# -------------------- JWT --------------------
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
@@ -35,14 +37,7 @@ from core.models import (
     Role,
     DomainRoleMapping,
 )
-
-# Import your models and serializers
-from .models import TicketImage
-
-from django.db.models import Prefetch
-
-# ✅ Always reference the active User model
-User = get_user_model()
+from .models import TicketImage  # local model
 
 # -------------------- Serializers --------------------
 from core.serializers import (
@@ -57,42 +52,34 @@ from core.serializers import (
     RoleSerializer,
 )
 
-from django.db import transaction
-
-
 # -------------------- Tasks --------------------
 from core.tasks import check_escalation
 
 # -------------------- Throttles --------------------
 from core.throttles import OTPThrottle, PasswordResetThrottle
 
-# -------------------- Helpers --------------------
+# -------------------- Utilities / Helpers --------------------
 from core.utils.audit import create_audit
 from core.utils.email_utils import deliver_code, send_verification_email
 from core.utils.security import generate_otp
 
+# -------------------- Standard Libraries --------------------
 import json
-from django.http import HttpResponse, JsonResponse
 import requests
 
-# ==================================================
-#                  User Management (Core)
-# ==================================================
-# This ViewSet handles user CRUD, registration, invites, and password management.
-# Relationships:
-# - Depends on Role and DomainRoleMapping for role assignment.
-# - Integrates with StudentProfile for student-specific data.
-# - Uses AuditLog for all actions.
-# - Feeds into Auth views for login/registration flows.
-# - Queried by TicketViewSet for assignee/reporter permissions.
+# -------------------- Django ORM Helpers --------------------
+from django.db.models import Count, Avg, Q, F, DurationField, ExpressionWrapper, Prefetch
+from django.db.models.functions import TruncMonth, TruncDay
+
+# -------------------- Always reference the active User model --------------------
+User = get_user_model()
+
+
 
 
 # ==========================
 # UserViewSet
 # ==========================
-
-
-
 class UserViewSet(viewsets.ModelViewSet):
     """
     Production-ready UserViewSet:
@@ -209,7 +196,7 @@ class UserViewSet(viewsets.ModelViewSet):
         with transaction.atomic():
             profile = serializer.save()
 
-            # ✅ Update the related User model (so name/email changes persist)
+            # Update the related User model (so name/email changes persist)
             user = profile.user
             name = data.get("full_name")
             if name:
@@ -454,14 +441,6 @@ class UserViewSet(viewsets.ModelViewSet):
     
 
 
-
-
-
-
-
-
-
-
 class InviteViewSet(viewsets.ModelViewSet):
     """
     Handles user invites for privileged roles.
@@ -485,7 +464,7 @@ class InviteViewSet(viewsets.ModelViewSet):
         return [IsAdminUser()]
 
     # ==============================================================    
-    # ✅ Admin creates invite
+    #  Admin creates invite
     # ==============================================================
     def perform_create(self, serializer):
         email = serializer.validated_data["email"]
@@ -502,7 +481,7 @@ class InviteViewSet(viewsets.ModelViewSet):
             invite.role = role
             invite.save(update_fields=["role"])
 
-        # ✅ Send invite link
+        #  Send invite link
         frontend_url = getattr(settings, "FRONTEND_URL", "http://localhost:5173")
         invite_url = f"{frontend_url}/invite/{invite.token}"
 
@@ -517,7 +496,7 @@ class InviteViewSet(viewsets.ModelViewSet):
         return invite
 
     # ==============================================================    
-    # ✅ Validate invite token
+    #  Validate invite token
     # ==============================================================
     @action(detail=False, methods=["post"], url_path="validate")
     def validate(self, request):
@@ -540,7 +519,7 @@ class InviteViewSet(viewsets.ModelViewSet):
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     # ==============================================================    
-    # ✅ Register via Invite
+    #  Register via Invite
     # ==============================================================
     @action(detail=False, methods=["post"], url_path="register")
     def register(self, request):
@@ -601,7 +580,7 @@ class InviteViewSet(viewsets.ModelViewSet):
         return Response({"message": "User registered successfully via invite"}, status=status.HTTP_201_CREATED)
 
     # ==============================================================    
-    # ✅ Resend Invite
+    #  Resend Invite
     # ==============================================================
     @action(detail=True, methods=["post"], url_path="resend")
     def resend(self, request, pk=None):
@@ -632,44 +611,9 @@ class InviteViewSet(viewsets.ModelViewSet):
 
 
 
-
-
-
-
-
-# ==================================================
-#                  Ticket Management (Core)
-# ==================================================
-# This ViewSet manages the ticket lifecycle (create, assign, resolve, etc.).
-# Relationships:
-# - Depends on UserProfile for permission checks (can_assign, can_fix, etc.).
-# - Uses Location for ticket locations.
-# - Integrates with TicketAssignment and TicketImage models.
-# - Logs actions to AuditLog.
-# - Queried by UserProfileView for feature flags based on role.
-
-# ==================================================
-# TicketViewSet (with proof upload support)
-# ==================================================
-
-
-
-# ==================================================
-# views.py
-# ==================================================
-from django.db.models import Count, Avg, Q, F, DurationField, ExpressionWrapper, Prefetch
-from django.db.models.functions import TruncMonth, TruncDay
-
-
 # ==============================
-# Ticket ViewSet (Updated)
+# Ticket ViewSet
 # ==============================
-from django.db.models import Count
-from django.db.models.functions import TruncMonth
-from rest_framework.decorators import action
-from rest_framework.response import Response
-
-
 class TicketViewSet(viewsets.ModelViewSet):
     """
     Ticket endpoints (list/retrieve + custom actions).
@@ -693,15 +637,13 @@ class TicketViewSet(viewsets.ModelViewSet):
     # Override create
     # ------------------------
     def create(self, request, *args, **kwargs):
+        """
+        Create a new ticket.
+        Audit logging for creation is handled automatically in signals.py.
+        """
         serializer = self.get_serializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
         ticket = serializer.save(reporter=request.user)
-
-        create_audit(
-            AuditLog.Action.TICKET_CREATED,
-            performed_by=request.user,
-            details=f"Ticket {ticket.id} created",
-        )
 
         headers = self.get_success_headers(serializer.data)
         return Response(
@@ -723,11 +665,6 @@ class TicketViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         ticket = serializer.save()
 
-        create_audit(
-            AuditLog.Action.TICKET_UPDATED,
-            performed_by=request.user,
-            details=f"Ticket {ticket.id} updated",
-        )
 
         return Response(self.get_serializer(ticket).data, status=status.HTTP_200_OK)
 
@@ -764,12 +701,6 @@ class TicketViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
         ticket = serializer.save(reporter=request.user)
-
-        create_audit(
-            AuditLog.Action.TICKET_CREATED,
-            performed_by=request.user,
-            details=f"Ticket {ticket.id} created",
-        )
 
         return Response(self.get_serializer(ticket).data, status=status.HTTP_201_CREATED)
 
@@ -817,12 +748,7 @@ class TicketViewSet(viewsets.ModelViewSet):
         ticket.status = Ticket.Status.ASSIGNED
         ticket.save(update_fields=["status", "updated_at"])
 
-        create_audit(
-            AuditLog.Action.TICKET_ASSIGNED,
-            performed_by=request.user,
-            target_user=assignee,
-            details=f"Ticket {ticket.id} assigned to {assignee.email}",
-        )
+       
         return Response({"message": f"Ticket {ticket.id} assigned to {assignee.email}"})
 
     @action(detail=True, methods=["get"], url_path="eligible_fixers")
@@ -859,11 +785,7 @@ class TicketViewSet(viewsets.ModelViewSet):
 
         ticket.status = Ticket.Status.CLOSED
         ticket.save(update_fields=["status", "updated_at"])
-        create_audit(
-            AuditLog.Action.TICKET_CLOSED,
-            performed_by=request.user,
-            details=f"Ticket {ticket.id} closed",
-        )
+       
         return Response(
             {"message": f"Ticket {ticket.id} has been closed successfully"}
         )
@@ -887,15 +809,11 @@ class TicketViewSet(viewsets.ModelViewSet):
 
         ticket.status = Ticket.Status.CANCELLED
         ticket.save(update_fields=["status", "updated_at"])
-        create_audit(
-            AuditLog.Action.TICKET_CANCELLED,
-            performed_by=request.user,
-            details=f"Ticket {ticket.id} cancelled",
-        )
+     
         return Response({"message": f"Ticket {ticket.id} has been cancelled"})
 
     # ------------------------
-    # ✅ Resolve (Updated)
+    #  Resolve (Updated)
     # ------------------------
     @action(detail=True, methods=["post"], url_path="resolve")
     def resolve(self, request, pk=None):
@@ -923,11 +841,7 @@ class TicketViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         resolution = serializer.save(ticket=ticket)
 
-        create_audit(
-            AuditLog.Action.TICKET_RESOLVED,
-            performed_by=request.user,
-            details=f"Ticket {ticket.id} resolved",
-        )
+        
 
         # Model already handles ticket.status update in save()
         return Response(
@@ -949,15 +863,11 @@ class TicketViewSet(viewsets.ModelViewSet):
 
         ticket.status = Ticket.Status.REOPENED
         ticket.save(update_fields=["status", "updated_at"])
-        create_audit(
-            AuditLog.Action.TICKET_REOPENED,
-            performed_by=request.user,
-            details=f"Ticket {ticket.id} reopened",
-        )
+  
         return Response({"message": f"Ticket {ticket.id} has been reopened"})
 
     # ------------------------
-    # 💬 Comment
+    #  Comment
     # ------------------------
 
 
@@ -970,11 +880,7 @@ class TicketViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         comment = serializer.save(ticket=ticket, author=request.user)
 
-        create_audit(
-            AuditLog.Action.TICKET_COMMENTED,
-            performed_by=request.user,
-            details=f"Commented on ticket {ticket.id}",
-        )
+       
 
         return Response(
             TicketCommentSerializer(comment).data, status=status.HTTP_201_CREATED
@@ -996,7 +902,7 @@ class TicketViewSet(viewsets.ModelViewSet):
         tickets = Ticket.objects.select_related("location").prefetch_related("assignments")
 
         # --------------------------------------------------
-        # 1️⃣ Summary Counts
+        # 1 Summary Counts
         # --------------------------------------------------
         total_tickets = tickets.count()
         resolved_count = tickets.filter(status=Ticket.Status.RESOLVED).count()
@@ -1006,7 +912,7 @@ class TicketViewSet(viewsets.ModelViewSet):
         completion_rate = round((resolved_count / total_tickets) * 100, 2) if total_tickets else 0
 
         # --------------------------------------------------
-        # 2️⃣ Time-based Trends (Monthly)
+        #  Time-based Trends (Monthly)
         # --------------------------------------------------
         monthly_trend = (
             tickets.annotate(month=TruncMonth("created_at"))
@@ -1016,9 +922,9 @@ class TicketViewSet(viewsets.ModelViewSet):
         )
 
         # --------------------------------------------------
-        # 3️⃣ Resolution Performance (avg duration for resolved tickets)
+        #  Resolution Performance (avg duration for resolved tickets)
         # --------------------------------------------------
-        # ⚠️ Some models don’t have resolved_at — use updated_at as fallback
+        #  Some models don’t have resolved_at — use updated_at as fallback
         if hasattr(Ticket, "resolved_at"):
             duration_expr = ExpressionWrapper(
                 F("resolved_at") - F("created_at"), output_field=DurationField()
@@ -1038,7 +944,7 @@ class TicketViewSet(viewsets.ModelViewSet):
         )
 
         # --------------------------------------------------
-        # 4️⃣ Top Locations & Categories
+        #  Top Locations & Categories
         # --------------------------------------------------
         top_locations = (
             tickets.values("location__building_name")
@@ -1052,7 +958,7 @@ class TicketViewSet(viewsets.ModelViewSet):
         )
 
         # --------------------------------------------------
-        # 5️⃣ Fixer Performance (resolved tickets per user)
+        #  Fixer Performance (resolved tickets per user)
         # --------------------------------------------------
         fixer_stats = (
             resolved_qs.values("assignments__user__email")
@@ -1068,7 +974,7 @@ class TicketViewSet(viewsets.ModelViewSet):
             fixer.pop("avg_time", None)
 
         # --------------------------------------------------
-        # 6️⃣ Status Summary
+        #  Status Summary
         # --------------------------------------------------
         status_summary = (
             tickets.values("status")
@@ -1077,7 +983,7 @@ class TicketViewSet(viewsets.ModelViewSet):
         )
 
         # --------------------------------------------------
-        # 🧩 Response
+        # Response
         # --------------------------------------------------
         return Response({
             "overview": {
@@ -1096,16 +1002,6 @@ class TicketViewSet(viewsets.ModelViewSet):
 
 
 
-
-
-# ==================================================
-#                  Supporting ViewSets (Read-Only)
-# ==================================================
-# These provide auxiliary data like locations and roles.
-# Relationships:
-# - LocationViewSet: Used by TicketViewSet for ticket creation.
-# - RoleViewSet: Queried by UserViewSet for role assignment; used in UserProfileView for feature computation.
-
 class LocationViewSet(viewsets.ModelViewSet):
     queryset = Location.objects.all()
     serializer_class = LocationSerializer
@@ -1119,28 +1015,6 @@ class RoleViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = RoleSerializer
     permission_classes = [IsAuthenticated]
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-# ==================================================
-#                  User Profile & Auth (Session Management)
-# ==================================================
-# UserProfileView: Provides current user capabilities/features.
-# Auth Views: Handle login, refresh, verification, password reset, logout.
-# Relationships:
-# - UserProfileView: Depends on UserViewSet for profile data; informs TicketViewSet permissions.
-# - Auth Views: Integrate with UserViewSet for registration/invites; use AuditLog for events.
-# - All use JWT for authentication, with cookie-based refresh for security.
 
 
 class UserProfileView(APIView):
@@ -1255,16 +1129,6 @@ class UserProfileView(APIView):
 
 
 
-
-
-
-
-
-
-
-
-
-
 class EmailLoginView(TokenObtainPairView):
     serializer_class = EmailTokenObtainPairSerializer
     permission_classes = [AllowAny]
@@ -1291,13 +1155,13 @@ class EmailLoginView(TokenObtainPairView):
             try:
                 user = User.objects.get(email=email)
 
-                # ✅ Update last_login on successful JWT login
+                # Update last_login on successful JWT login
                 update_last_login(None, user)
 
                 profile, created = UserProfile.objects.get_or_create(user=user)
 
                 if created:
-                    # ✅ Assign default role
+                    # Assign default role
                     if user.is_superuser:
                         profile.role, _ = Role.objects.get_or_create(name="University Admin")
                         profile.is_email_verified = True
@@ -1324,7 +1188,7 @@ class EmailLoginView(TokenObtainPairView):
                     max_age=cookie_max_age,
                 )
 
-                # ✅ Audit log
+                # Audit log
                 create_audit(
                     "Login",
                     performed_by=user,
@@ -1344,7 +1208,7 @@ class CookieTokenRefreshView(TokenRefreshView):
     permission_classes = [AllowAny]
 
     def post(self, request, *args, **kwargs):
-        # 🔹 Get refresh token from HttpOnly cookie
+        # Get refresh token from HttpOnly cookie
         refresh = request.COOKIES.get("refresh_token")
         if not refresh:
             return Response(
@@ -1365,7 +1229,7 @@ class CookieTokenRefreshView(TokenRefreshView):
                 status=status.HTTP_401_UNAUTHORIZED,
             )
 
-        # 🔹 If refresh successful
+        # If refresh successful
         if response.status_code == 200 and "access" in response.data:
             new_access = response.data["access"]
 
@@ -1388,12 +1252,11 @@ class CookieTokenRefreshView(TokenRefreshView):
                     max_age=cookie_max_age,
                 )
 
-            # ✅ Attach profile info (safe serialization)
+            # Attach profile info (safe serialization)
             try:
                 user = request.user
                 if not user or not user.is_authenticated:
                     # fallback: extract user_id from refresh token
-                    from rest_framework_simplejwt.tokens import RefreshToken
                     token = RefreshToken(refresh)
                     user_id = token["user_id"]
                     user = User.objects.get(id=user_id)
@@ -1437,24 +1300,24 @@ class VerifyEmailView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # ✅ Check token validity
+        # Check token validity
         if not default_token_generator.check_token(user, token):
             return Response(
                 {"error": "Verification link is invalid or expired."},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # ✅ Activate account and mark email verified
+        # Activate account and mark email verified
         user.is_active = True
         user.save()
 
-        # ✅ Update or create user profile
+        # Update or create user profile
         profile, created = UserProfile.objects.get_or_create(user=user)
         if not profile.is_email_verified:
             profile.is_email_verified = True
             profile.save()
 
-        # ✅ Audit log
+        # Audit log
         create_audit(
             action="Email Verification",
             performed_by=user,
@@ -1462,7 +1325,7 @@ class VerifyEmailView(APIView):
             details="User verified their email"
         )
 
-        # ✅ Return full serialized profile
+        # Return full serialized profile
         profile_data = UserProfileSerializer(profile).data
 
         return Response(
@@ -1541,7 +1404,7 @@ class ResetPasswordView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # ✅ Set the new password securely
+        #  Set the new password securely
         user.set_password(new_password)
         user.save()
 
@@ -1571,27 +1434,27 @@ class LogoutView(APIView):
 
         if refresh_token:
             try:
-                # ✅ Blacklist the refresh token if app has blacklist app enabled
+                #  Blacklist the refresh token if app has blacklist app enabled
                 token = RefreshToken(refresh_token)
                 token.blacklist()
             except Exception:
                 # If blacklist app is not configured, ignore
                 pass
 
-        # ✅ Build response
+        #  Build response
         response = Response(
             {"message": "Logged out successfully"},
             status=status.HTTP_200_OK,
         )
 
-        # ✅ Delete refresh cookie (only key, path/domain if needed)
+        #  Delete refresh cookie (only key, path/domain if needed)
         response.delete_cookie(
             "refresh_token",
             path="/",          # match how you set it
             domain=None,       # set if you used a domain in set_cookie()
         )
 
-        # ✅ Audit log
+        #  Audit log
         try:
             create_audit(
                 "Logout",
@@ -1606,22 +1469,6 @@ class LogoutView(APIView):
         return response
 
 
-
-
-
-
-
-
-
-
-
-# ==================================================
-#                  Audit Logs (Monitoring)
-# ==================================================
-# Provides read-only access to logs for admins.
-# Relationships:
-# - Logs actions from all other views (UserViewSet, TicketViewSet, Auth views).
-# - No direct dependencies; used for compliance/auditing.
 
 class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
     """
@@ -1644,7 +1491,6 @@ class AuditLogsAPIView(APIView):
         serializer = AuditLogSerializer(logs, many=True)
         return Response(serializer.data)
     
-
 
 
 

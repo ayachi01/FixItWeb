@@ -30,6 +30,6 @@ def root_view(request):
 urlpatterns = [
     path('', root_view),
     path('admin/', admin.site.urls),
-    path('api/', include('core.urls')),  # ✅ includes your custom EmailLoginView + refresh
+    path('api/', include('core.urls')),  # includes custom EmailLoginView + refresh
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 

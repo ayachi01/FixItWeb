@@ -8,6 +8,7 @@ from django.utils import timezone
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
+
 from core.models import (
     UserProfile, StudentProfile, Role, Invite,
     Ticket, TicketImage, TicketResolution,
@@ -15,7 +16,7 @@ from core.models import (
     TicketAssignment, Permission,
 )
 
-# ✅ Always reference your custom user dynamically
+#  Always reference your custom user dynamically
 User = get_user_model()
 
 
@@ -48,7 +49,7 @@ class StudentProfileSerializer(serializers.ModelSerializer):
         return value
 
     def update(self, instance, validated_data):
-        # 🔒 Prevent overwriting student_id if already set
+        # Prevent overwriting student_id if already set
         if "student_id" in validated_data and instance.student_id:
             validated_data.pop("student_id")
         return super().update(instance, validated_data)
@@ -117,7 +118,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
     full_name = serializers.SerializerMethodField()
     status = serializers.SerializerMethodField()
 
-    # ✅ Role + Permissions
+    #  Role + Permissions
     role = RoleSerializer(read_only=True)
     role_id = serializers.PrimaryKeyRelatedField(
         queryset=Role.objects.all(),
@@ -127,10 +128,10 @@ class UserProfileSerializer(serializers.ModelSerializer):
     )
     permissions = PermissionSerializer(source="role.permissions", read_only=True)
 
-    # ✅ Nested StudentProfile
+    #  Nested StudentProfile
     student_profile = StudentProfileSerializer(required=False)
 
-    # ✅ Permission flags from properties
+    #  Permission flags from properties
     can_fix = serializers.BooleanField(read_only=True)
     can_assign = serializers.BooleanField(read_only=True)
     can_manage_users = serializers.BooleanField(read_only=True)
@@ -198,13 +199,13 @@ class UserProfileSerializer(serializers.ModelSerializer):
         student_data = validated_data.pop("student_profile", None)
         role = validated_data.pop("role", None)
 
-        # ✅ Extract user fields
+        #  Extract user fields
         user_fields = {}
         for field in ["first_name", "last_name", "email", "password"]:
             if field in validated_data:
                 user_fields[field] = validated_data.pop(field)
 
-        # ✅ Create User
+        #  Create User
         user = User.objects.create(
             first_name=user_fields.get("first_name", ""),
             last_name=user_fields.get("last_name", ""),
@@ -214,10 +215,10 @@ class UserProfileSerializer(serializers.ModelSerializer):
             user.set_password(user_fields["password"])
         user.save()
 
-        # ✅ Create UserProfile
+        #  Create UserProfile
         profile = UserProfile.objects.create(user=user, role=role, **validated_data)
 
-        # ✅ Create StudentProfile if data provided
+        #  Create StudentProfile if data provided
         if student_data:
             StudentProfile.objects.create(user_profile=profile, **student_data)
 
@@ -231,7 +232,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
         student_data = validated_data.pop("student_profile", None)
         role = validated_data.pop("role", None)
 
-        # ✅ Update related User fields
+        #  Update related User fields
         user = instance.user
         for field in ["first_name", "last_name", "email", "password"]:
             if field in validated_data:
@@ -242,21 +243,21 @@ class UserProfileSerializer(serializers.ModelSerializer):
                     setattr(user, field, value)
         user.save()
 
-        # ✅ Update role
+        #  Update role
         if role:
             instance.role = role
 
-        # ✅ Update UserProfile fields
+        #  Update UserProfile fields
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
 
-        # ✅ Handle StudentProfile safely
+        #  Handle StudentProfile safely
         if student_data is not None:
             student_profile, _ = StudentProfile.objects.get_or_create(user_profile=instance)
             for attr, value in student_data.items():
                 if attr == "student_id" and student_profile.student_id:
-                    continue  # 🔒 don’t overwrite existing student_id
+                    continue  #  don’t overwrite existing student_id
                 setattr(student_profile, attr, value)
             student_profile.save()
 
@@ -304,9 +305,6 @@ class StudentRegisterSerializer(serializers.ModelSerializer):
         return user
 
 
-
-
-
 # ==================================================
 #         Staff Create Serializer (Admin)
 # ==================================================
@@ -336,7 +334,6 @@ class StaffCreateSerializer(serializers.ModelSerializer):
             profile.is_email_verified = False
             profile.save()
         return user
-
 
 
 
@@ -477,19 +474,6 @@ class InviteValidateSerializer(serializers.Serializer):
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-from rest_framework import serializers
-
 # ====================
 # Ticket Image Serializer
 # ====================
@@ -511,7 +495,7 @@ class TicketImageSerializer(serializers.ModelSerializer):
         if obj.image_url:
             try:
                 if request is not None:
-                    # ✅ Example: http://192.168.5.137:8000/media/ticket_images/photo.jpg
+                    #  Example: http://192.168.5.137:8000/media/ticket_images/photo.jpg
                     return request.build_absolute_uri(obj.image_url.url)
                 # fallback if no request context
                 from django.conf import settings
@@ -684,29 +668,11 @@ class TicketSerializer(serializers.ModelSerializer):
     
 
 
-
-
-
-
-
-
-
-
-
-
-
-
 # ==================== Locations ====================
 class LocationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Location
         fields = ["id", "building_name", "floor_number", "room_identifier"]
-
-
-
-
-
-
 
 
 
@@ -744,7 +710,7 @@ class EmailTokenObtainPairSerializer(TokenObtainPairSerializer):
             "password": password,
         })
 
-        # ✅ Add safe user info
+        #  Add safe user info
         data["email"] = user.email
         if hasattr(user, "profile") and user.profile:
             data["role"] = (
@@ -762,7 +728,7 @@ class EmailTokenObtainPairSerializer(TokenObtainPairSerializer):
         token = super().get_token(user)
         token["email"] = user.email
 
-        # ✅ Store only safe fields inside JWT
+        #  Store only safe fields inside JWT
         if hasattr(user, "profile") and user.profile:
             token["role"] = (
                 user.profile.role.name if user.profile.role else None

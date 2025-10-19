@@ -17,13 +17,13 @@ class _LoginFormState extends State<LoginForm> {
   final _loginFormKey = GlobalKey<FormState>();
   final emailController = TextEditingController();
   final passwordController = TextEditingController();
-  final ApiService apiService = ApiService(); // ✅ shared instance
+  final ApiService apiService = ApiService(); // shared instance
 
   bool obscurePassword = true;
   bool isLoading = false;
 
   // ====================================================
-  // 🔐 Handle Login (uses ApiService for token storage)
+  // Handle Login (uses ApiService for token storage)
   // ====================================================
   Future<void> _handleLogin() async {
     if (!_loginFormKey.currentState!.validate()) return;
@@ -43,7 +43,7 @@ class _LoginFormState extends State<LoginForm> {
       final refreshToken = response["refresh"] ?? "";
 
       if (accessToken.isNotEmpty && refreshToken.isNotEmpty) {
-        // ✅ Save both tokens using ApiService
+        // Save both tokens using ApiService
         await apiService.saveTokens(accessToken, refreshToken);
 
         ScaffoldMessenger.of(context).showSnackBar(
@@ -53,7 +53,7 @@ class _LoginFormState extends State<LoginForm> {
           ),
         );
 
-        // ✅ Go to home page
+        // Go to home page
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (context) => const HomePage()),

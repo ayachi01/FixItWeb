@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-// 🧩 Feature imports
+// Feature imports
 import 'package:fixit/core/services/image_picker_service.dart';
 import 'package:fixit/features/reports/presentation/pages/scanner_screen.dart';
 import '/features/reports/presentation/pages/my_reports.dart';
@@ -9,9 +9,9 @@ import '/features/reports/presentation/pages/create_report.dart';
 import '/features/settings/presentation/pages/settings.dart';
 import '/features/reports/presentation/viewmodels/report_viewmodel.dart';
 import '/core/api_service.dart';
-import '/features/auth/presentation/pages/login_form.dart'; // ✅ for redirect
+import '/features/auth/presentation/pages/login_form.dart';
 
-// 🧱 Core widgets
+// Core widgets
 import '/core/widgets/profile_avatar.dart';
 import '/core/widgets/search_bar.dart';
 import '/core/widgets/bottom_nav_bar.dart';
@@ -41,24 +41,24 @@ class _HomePageState extends State<HomePage> {
   final ApiService _apiService = ApiService();
 
   // ====================================================
-  // 🚪 LOGOUT HANDLER (COMPLETE RESET)
+  // LOGOUT HANDLER (COMPLETE RESET)
   // ====================================================
   Future<void> _handleLogout(BuildContext context) async {
     final reportVM = Provider.of<ReportViewModel>(context, listen: false);
 
     try {
-      // 1️⃣ Fully reset everything inside ReportViewModel (token + data + camera)
+      // Fully reset everything inside ReportViewModel (token + data + camera)
       await reportVM.logoutAndReset();
 
-      // 2️⃣ Also clear token from ApiService (double safety)
+      // Also clear token from ApiService (double safety)
       await _apiService.logout();
 
-      // 3️⃣ Clear any controllers in HomePage
+      //Clear any controllers in HomePage
       _searchController.clear();
       ticketCards.clear();
       _selectedIndex = 0;
 
-      // 4️⃣ Navigate back to LoginForm (remove all previous routes)
+      // Navigate back to LoginForm (remove all previous routes)
       if (context.mounted) {
         Navigator.pushAndRemoveUntil(
           context,
@@ -67,7 +67,7 @@ class _HomePageState extends State<HomePage> {
         );
       }
 
-      // 5️⃣ Show confirmation
+      // Show confirmation
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("✅ Logged out successfully.")),
       );
@@ -132,7 +132,7 @@ class _HomePageState extends State<HomePage> {
               radius: 27,
             ),
           ),
-          // 🚪 Logout button
+          // Logout button
           IconButton(
             icon: const Icon(Icons.logout, color: Colors.redAccent),
             onPressed: () => _handleLogout(context),
@@ -147,7 +147,7 @@ class _HomePageState extends State<HomePage> {
         child: SingleChildScrollView(
           child: Column(
             children: [
-              // 🔍 Search Bar
+              // Search Bar
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 child: SizedBox(
@@ -164,7 +164,7 @@ class _HomePageState extends State<HomePage> {
               ),
               const SizedBox(height: 20),
 
-              // 🏷️ Ticket List Title
+              // Ticket List Title
               const Padding(
                 padding: EdgeInsets.only(right: 215),
                 child: Text(
@@ -178,7 +178,7 @@ class _HomePageState extends State<HomePage> {
               ),
               const SizedBox(height: 30),
 
-              // 📋 Empty State or Ticket List
+              // Empty State or Ticket List
               if (ticketCards.isEmpty)
                 Center(
                   child: Column(
@@ -238,7 +238,7 @@ class _HomePageState extends State<HomePage> {
           }
 
           if (index == 2) {
-            // ✅ Use existing provider (no reset)
+            // Use existing provider (no reset)
             final newReport = await Navigator.push(
               context,
               MaterialPageRoute(builder: (context) => const CreateReport()),

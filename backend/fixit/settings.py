@@ -18,9 +18,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "unsafe-secret-key")
 DEBUG = os.environ.get("DEBUG", "True") == "True"
 
-ALLOWED_HOSTS = ["localhost", "127.0.0.1", "10.134.119.9", "10.134.119.9:8000"]
+ALLOWED_HOSTS = ["localhost", "127.0.0.1", "192.168.5.137", "192.168.5.137:8000"]
 if not DEBUG:
-    ALLOWED_HOSTS += ["fixit.university.edu"]  # ✅ replace with your domain
+    ALLOWED_HOSTS += ["fixit.university.edu"]  #  replace with your domain
 
 # Application definition
 INSTALLED_APPS = [
@@ -31,7 +31,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
 
-    # ✅ WebSockets
+    #  WebSockets
     "channels",
 
     # Third-party
@@ -56,11 +56,11 @@ MIDDLEWARE = [
 ]
 
 # -------------------------------------------------------------------
-# ✅ CORS / Cookies
+#  CORS / Cookies
 # -------------------------------------------------------------------
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",  # Frontend dev URL
-    "http://localhost:65353", # need to change
+    "http://localhost:63245", # need to change
 
 ]
 if not DEBUG:
@@ -79,7 +79,7 @@ CORS_ALLOW_HEADERS = [
 # CSRF / Cookie Security
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:5173",
-    "http://localhost:65353",
+    "http://localhost:63245",
    
 
 ]
@@ -107,13 +107,13 @@ TEMPLATES = [
 ]
 
 # -------------------------------------------------------------------
-# ✅ WSGI + ASGI
+#  WSGI + ASGI
 # -------------------------------------------------------------------
 WSGI_APPLICATION = "fixit.wsgi.application"
 ASGI_APPLICATION = "fixit.asgi.application"
 
 # -------------------------------------------------------------------
-# ✅ Channels / Redis
+#  Channels / Redis
 # -------------------------------------------------------------------
 CHANNEL_LAYERS = {
     "default": {
@@ -148,7 +148,7 @@ CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = "Asia/Manila"
 
-# ✅ Celery Beat Schedule
+#  Celery Beat Schedule
 from celery.schedules import crontab
 
 CELERY_BEAT_SCHEDULE = {
@@ -184,7 +184,7 @@ MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
 # -------------------------------------------------------------------
-# ✅ Email (Dev = console, Prod = SMTP)
+#  Email (Dev = console, Prod = SMTP)
 # -------------------------------------------------------------------
 DEBUG_OTP = os.environ.get("DEBUG_OTP", "True") == "True"
 
@@ -202,7 +202,7 @@ DEFAULT_FROM_EMAIL = "fixit@university.edu"
 FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:5173")
 
 # -------------------------------------------------------------------
-# ✅ REST Framework (JWT + throttling)
+#  REST Framework (JWT + throttling)
 # -------------------------------------------------------------------
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
@@ -228,7 +228,7 @@ REST_FRAMEWORK = {
 }
 
 # -------------------------------------------------------------------
-# ✅ JWT settings (short-lived access, cookie refresh)
+#  JWT settings (short-lived access, cookie refresh)
 # -------------------------------------------------------------------
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=15),
@@ -253,7 +253,7 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 # -------------------------------------------------------------------
-# ✅ Password reset link timeout (in seconds)
+#  Password reset link timeout (in seconds)
 # -------------------------------------------------------------------
 PASSWORD_RESET_TIMEOUT = 900  # 15 minutes
 
@@ -277,7 +277,7 @@ STATIC_ROOT = BASE_DIR / "static"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # -------------------------------------------------------------------
-# ✅ Security (enabled in production)
+#  Security (enabled in production)
 # -------------------------------------------------------------------
 if not DEBUG:
     SECURE_SSL_REDIRECT = True
@@ -292,7 +292,7 @@ if not DEBUG:
 AUTH_USER_MODEL = "core.CustomUser"
 
 # -------------------------------------------------------------------
-# ✅ Logging for debugging dashboard / auth issues
+#  Logging for debugging dashboard / auth issues
 # -------------------------------------------------------------------
 LOGGING = {
     "version": 1,

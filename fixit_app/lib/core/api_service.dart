@@ -3,10 +3,10 @@ import 'dart:io' show File;
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'dart:html' as html; // For web localStorage
+import 'dart:html' as html; // Used only on web
 
 class ApiService {
-  final String baseUrl = "http://10.134.119.9:8000/api";
+  final String baseUrl = "http://192.168.5.137:8000/api"; // Update if needed
   late Dio dio;
   final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
   String? _webAccessToken;
@@ -21,7 +21,20 @@ class ApiService {
         baseUrl: baseUrl,
         connectTimeout: const Duration(seconds: 10),
         receiveTimeout: const Duration(seconds: 10),
-        headers: {'Content-Type': 'application/json'},
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+        },
+      ),
+    );
+
+    // ✅ Prevent "unsafe header" warnings in web
+    dio.interceptors.add(
+      InterceptorsWrapper(
+        onRequest: (options, handler) {
+          options.headers.remove('Connection');
+          return handler.next(options);
+        },
       ),
     );
   }
@@ -29,8 +42,6 @@ class ApiService {
   // ====================================================
   //  TOKEN HELPERS
   // ====================================================
-
-  /// Save both access and refresh tokens
   Future<void> saveTokens(String access, String refresh) async {
     _webAccessToken = access;
     _webRefreshToken = refresh;
@@ -44,12 +55,13 @@ class ApiService {
     }
 
     dio.options.headers['Authorization'] = 'Bearer $access';
-    print("🔐 Tokens saved successfully (access: ${access.substring(0, 10)}...)");
   }
 
-  /// Load access token from storage if it exists
   Future<String?> _getStoredAccessToken() async {
-    if (_webAccessToken != null && _webAccessToken!.isNotEmpty) return _webAccessToken;
+    if (_webAccessToken != null && _webAccessToken!.isNotEmpty) {
+      dio.options.headers['Authorization'] = 'Bearer $_webAccessToken';
+      return _webAccessToken;
+    }
 
     if (kIsWeb) {
       final access = html.window.localStorage['access_token'];
@@ -70,7 +82,6 @@ class ApiService {
     }
   }
 
-  /// Completely clears stored tokens, Dio headers, and memory state
   Future<void> clearTokens() async {
     try {
       if (kIsWeb) {
@@ -83,7 +94,6 @@ class ApiService {
 
       _webAccessToken = null;
       _webRefreshToken = null;
-
       dio.options.headers.remove('Authorization');
 
       dio = Dio(
@@ -91,44 +101,42 @@ class ApiService {
           baseUrl: baseUrl,
           connectTimeout: const Duration(seconds: 10),
           receiveTimeout: const Duration(seconds: 10),
-          headers: {'Content-Type': 'application/json'},
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+          },
         ),
       );
 
-      print("🧹 Tokens cleared and Dio reset completely.");
-    } catch (e) {
-      print("⚠️ Failed to clear tokens: $e");
-    }
+      dio.interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            options.headers.remove('Connection');
+            return handler.next(options);
+          },
+        ),
+      );
+    } catch (_) {}
   }
 
-  // ====================================================
-  //  LOGOUT (Local only — no backend call)
-  // ====================================================
   Future<void> logout() async {
     await clearTokens();
-    print("🚪 User logged out locally (tokens + Dio reset).");
   }
 
   // ====================================================
   //  AUTH APIs
   // ====================================================
-
   Future<Map<String, dynamic>> emailLogin(String email, String password) async {
     try {
-      await clearTokens(); // Always clear before login
-
+      await clearTokens();
       final response = await dio.post(
         '/users/email_login/',
         data: {'email': email, 'password': password},
       );
-
       final data = response.data as Map<String, dynamic>;
-
-      // Backend returns access + refresh + profile
       if (data.containsKey('access') && data.containsKey('refresh')) {
         await saveTokens(data['access'], data['refresh']);
       }
-
       return data;
     } on DioException catch (e) {
       throw Exception(_handleError(e));
@@ -214,18 +222,13 @@ class ApiService {
   // ====================================================
   //  LOCATIONS
   // ====================================================
-
   Future<List<Map<String, dynamic>>> getLocations() async {
     try {
       final response = await dio.get('/locations/');
-      if (response.statusCode == 200) {
-        final data = response.data;
-        if (data is List) {
-          return data.map((item) => Map<String, dynamic>.from(item)).toList();
-        }
-        throw Exception("Unexpected response format from server");
+      if (response.statusCode == 200 && response.data is List) {
+        return List<Map<String, dynamic>>.from(response.data);
       }
-      throw Exception("Failed to fetch locations: ${response.statusCode}");
+      throw Exception("Unexpected response format.");
     } on DioException catch (e) {
       throw Exception(_handleError(e));
     }
@@ -234,7 +237,6 @@ class ApiService {
   // ====================================================
   //  SUBMIT TICKET
   // ====================================================
-
   Future<Map<String, dynamic>> submitTicket({
     required String title,
     required String description,
@@ -258,7 +260,9 @@ class ApiService {
         'location': locationId,
         if (imagePaths != null && imagePaths.isNotEmpty)
           'image': await Future.wait(
-            imagePaths.map((path) async => await MultipartFile.fromFile(path)),
+            imagePaths.map(
+              (path) async => await MultipartFile.fromFile(path),
+            ),
           ),
         if (imageBytesList != null && imageBytesList.isNotEmpty)
           'image': imageBytesList
@@ -276,7 +280,10 @@ class ApiService {
       final response = await dio.post(
         '/tickets/report_issue/',
         data: formData,
-        options: Options(headers: headers, contentType: 'multipart/form-data'),
+        options: Options(
+          headers: headers,
+          contentType: 'multipart/form-data',
+        ),
       );
 
       return response.data as Map<String, dynamic>;
@@ -311,7 +318,6 @@ class ApiService {
   // ====================================================
   //  GLOBAL ERROR HANDLER
   // ====================================================
-
   String _handleError(DioException e) {
     if (e.response != null) {
       final data = e.response?.data;

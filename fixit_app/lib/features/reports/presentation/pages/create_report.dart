@@ -51,7 +51,6 @@ class CreateReportState extends State<CreateReport> {
   @override
   void initState() {
     super.initState();
-    print("🟢 [Init] CreateReport initialized");
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _fetchBuildings();
     });
@@ -61,7 +60,6 @@ class CreateReportState extends State<CreateReport> {
   void dispose() {
     incidentType.dispose();
     description.dispose();
-    print("🔴 [Dispose] CreateReport disposed");
     super.dispose();
   }
 
@@ -71,16 +69,13 @@ class CreateReportState extends State<CreateReport> {
   Future<void> _fetchBuildings() async {
     final vm = context.read<ReportViewModel>();
     try {
-      print("🔹 [Fetch] Fetching buildings...");
       final buildings = await vm.fetchLocations();
-      print("✅ [Fetch] Fetched buildings: ${buildings.length}");
       if (!mounted) return;
       setState(() {
         buildingOptions = buildings;
         isLoadingBuildings = false;
       });
-    } catch (e, st) {
-      print("❌ [Fetch] Error fetching buildings: $e\n$st");
+    } catch (e) {
       if (!mounted) return;
       setState(() => isLoadingBuildings = false);
       ScaffoldMessenger.of(context).showSnackBar(
@@ -93,10 +88,7 @@ class CreateReportState extends State<CreateReport> {
   // Submit report to backend
   // -------------------------------
   Future<void> _submitReport(BuildContext context) async {
-    if (!_createReportKey.currentState!.validate()) {
-      print("⚠️ [Submit] Form validation failed");
-      return;
-    }
+    if (!_createReportKey.currentState!.validate()) return;
 
     final vm = context.read<ReportViewModel>();
     final Map<String, dynamic> formData = {
@@ -107,11 +99,8 @@ class CreateReportState extends State<CreateReport> {
       "location": selectedLocationId,
     };
 
-    print("🔹 [Submit] Form data: $formData");
-
     try {
       await vm.createTicket(formData);
-      print("✅ [Submit] Ticket submitted successfully");
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -119,8 +108,7 @@ class CreateReportState extends State<CreateReport> {
         );
         Navigator.pop(context);
       }
-    } catch (e, st) {
-      print("❌ [Submit] Error submitting ticket: $e\n$st");
+    } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text("Error submitting ticket: $e")),
@@ -134,7 +122,6 @@ class CreateReportState extends State<CreateReport> {
   // -------------------------------
   @override
   Widget build(BuildContext context) {
-    print("🔹 [Build] Building CreateReport UI");
     return Scaffold(
       appBar: AppBar(
         title: const Text(
@@ -170,7 +157,6 @@ class CreateReportState extends State<CreateReport> {
                   validator: (value) => value == null || value.isEmpty
                       ? "Please enter incident type!"
                       : null,
-                  onChanged: (val) => print("🖊️ [Input] Incident Type: $val"),
                 ),
                 const SizedBox(height: 20),
 
@@ -190,7 +176,6 @@ class CreateReportState extends State<CreateReport> {
                         hint: const Text('Select Location'),
                         onChanged: (value) {
                           if (!mounted) return;
-                          print("🏢 [Select] Location ID: $value");
                           setState(() => selectedLocationId = value);
                         },
                         items: buildingOptions.map((loc) {
@@ -216,7 +201,6 @@ class CreateReportState extends State<CreateReport> {
                   hint: const Text('Select Category'),
                   onChanged: (value) {
                     if (!mounted) return;
-                    print("📂 [Select] Category: $value");
                     setState(() => categoryDropDownValue = value);
                   },
                   items: categoryOptions
@@ -237,7 +221,6 @@ class CreateReportState extends State<CreateReport> {
                   hint: const Text('Select Urgency'),
                   onChanged: (value) {
                     if (!mounted) return;
-                    print("⏰ [Select] Urgency: $value");
                     setState(() => urgencyDropDownValue = value);
                   },
                   items: urgencyOptions
@@ -260,7 +243,6 @@ class CreateReportState extends State<CreateReport> {
                   validator: (value) => value == null || value.isEmpty
                       ? "Please enter description!"
                       : null,
-                  onChanged: (val) => print("📝 [Input] Description: $val"),
                 ),
                 const SizedBox(height: 15),
 
@@ -279,7 +261,6 @@ class CreateReportState extends State<CreateReport> {
                             (!kIsWeb && vm.selectedImage != null);
 
                         if (hasImage) {
-                          print("🖼️ [Image] Displaying selected image");
                           return Stack(
                             alignment: Alignment.topRight,
                             children: [
@@ -305,10 +286,7 @@ class CreateReportState extends State<CreateReport> {
                                   child: IconButton(
                                     icon: const Icon(Icons.clear,
                                         color: Colors.red, size: 18),
-                                    onPressed: () {
-                                      print("❌ [Image] Removing selected image");
-                                      vm.removeImage();
-                                    },
+                                    onPressed: vm.removeImage,
                                   ),
                                 ),
                               ),
@@ -317,10 +295,7 @@ class CreateReportState extends State<CreateReport> {
                         }
 
                         return MaterialButton(
-                          onPressed: () {
-                            print("📸 [Image] Picking image from gallery");
-                            vm.pickFromGallery();
-                          },
+                          onPressed: vm.pickFromGallery,
                           textColor: Colors.black,
                           padding: const EdgeInsets.all(16),
                           child: const Row(

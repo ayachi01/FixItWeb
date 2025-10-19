@@ -6,19 +6,13 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '/core/services/image_picker_service.dart';
 import '/core/api_service.dart';
-import 'dart:html' as html; // Web localStorage
+import 'dart:html' as html;
 
 class ReportViewModel extends ChangeNotifier {
-  // ====================================================
-  // SERVICES
-  // ====================================================
   final ImagePickerService _imagePicker;
   final ApiService _apiService = ApiService();
   final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
 
-  // ====================================================
-  // CAMERA
-  // ====================================================
   CameraController? _controller;
   List<CameraDescription> _cameras = [];
   Future<void>? _initializeControllerFuture;
@@ -29,31 +23,16 @@ class ReportViewModel extends ChangeNotifier {
   bool _isTorchOn = false;
   bool get isTorchOn => _isTorchOn;
 
-  // ====================================================
-  // IMAGE PICKER STATE
-  // ====================================================
   File? selectedImage;
   Uint8List? selectedImageBytes;
 
-  // ====================================================
-  // UI / DATA STATE
-  // ====================================================
   bool isLoading = false;
   List<Map<String, dynamic>> locationOptions = [];
 
-  // ====================================================
-  // WEB TOKEN FALLBACK
-  // ====================================================
   String? _webToken;
 
-  // ====================================================
-  // CONSTRUCTOR
-  // ====================================================
   ReportViewModel(this._imagePicker);
 
-  // ====================================================
-  // SAFE NOTIFY LISTENERS
-  // ====================================================
   void safeNotify() {
     if (SchedulerBinding.instance.schedulerPhase == SchedulerPhase.idle ||
         SchedulerBinding.instance.schedulerPhase ==
@@ -66,9 +45,6 @@ class ReportViewModel extends ChangeNotifier {
     }
   }
 
-  // ====================================================
-  // DATE / TIME
-  // ====================================================
   Map<String, String> get currentDateTime {
     final now = DateTime.now();
     final formattedDate =
@@ -78,9 +54,6 @@ class ReportViewModel extends ChangeNotifier {
     return {"date": formattedDate, "time": formattedTime};
   }
 
-  // ====================================================
-  // FETCH LOCATIONS
-  // ====================================================
   Future<List<Map<String, dynamic>>> fetchLocations() async {
     try {
       isLoading = true;
@@ -92,7 +65,6 @@ class ReportViewModel extends ChangeNotifier {
       safeNotify();
       return locationOptions;
     } catch (e) {
-      print("❌ Error fetching locations: $e");
       rethrow;
     } finally {
       isLoading = false;
@@ -100,9 +72,6 @@ class ReportViewModel extends ChangeNotifier {
     }
   }
 
-  // ====================================================
-  // SAVE TOKEN SAFELY (WEB + MOBILE)
-  // ====================================================
   Future<void> saveToken(String token) async {
     _webToken = token;
     if (kIsWeb) {
@@ -110,12 +79,8 @@ class ReportViewModel extends ChangeNotifier {
     } else {
       await _secureStorage.write(key: 'access_token', value: token);
     }
-    print("🔐 Token saved successfully: ${token.substring(0, 10)}...");
   }
 
-  // ====================================================
-  // RETRIEVE TOKEN SAFELY
-  // ====================================================
   Future<String?> _getStoredToken() async {
     if (_webToken != null && _webToken!.isNotEmpty) return _webToken;
 
@@ -123,7 +88,6 @@ class ReportViewModel extends ChangeNotifier {
       final stored = html.window.localStorage['access_token'];
       if (stored != null && stored.isNotEmpty) {
         _webToken = stored;
-        print("🔐 Token loaded successfully: ${stored.substring(0, 10)}...");
         return stored;
       }
     } else {
@@ -131,22 +95,16 @@ class ReportViewModel extends ChangeNotifier {
         final token = await _secureStorage.read(key: 'access_token');
         if (token != null && token.isNotEmpty) {
           _webToken = token;
-          print("🔐 Token loaded successfully: ${token.substring(0, 10)}...");
           return token;
         }
-      } catch (e) {
-        print("❌ Error reading token: $e");
+      } catch (_) {
         return null;
       }
     }
 
-    print("⚠️ Token is missing or empty.");
     return null;
   }
 
-  // ====================================================
-  // CREATE / SUBMIT TICKET
-  // ====================================================
   Future<void> createTicket(Map<String, dynamic> formData) async {
     try {
       isLoading = true;
@@ -157,7 +115,6 @@ class ReportViewModel extends ChangeNotifier {
         throw Exception("Authentication token missing. Please log in again.");
       }
 
-      // Prepare images
       List<String> imagePaths = [];
       List<Uint8List> imageBytesList = [];
 
@@ -171,8 +128,6 @@ class ReportViewModel extends ChangeNotifier {
         throw Exception("Please attach at least 1 image.");
       }
 
-      print("🔹 [Submit] Form data: $formData");
-
       await _apiService.submitTicket(
         title: formData["title"] ?? "",
         description: formData["description"] ?? "",
@@ -182,10 +137,7 @@ class ReportViewModel extends ChangeNotifier {
         imagePaths: imagePaths.isNotEmpty ? imagePaths : null,
         imageBytesList: imageBytesList.isNotEmpty ? imageBytesList : null,
       );
-
-      print("✅ Ticket submitted successfully!");
     } catch (e) {
-      print("❌ Error creating ticket: $e");
       rethrow;
     } finally {
       isLoading = false;
@@ -193,9 +145,6 @@ class ReportViewModel extends ChangeNotifier {
     }
   }
 
-  // ====================================================
-  // IMAGE PICKER
-  // ====================================================
   Future<void> pickFromGallery() async {
     final image = await _imagePicker.pickImageFromGallery();
     if (image != null) {
@@ -214,9 +163,6 @@ class ReportViewModel extends ChangeNotifier {
     safeNotify();
   }
 
-  // ====================================================
-  // CAMERA MANAGEMENT
-  // ====================================================
   Future<void> setupCamera() async {
     if (_controller != null) return;
     _cameras = await availableCameras();
@@ -237,47 +183,30 @@ class ReportViewModel extends ChangeNotifier {
   Future<void> disposeCamera() async {
     try {
       await _controller?.dispose();
-    } catch (e) {
-      print("Error disposing camera: $e");
-    }
+    } catch (_) {}
     _controller = null;
     _initializeControllerFuture = null;
     safeNotify();
   }
 
-  // ====================================================
-  // 🚪 LOGOUT + ACCOUNT RESET
-  // ====================================================
   Future<void> logoutAndReset() async {
     try {
-      print("🚪 Logging out and resetting account...");
-
-      // 1️⃣ Logout via ApiService (clears tokens everywhere)
       await _apiService.logout();
 
-      // 2️⃣ Clear local token references
       _webToken = null;
       await _secureStorage.delete(key: 'access_token');
       if (kIsWeb) html.window.localStorage.remove('access_token');
 
-      // 3️⃣ Reset images, form data, etc.
       selectedImage = null;
       selectedImageBytes = null;
       locationOptions = [];
 
-      // 4️⃣ Dispose camera properly
       await disposeCamera();
 
-      print("🧹 All user data cleared — ready for new login.");
       safeNotify();
-    } catch (e) {
-      print("⚠️ Logout reset failed: $e");
-    }
+    } catch (_) {}
   }
 
-  // ====================================================
-  // CLEANUP
-  // ====================================================
   @override
   void dispose() {
     _controller?.dispose();
