@@ -1,199 +1,279 @@
+// src/pages/Dashboard/ReportsPage.tsx
 import { useEffect, useState } from "react";
-import { getAllTickets } from "../../api/ticket";
-import { getAllUsers } from "../../api/users";
-import { useAuthStore } from "../../store/authStore";
+import { api } from "../../api/client";
 import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  Title,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
   Tooltip,
   Legend,
-  ArcElement,
-} from "chart.js";
-import { Bar, Pie } from "react-chartjs-2";
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+  LineChart,
+  Line,
+  CartesianGrid,
+  ComposedChart,
+} from "recharts";
 
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  ArcElement,
-  Title,
-  Tooltip,
-  Legend
-);
+// Generic base interface for Recharts compatibility
+interface ChartFriendly {
+  [key: string]: string | number | null | undefined;
+}
 
-export default function Dashboard() {
-  const { user } = useAuthStore();
-  const [ticketCount, setTicketCount] = useState(0);
-  const [pendingCount, setPendingCount] = useState(0);
-  const [userCount, setUserCount] = useState(0);
-  const [ticketsByStatus, setTicketsByStatus] = useState<any>({});
-  const [ticketsByCategory, setTicketsByCategory] = useState<any>({});
+interface Overview {
+  total_tickets: number;
+  resolved: number;
+  open: number;
+  completion_rate: number;
+  avg_resolution_hours: number | null;
+}
+
+interface StatusSummary extends ChartFriendly {
+  status: string;
+  count: number;
+}
+
+interface Trend extends ChartFriendly {
+  month: string;
+  count: number;
+}
+
+interface Category extends ChartFriendly {
+  category: string;
+  count: number;
+}
+
+interface Location extends ChartFriendly {
+  location__building_name: string;
+  count: number;
+}
+
+interface FixerPerformance extends ChartFriendly {
+  assignments__user__email: string;
+  resolved_count: number;
+  avg_time_hours?: number;
+}
+
+interface AnalyticsData {
+  overview: Overview;
+  status_summary: StatusSummary[];
+  monthly_trend: Trend[];
+  top_locations: Location[];
+  top_categories: Category[];
+  fixer_performance: FixerPerformance[];
+}
+
+export default function ReportsPage() {
+  const [data, setData] = useState<AnalyticsData | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    async function loadData() {
-      if (!user?.permissions) return setLoading(false);
+    api
+      .get<AnalyticsData>("/tickets/analytics/")
+      .then((res) => {
+        console.log("✅ Analytics loaded:", res.data);
+        setData(res.data);
+      })
+      .catch((err) => {
+        console.error("❌ Failed to load analytics:", err);
+        setError("Failed to load analytics data.");
+      })
+      .finally(() => setLoading(false));
+  }, []);
 
-      try {
-        // Only fetch tickets if user has ticket-related permissions
-        let tickets: any[] = [];
-        if (
-          user.permissions.can_report ||
-          user.permissions.can_fix ||
-          user.permissions.can_assign
-        ) {
-          tickets = await getAllTickets();
-          setTicketCount(tickets.length);
+  if (loading) return <p className="p-6 text-gray-500">Loading analytics...</p>;
+  if (error) return <p className="p-6 text-red-500">{error}</p>;
+  if (!data) return <p className="p-6 text-gray-500">No analytics data.</p>;
 
-          const pendingTickets = tickets.filter(
-            (t: any) =>
-              t.status === "Created" ||
-              t.status === "Assigned" ||
-              t.status === "In Progress"
-          );
-          setPendingCount(pendingTickets.length);
+  const COLORS = ["#8884d8", "#82ca9d", "#ffc658", "#ff8042", "#a4de6c"];
 
-          // Prepare chart data safely
-          const statusCounts: Record<string, number> = {};
-          tickets.forEach((t: any) => {
-            statusCounts[t.status] = (statusCounts[t.status] || 0) + 1;
-          });
-          setTicketsByStatus({
-            labels: Object.keys(statusCounts),
-            datasets: [
-              {
-                label: "Tickets by Status",
-                data: Object.values(statusCounts),
-                backgroundColor: [
-                  "#4f46e5",
-                  "#f59e0b",
-                  "#10b981",
-                  "#ef4444",
-                  "#3b82f6",
-                  "#8b5cf6",
-                  "#ec4899",
-                ],
-              },
-            ],
-          });
-
-          const categoryCounts: Record<string, number> = {};
-          tickets.forEach((t: any) => {
-            categoryCounts[t.category] = (categoryCounts[t.category] || 0) + 1;
-          });
-          setTicketsByCategory({
-            labels: Object.keys(categoryCounts),
-            datasets: [
-              {
-                label: "Tickets by Category",
-                data: Object.values(categoryCounts),
-                backgroundColor: [
-                  "#f87171",
-                  "#34d399",
-                  "#60a5fa",
-                  "#fbbf24",
-                  "#a78bfa",
-                  "#f472b6",
-                  "#4ade80",
-                  "#facc15",
-                  "#38bdf8",
-                  "#fb7185",
-                ],
-              },
-            ],
-          });
-        }
-
-        // Only fetch users if user has admin permissions
-        if (
-          user.permissions.is_admin_level ||
-          user.permissions.can_manage_users
-        ) {
-          const users = await getAllUsers();
-          setUserCount(users.length);
-        }
-      } catch (err) {
-        console.error("Failed to load dashboard stats:", err);
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    loadData();
-  }, [user]);
-
-  if (!user) return <p>Loading user info...</p>;
-
-  const permissions = user.permissions || {};
+  const formatMonth = (dateString: string) =>
+    new Date(dateString).toLocaleString("default", {
+      month: "short",
+      year: "2-digit",
+    });
 
   return (
-    <div className="p-6">
-      <h1 className="text-2xl font-bold mb-6">📊 Dashboard</h1>
+    <div className="p-8 bg-gray-50 min-h-screen space-y-10">
+      <h1 className="text-3xl font-bold mb-6 text-gray-800">
+        📊 Reports Dashboard
+      </h1>
 
-      {loading ? (
-        <p>Loading stats...</p>
-      ) : (
-        <>
-          {/* --- Counts --- */}
-          <div className="grid grid-cols-3 gap-4 mb-6">
-            {(permissions.can_report ||
-              permissions.can_fix ||
-              permissions.can_assign) && (
-              <div className="bg-white shadow rounded p-4 text-center">
-                <h2 className="text-lg font-semibold">Total Tickets</h2>
-                <p className="text-3xl">{ticketCount}</p>
-              </div>
-            )}
-
-            {(permissions.is_admin_level || permissions.can_manage_users) && (
-              <div className="bg-white shadow rounded p-4 text-center">
-                <h2 className="text-lg font-semibold">Users</h2>
-                <p className="text-3xl">{userCount}</p>
-              </div>
-            )}
-
-            {(permissions.can_fix || permissions.can_assign) && (
-              <div className="bg-white shadow rounded p-4 text-center">
-                <h2 className="text-lg font-semibold">Pending Tickets</h2>
-                <p className="text-3xl">{pendingCount}</p>
-              </div>
-            )}
+      {/* --- Overview KPIs --- */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        {[
+          {
+            label: "Total Tickets",
+            value: data.overview.total_tickets,
+            color: "bg-blue-600",
+          },
+          {
+            label: "Resolved",
+            value: data.overview.resolved,
+            color: "bg-green-500",
+          },
+          {
+            label: "Open",
+            value: data.overview.open,
+            color: "bg-yellow-500",
+          },
+          {
+            label: "Completion Rate",
+            value: `${data.overview.completion_rate}%`,
+            color: "bg-indigo-500",
+          },
+          {
+            label: "Avg Resolution (hrs)",
+            value: data.overview.avg_resolution_hours ?? "N/A",
+            color: "bg-purple-500",
+          },
+        ].map((card, i) => (
+          <div
+            key={i}
+            className={`p-4 text-white rounded-2xl shadow ${card.color}`}
+          >
+            <p className="text-sm opacity-80">{card.label}</p>
+            <h3 className="text-2xl font-bold">{card.value}</h3>
           </div>
+        ))}
+      </div>
 
-          {/* --- Charts --- */}
-          <div className="grid grid-cols-2 gap-6">
-            {(permissions.can_fix ||
-              permissions.can_assign ||
-              permissions.can_report) &&
-              ticketsByStatus.labels?.length > 0 && (
-                <div className="bg-white shadow rounded p-4">
-                  <h2 className="text-lg font-semibold mb-2 text-center">
-                    Tickets by Status
-                  </h2>
-                  <Bar data={ticketsByStatus} options={{ responsive: true }} />
-                </div>
-              )}
+      {/* --- Ticket Status Summary (Pie Chart) --- */}
+      <div className="bg-white rounded-2xl shadow p-6">
+        <h2 className="text-xl font-semibold mb-4">Tickets by Status</h2>
+        {data.status_summary.length ? (
+          <ResponsiveContainer width="100%" height={300}>
+            <PieChart>
+              <Pie
+                data={data.status_summary}
+                dataKey="count"
+                nameKey="status"
+                outerRadius={120}
+                label
+              >
+                {data.status_summary.map((_, i) => (
+                  <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                ))}
+              </Pie>
+              <Tooltip />
+              <Legend />
+            </PieChart>
+          </ResponsiveContainer>
+        ) : (
+          <p className="text-gray-400">No status data available.</p>
+        )}
+      </div>
 
-            {(permissions.can_fix ||
-              permissions.can_assign ||
-              permissions.can_report) &&
-              ticketsByCategory.labels?.length > 0 && (
-                <div className="bg-white shadow rounded p-4">
-                  <h2 className="text-lg font-semibold mb-2 text-center">
-                    Tickets by Category
-                  </h2>
-                  <Pie
-                    data={ticketsByCategory}
-                    options={{ responsive: true }}
-                  />
-                </div>
-              )}
-          </div>
-        </>
-      )}
+      {/* --- Monthly Trends (Line Chart) --- */}
+      <div className="bg-white rounded-2xl shadow p-6">
+        <h2 className="text-xl font-semibold mb-4">Monthly Ticket Trends</h2>
+        {data.monthly_trend.length ? (
+          <ResponsiveContainer width="100%" height={300}>
+            <LineChart
+              data={data.monthly_trend.map((d) => ({
+                ...d,
+                month: formatMonth(d.month),
+              }))}
+            >
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="month" />
+              <YAxis />
+              <Tooltip />
+              <Legend />
+              <Line
+                type="monotone"
+                dataKey="count"
+                stroke="#3b82f6"
+                strokeWidth={3}
+                dot={{ r: 5 }}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        ) : (
+          <p className="text-gray-400">No monthly trend data available.</p>
+        )}
+      </div>
+
+      {/* --- Top Categories (Vertical Bar Chart) --- */}
+      <div className="bg-white rounded-2xl shadow p-6">
+        <h2 className="text-xl font-semibold mb-4">Top 5 Categories</h2>
+        {data.top_categories.length ? (
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={data.top_categories}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="category" />
+              <YAxis />
+              <Tooltip />
+              <Bar dataKey="count" fill="#16a34a" radius={[8, 8, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        ) : (
+          <p className="text-gray-400">No category data available.</p>
+        )}
+      </div>
+
+      {/* --- Top Locations (Horizontal Bar Chart) --- */}
+      <div className="bg-white rounded-2xl shadow p-6">
+        <h2 className="text-xl font-semibold mb-4">Top 5 Locations</h2>
+        {data.top_locations.length ? (
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart
+              layout="vertical"
+              data={data.top_locations}
+              margin={{ left: 50 }}
+            >
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis type="number" />
+              <YAxis
+                dataKey="location__building_name"
+                type="category"
+                width={150}
+              />
+              <Tooltip />
+              <Bar dataKey="count" fill="#fbbf24" radius={[0, 8, 8, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        ) : (
+          <p className="text-gray-400">No location data available.</p>
+        )}
+      </div>
+
+      {/* --- Fixer Performance (Composed Chart: Bar + Line) --- */}
+      <div className="bg-white rounded-2xl shadow p-6">
+        <h2 className="text-xl font-semibold mb-4">
+          Fixer Performance (Resolved vs Avg Time)
+        </h2>
+        {data.fixer_performance.length ? (
+          <ResponsiveContainer width="100%" height={300}>
+            <ComposedChart data={data.fixer_performance}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="assignments__user__email" />
+              <YAxis />
+              <Tooltip />
+              <Legend />
+              <Bar
+                dataKey="resolved_count"
+                fill="#fb923c"
+                name="Resolved Tickets"
+                radius={[6, 6, 0, 0]}
+              />
+              <Line
+                type="monotone"
+                dataKey="avg_time_hours"
+                stroke="#1d4ed8"
+                strokeWidth={2}
+                name="Avg Time (hrs)"
+              />
+            </ComposedChart>
+          </ResponsiveContainer>
+        ) : (
+          <p className="text-gray-400">No fixer performance data available.</p>
+        )}
+      </div>
     </div>
   );
 }

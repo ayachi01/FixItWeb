@@ -60,7 +60,7 @@ MIDDLEWARE = [
 # -------------------------------------------------------------------
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",  # Frontend dev URL
-    "http://localhost:63245", # need to change
+    "http://localhost:49683", # need to change
 
 ]
 if not DEBUG:
@@ -79,7 +79,7 @@ CORS_ALLOW_HEADERS = [
 # CSRF / Cookie Security
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:5173",
-    "http://localhost:63245",
+    "http://localhost:49683",
    
 
 ]

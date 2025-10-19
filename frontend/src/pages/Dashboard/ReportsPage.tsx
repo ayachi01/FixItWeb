@@ -15,6 +15,7 @@ import {
   LineChart,
   Line,
   CartesianGrid,
+  ComposedChart,
 } from "recharts";
 
 // Generic base interface for Recharts compatibility
@@ -90,7 +91,6 @@ export default function ReportsPage() {
 
   const COLORS = ["#8884d8", "#82ca9d", "#ffc658", "#ff8042", "#a4de6c"];
 
-  // Helper: format month for display
   const formatMonth = (dateString: string) =>
     new Date(dateString).toLocaleString("default", {
       month: "short",
@@ -99,8 +99,8 @@ export default function ReportsPage() {
 
   return (
     <div className="p-8 bg-gray-50 min-h-screen space-y-10">
-      <h1 className="text-3xl font-bold mb-4 text-gray-800">
-        📊 System Analytics Dashboard
+      <h1 className="text-3xl font-bold mb-6 text-gray-800">
+        📊 Reports Dashboard
       </h1>
 
       {/* --- Overview KPIs --- */}
@@ -142,7 +142,7 @@ export default function ReportsPage() {
         ))}
       </div>
 
-      {/* --- Ticket Status Summary --- */}
+      {/* --- Ticket Status Summary (Pie Chart) --- */}
       <div className="bg-white rounded-2xl shadow p-6">
         <h2 className="text-xl font-semibold mb-4">Tickets by Status</h2>
         {data.status_summary.length ? (
@@ -168,7 +168,7 @@ export default function ReportsPage() {
         )}
       </div>
 
-      {/* --- Monthly Trends --- */}
+      {/* --- Monthly Trends (Line Chart) --- */}
       <div className="bg-white rounded-2xl shadow p-6">
         <h2 className="text-xl font-semibold mb-4">Monthly Ticket Trends</h2>
         {data.monthly_trend.length ? (
@@ -187,8 +187,9 @@ export default function ReportsPage() {
               <Line
                 type="monotone"
                 dataKey="count"
-                stroke="#8884d8"
-                strokeWidth={2}
+                stroke="#3b82f6"
+                strokeWidth={3}
+                dot={{ r: 5 }}
               />
             </LineChart>
           </ResponsiveContainer>
@@ -197,7 +198,7 @@ export default function ReportsPage() {
         )}
       </div>
 
-      {/* --- Top Categories --- */}
+      {/* --- Top Categories (Vertical Bar Chart) --- */}
       <div className="bg-white rounded-2xl shadow p-6">
         <h2 className="text-xl font-semibold mb-4">Top 5 Categories</h2>
         {data.top_categories.length ? (
@@ -207,7 +208,7 @@ export default function ReportsPage() {
               <XAxis dataKey="category" />
               <YAxis />
               <Tooltip />
-              <Bar dataKey="count" fill="#82ca9d" />
+              <Bar dataKey="count" fill="#16a34a" radius={[8, 8, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         ) : (
@@ -215,17 +216,25 @@ export default function ReportsPage() {
         )}
       </div>
 
-      {/* --- Top Locations --- */}
+      {/* --- Top Locations (Horizontal Bar Chart) --- */}
       <div className="bg-white rounded-2xl shadow p-6">
         <h2 className="text-xl font-semibold mb-4">Top 5 Locations</h2>
         {data.top_locations.length ? (
           <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={data.top_locations}>
+            <BarChart
+              layout="vertical"
+              data={data.top_locations}
+              margin={{ left: 50 }}
+            >
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="location__building_name" />
-              <YAxis />
+              <XAxis type="number" />
+              <YAxis
+                dataKey="location__building_name"
+                type="category"
+                width={150}
+              />
               <Tooltip />
-              <Bar dataKey="count" fill="#ffc658" />
+              <Bar dataKey="count" fill="#fbbf24" radius={[0, 8, 8, 0]} />
             </BarChart>
           </ResponsiveContainer>
         ) : (
@@ -233,21 +242,33 @@ export default function ReportsPage() {
         )}
       </div>
 
-      {/* --- Fixer Performance --- */}
+      {/* --- Fixer Performance (Composed Chart: Bar + Line) --- */}
       <div className="bg-white rounded-2xl shadow p-6">
         <h2 className="text-xl font-semibold mb-4">
-          Fixer Performance (Resolved Tickets)
+          Fixer Performance (Resolved vs Avg Time)
         </h2>
         {data.fixer_performance.length ? (
           <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={data.fixer_performance}>
+            <ComposedChart data={data.fixer_performance}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="assignments__user__email" />
               <YAxis />
               <Tooltip />
               <Legend />
-              <Bar dataKey="resolved_count" fill="#ff8042" name="Resolved" />
-            </BarChart>
+              <Bar
+                dataKey="resolved_count"
+                fill="#fb923c"
+                name="Resolved Tickets"
+                radius={[6, 6, 0, 0]}
+              />
+              <Line
+                type="monotone"
+                dataKey="avg_time_hours"
+                stroke="#1d4ed8"
+                strokeWidth={2}
+                name="Avg Time (hrs)"
+              />
+            </ComposedChart>
           </ResponsiveContainer>
         ) : (
           <p className="text-gray-400">No fixer performance data available.</p>
