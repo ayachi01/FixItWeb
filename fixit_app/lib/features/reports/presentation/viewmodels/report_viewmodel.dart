@@ -1,12 +1,16 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '/core/services/image_picker_service.dart';
+import '/core/api_service.dart';
+import '/core/utils/storage_helper.dart';
 
 class ReportViewModel extends ChangeNotifier {
   // Services
   final ImagePickerService _imagePicker;
+  final ApiService _apiService = ApiService();
 
   // Controllers
   final TextEditingController dateCtrl = TextEditingController();
@@ -28,6 +32,11 @@ class ReportViewModel extends ChangeNotifier {
   bool get isTorchOn => _isTorchOn;
   CameraController? get controller => _controller;
 
+  // Optional variables for storage
+  String? _webToken;
+  Uint8List? selectedImageBytes;
+  List<String> locationOptions = [];
+
   // Dispose controllers
   @override
   void dispose() {
@@ -37,7 +46,9 @@ class ReportViewModel extends ChangeNotifier {
     super.dispose();
   }
 
-  // Date Picker
+  // ====================================================
+  // DATE & TIME PICKERS
+  // ====================================================
   Future<void> pickDate(BuildContext context) async {
     final picked = await showDatePicker(
       context: context,
@@ -54,7 +65,6 @@ class ReportViewModel extends ChangeNotifier {
     }
   }
 
-  // Time Picker
   Future<void> pickTime(BuildContext context) async {
     final picked = await showTimePicker(
       context: context,
@@ -82,7 +92,32 @@ class ReportViewModel extends ChangeNotifier {
     return timeCtrl.text;
   }
 
-  // Image Picker
+  // ====================================================
+  // TOKEN MANAGEMENT (WEB + MOBILE)
+  // ====================================================
+  Future<void> saveToken(String token) async {
+    _webToken = token;
+    await StorageHelper.saveToken(token);
+    print("🔐 Token saved successfully: ${token.substring(0, 10)}...");
+  }
+
+  Future<String?> _getStoredToken() async {
+    if (_webToken != null && _webToken!.isNotEmpty) return _webToken;
+
+    final stored = await StorageHelper.getToken();
+    if (stored != null && stored.isNotEmpty) {
+      _webToken = stored;
+      print("🔐 Token loaded successfully: ${stored.substring(0, 10)}...");
+      return stored;
+    }
+
+    print("⚠️ Token is missing or empty.");
+    return null;
+  }
+
+  // ====================================================
+  // IMAGE PICKING
+  // ====================================================
   Future<void> pickFromGallery() async {
     final XFile? image = await _imagePicker.pickImageFromGallery();
     if (image != null) {
@@ -91,13 +126,14 @@ class ReportViewModel extends ChangeNotifier {
     }
   }
 
-  // Remove Image
   void removeImage() {
     selectedImage = null;
     notifyListeners();
   }
 
-  // Setup Camera
+  // ====================================================
+  // CAMERA CONTROLS
+  // ====================================================
   Future<void> setupCamera() async {
     if (_controller != null) return;
     _cameras = await availableCameras();
@@ -115,7 +151,6 @@ class ReportViewModel extends ChangeNotifier {
     }
   }
 
-  // Dispose Camera
   Future<void> disposeCamera() async {
     try {
       if (_controller != null && _controller!.value.isStreamingImages) {
@@ -131,7 +166,7 @@ class ReportViewModel extends ChangeNotifier {
   }
 
   Future<void> pauseCamera() async {
-    if(_controller != null && _controller!.value.isStreamingImages) {
+    if (_controller != null && _controller!.value.isStreamingImages) {
       await _controller?.stopImageStream();
       notifyListeners();
     }
@@ -139,9 +174,32 @@ class ReportViewModel extends ChangeNotifier {
 
   Future<void> resumeCamera() async {
     if (_controller != null && !_controller!.value.isStreamingImages) {
-      await _controller!.startImageStream((CameraImage image) {
-      });
+      await _controller!.startImageStream((CameraImage image) {});
       notifyListeners();
+    }
+  }
+
+  // ====================================================
+  // LOGOUT + ACCOUNT RESET
+  // ====================================================
+  Future<void> logoutAndReset() async {
+    try {
+      print("🚪 Logging out and resetting account...");
+
+      await _apiService.logout();
+      _webToken = null;
+      await StorageHelper.clearToken();
+
+      selectedImage = null;
+      selectedImageBytes = null;
+      locationOptions = [];
+
+      await disposeCamera();
+
+      print("🧹 All user data cleared — ready for new login.");
+      notifyListeners();
+    } catch (e) {
+      print("⚠️ Logout reset failed: $e");
     }
   }
 }
