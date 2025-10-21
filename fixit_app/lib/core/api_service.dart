@@ -1,20 +1,12 @@
 import 'dart:typed_data';
 import 'dart:io' show File;
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'dart:html' as html; // Used only on web
+import 'utils/storage.dart'; // ✅ Use your new platform-safe storage helper
 
 class ApiService {
   final String baseUrl = "http://192.168.5.137:8000/api"; // Update if needed
   late Dio dio;
-  final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
-  String? _webAccessToken;
-  String? _webRefreshToken;
 
-  // ====================================================
-  //  CONSTRUCTOR
-  // ====================================================
   ApiService() {
     dio = Dio(
       BaseOptions(
@@ -43,85 +35,27 @@ class ApiService {
   //  TOKEN HELPERS
   // ====================================================
   Future<void> saveTokens(String access, String refresh) async {
-    _webAccessToken = access;
-    _webRefreshToken = refresh;
-
-    if (kIsWeb) {
-      html.window.localStorage['access_token'] = access;
-      html.window.localStorage['refresh_token'] = refresh;
-    } else {
-      await _secureStorage.write(key: 'access_token', value: access);
-      await _secureStorage.write(key: 'refresh_token', value: refresh);
-    }
-
+    await storageHelper.write('access_token', access);
+    await storageHelper.write('refresh_token', refresh);
     dio.options.headers['Authorization'] = 'Bearer $access';
   }
 
   Future<String?> _getStoredAccessToken() async {
-    if (_webAccessToken != null && _webAccessToken!.isNotEmpty) {
-      dio.options.headers['Authorization'] = 'Bearer $_webAccessToken';
-      return _webAccessToken;
+    final access = await storageHelper.read('access_token');
+    if (access != null && access.isNotEmpty) {
+      dio.options.headers['Authorization'] = 'Bearer $access';
+      return access;
     }
-
-    if (kIsWeb) {
-      final access = html.window.localStorage['access_token'];
-      if (access != null && access.isNotEmpty) {
-        _webAccessToken = access;
-        dio.options.headers['Authorization'] = 'Bearer $access';
-        return access;
-      }
-      return null;
-    } else {
-      final access = await _secureStorage.read(key: 'access_token');
-      if (access != null && access.isNotEmpty) {
-        _webAccessToken = access;
-        dio.options.headers['Authorization'] = 'Bearer $access';
-        return access;
-      }
-      return null;
-    }
+    return null;
   }
 
   Future<void> clearTokens() async {
-    try {
-      if (kIsWeb) {
-        html.window.localStorage.remove('access_token');
-        html.window.localStorage.remove('refresh_token');
-      } else {
-        await _secureStorage.delete(key: 'access_token');
-        await _secureStorage.delete(key: 'refresh_token');
-      }
-
-      _webAccessToken = null;
-      _webRefreshToken = null;
-      dio.options.headers.remove('Authorization');
-
-      dio = Dio(
-        BaseOptions(
-          baseUrl: baseUrl,
-          connectTimeout: const Duration(seconds: 10),
-          receiveTimeout: const Duration(seconds: 10),
-          headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json',
-          },
-        ),
-      );
-
-      dio.interceptors.add(
-        InterceptorsWrapper(
-          onRequest: (options, handler) {
-            options.headers.remove('Connection');
-            return handler.next(options);
-          },
-        ),
-      );
-    } catch (_) {}
+    await storageHelper.delete('access_token');
+    await storageHelper.delete('refresh_token');
+    dio.options.headers.remove('Authorization');
   }
 
-  Future<void> logout() async {
-    await clearTokens();
-  }
+  Future<void> logout() async => await clearTokens();
 
   // ====================================================
   //  AUTH APIs

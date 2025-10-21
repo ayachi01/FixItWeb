@@ -1,50 +1,70 @@
 import 'dart:io' show File;
 import 'dart:typed_data';
-import 'package:flutter/foundation.dart' show ChangeNotifier, kIsWeb;
 import 'package:camera/camera.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+
 import '/core/services/image_picker_service.dart';
+import '/core/services/llm_service.dart';
 import '/core/api_service.dart';
-import 'dart:html' as html;
+
+// ✅ Conditional import (web-safe local storage)
+import 'package:fixit/core/helpers/local_storage_helper_web.dart'
+    if (dart.library.io) 'package:fixit/core/helpers/local_storage_helper_stub.dart';
 
 class ReportViewModel extends ChangeNotifier {
+  // Services
   final ImagePickerService _imagePicker;
+  final LLMService _llmService = LLMService();
   final ApiService _apiService = ApiService();
   final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
 
+  ReportViewModel(this._imagePicker);
+
+  // Camera
   CameraController? _controller;
   List<CameraDescription> _cameras = [];
   Future<void>? _initializeControllerFuture;
-
   Future<void>? get initializeControllerFuture => _initializeControllerFuture;
   CameraController? get controller => _controller;
 
+  // State
   bool _isTorchOn = false;
   bool get isTorchOn => _isTorchOn;
+  bool isLoading = false;
+  bool _isLLMLoading = false;
+  bool get isLLMLoading => _isLLMLoading;
 
   File? selectedImage;
   Uint8List? selectedImageBytes;
-
-  bool isLoading = false;
   List<Map<String, dynamic>> locationOptions = [];
 
+  // Tokens
   String? _webToken;
 
-  ReportViewModel(this._imagePicker);
+  // LLM Result
+  String? _llmResult;
+  Map<String, dynamic>? llmData;
 
+  // ========================
+  // 🧠  SAFE NOTIFY
+  // ========================
   void safeNotify() {
     if (SchedulerBinding.instance.schedulerPhase == SchedulerPhase.idle ||
         SchedulerBinding.instance.schedulerPhase ==
             SchedulerPhase.postFrameCallbacks) {
       notifyListeners();
     } else {
-      SchedulerBinding.instance.addPostFrameCallback((_) {
-        notifyListeners();
-      });
+      SchedulerBinding.instance.addPostFrameCallback((_) => notifyListeners());
     }
   }
 
+  // ========================
+  // 🗓️ DATE + TIME HELPERS
+  // ========================
   Map<String, String> get currentDateTime {
     final now = DateTime.now();
     final formattedDate =
@@ -54,6 +74,9 @@ class ReportViewModel extends ChangeNotifier {
     return {"date": formattedDate, "time": formattedTime};
   }
 
+  // ========================
+  // 🧾 LOCATIONS (Backend)
+  // ========================
   Future<List<Map<String, dynamic>>> fetchLocations() async {
     try {
       isLoading = true;
@@ -61,21 +84,20 @@ class ReportViewModel extends ChangeNotifier {
 
       final locations = await _apiService.getLocations();
       locationOptions = List<Map<String, dynamic>>.from(locations);
-
-      safeNotify();
       return locationOptions;
-    } catch (e) {
-      rethrow;
     } finally {
       isLoading = false;
       safeNotify();
     }
   }
 
+  // ========================
+  // 🔐 TOKEN HANDLING
+  // ========================
   Future<void> saveToken(String token) async {
     _webToken = token;
     if (kIsWeb) {
-      html.window.localStorage['access_token'] = token;
+      LocalStorageHelper.saveToken('access_token', token);
     } else {
       await _secureStorage.write(key: 'access_token', value: token);
     }
@@ -85,7 +107,7 @@ class ReportViewModel extends ChangeNotifier {
     if (_webToken != null && _webToken!.isNotEmpty) return _webToken;
 
     if (kIsWeb) {
-      final stored = html.window.localStorage['access_token'];
+      final stored = LocalStorageHelper.getToken('access_token');
       if (stored != null && stored.isNotEmpty) {
         _webToken = stored;
         return stored;
@@ -101,19 +123,19 @@ class ReportViewModel extends ChangeNotifier {
         return null;
       }
     }
-
     return null;
   }
 
+  // ========================
+  // 🧾 SUBMIT REPORT (Backend)
+  // ========================
   Future<void> createTicket(Map<String, dynamic> formData) async {
     try {
       isLoading = true;
       safeNotify();
 
       final token = await _getStoredToken();
-      if (token == null) {
-        throw Exception("Authentication token missing. Please log in again.");
-      }
+      if (token == null) throw Exception("Authentication token missing.");
 
       List<String> imagePaths = [];
       List<Uint8List> imageBytesList = [];
@@ -122,10 +144,6 @@ class ReportViewModel extends ChangeNotifier {
         imagePaths.add(selectedImage!.path);
       } else if (kIsWeb && selectedImageBytes != null) {
         imageBytesList.add(selectedImageBytes!);
-      }
-
-      if (imagePaths.isEmpty && imageBytesList.isEmpty) {
-        throw Exception("Please attach at least 1 image.");
       }
 
       await _apiService.submitTicket(
@@ -137,32 +155,45 @@ class ReportViewModel extends ChangeNotifier {
         imagePaths: imagePaths.isNotEmpty ? imagePaths : null,
         imageBytesList: imageBytesList.isNotEmpty ? imageBytesList : null,
       );
-    } catch (e) {
-      rethrow;
     } finally {
       isLoading = false;
       safeNotify();
     }
   }
 
-  Future<void> pickFromGallery() async {
-    final image = await _imagePicker.pickImageFromGallery();
-    if (image != null) {
-      if (kIsWeb) {
-        selectedImageBytes = await image.readAsBytes();
-      } else {
-        selectedImage = File(image.path);
-      }
+  // ========================
+  // 🧠 LLM: Analyze Image
+  // ========================
+  Future<Map<String, dynamic>?> sendToLLM(File imageFile) async {
+    try {
+      _isLLMLoading = true;
+      safeNotify();
+
+      final response = await _llmService.reportIssue(image: imageFile);
+      if (response.isEmpty) return null;
+
+      llmData = {
+        'building': response['ticket']?['building'] ?? '',
+        'room': response['ticket']?['room'] ?? '',
+        'item': response['ticket']?['item'] ?? '',
+        'intent': response['ticket']?['intent'] ?? '',
+        'notes': response['ticket']?['notes'] ?? '',
+      };
+      _llmResult = response['ai_reply'];
+      safeNotify();
+      return llmData;
+    } catch (e) {
+      debugPrint("Error in sendToLLM: $e");
+      return null;
+    } finally {
+      _isLLMLoading = false;
       safeNotify();
     }
   }
 
-  void removeImage() {
-    selectedImage = null;
-    selectedImageBytes = null;
-    safeNotify();
-  }
-
+  // ========================
+  // 🎥 CAMERA MANAGEMENT
+  // ========================
   Future<void> setupCamera() async {
     if (_controller != null) return;
     _cameras = await availableCameras();
@@ -170,10 +201,9 @@ class ReportViewModel extends ChangeNotifier {
     if (_cameras.isNotEmpty) {
       _controller = CameraController(
         _cameras.first,
-        ResolutionPreset.low,
+        ResolutionPreset.medium,
         enableAudio: false,
       );
-
       _initializeControllerFuture = _controller!.initialize();
       await _initializeControllerFuture;
       safeNotify();
@@ -189,20 +219,42 @@ class ReportViewModel extends ChangeNotifier {
     safeNotify();
   }
 
+  // ========================
+  // 🖼️ IMAGE PICKING
+  // ========================
+  Future<void> pickFromGallery() async {
+    final XFile? image = await _imagePicker.pickImageFromGallery();
+    if (image != null) {
+      if (kIsWeb) {
+        selectedImageBytes = await image.readAsBytes();
+      } else {
+        selectedImage = File(image.path);
+      }
+      safeNotify();
+    }
+  }
+
+  void removeImage() {
+    selectedImage = null;
+    selectedImageBytes = null;
+    _llmResult = null;
+    llmData = null;
+    safeNotify();
+  }
+
+  // ========================
+  // 🚪 LOGOUT + RESET
+  // ========================
   Future<void> logoutAndReset() async {
     try {
       await _apiService.logout();
-
       _webToken = null;
       await _secureStorage.delete(key: 'access_token');
-      if (kIsWeb) html.window.localStorage.remove('access_token');
-
+      LocalStorageHelper.removeToken('access_token');
       selectedImage = null;
       selectedImageBytes = null;
       locationOptions = [];
-
       await disposeCamera();
-
       safeNotify();
     } catch (_) {}
   }

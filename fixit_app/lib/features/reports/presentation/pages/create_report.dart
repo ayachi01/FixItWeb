@@ -7,7 +7,9 @@ import '/core/widgets/welcome_button.dart';
 import '/features/reports/presentation/viewmodels/report_viewmodel.dart';
 
 class CreateReport extends StatefulWidget {
-  const CreateReport({super.key});
+  final Map<String, dynamic>? llmData; // 🧠 Optional LLM response data
+
+  const CreateReport({super.key, this.llmData});
 
   @override
   State<CreateReport> createState() => CreateReportState();
@@ -52,7 +54,16 @@ class CreateReportState extends State<CreateReport> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _fetchBuildings();
+      _fetchBuildings().then((_) {
+        // ✅ Prefill from widget.llmData after buildings are loaded
+        _prefillFromLLM(widget.llmData);
+
+        // ✅ Also handle navigation arguments
+        final args = ModalRoute.of(context)?.settings.arguments;
+        if (args != null && args is Map<String, dynamic>) {
+          _prefillFromLLM(args);
+        }
+      });
     });
   }
 
@@ -62,6 +73,79 @@ class CreateReportState extends State<CreateReport> {
     description.dispose();
     super.dispose();
   }
+
+  // -------------------------------
+  // 🧠 Prefill fields using LLM data
+  // -------------------------------
+  void _prefillFromLLM(Map<String, dynamic>? data) {
+  if (data == null) return;
+
+  debugPrint("🧠 Prefilling fields with LLM data: $data");
+
+  // 🏢 Building/Location - Match LLM building to location ID
+  if (data['building'] != null && data['building'] != 'null') {
+    final llmBuilding = data['building'].toString().toUpperCase();
+    final matchingLocation = buildingOptions.firstWhere(
+      (loc) => loc['building_name']?.toString().toUpperCase().contains(llmBuilding) ?? false,
+      orElse: () => {},
+    );
+    if (matchingLocation.isNotEmpty && matchingLocation['id'] != null) {
+      selectedLocationId = matchingLocation['id'];
+    }
+  }
+
+  // 🪑 Combine intent + item → Incident Type (e.g. "broken chair")
+  incidentType.text = [
+    if (data['intent'] != null && data['intent'] != 'null') data['intent'],
+    if (data['item'] != null && data['item'] != 'null') data['item'],
+  ].join(' ').trim();
+
+  // 🏷️ Map LLM intent to category
+  if (data['intent'] != null && data['intent'] != 'null') {
+    final intent = data['intent'].toString().toLowerCase();
+
+    if (intent.contains('broken') || intent.contains('damaged')) {
+      categoryDropDownValue = 'Structural';
+    } else if (intent.contains('dirty') || intent.contains('clean')) {
+      categoryDropDownValue = 'Cleaning';
+    } else if (intent.contains('leak') || intent.contains('water')) {
+      categoryDropDownValue = 'Plumbing';
+    } else if (intent.contains('light') || intent.contains('electric')) {
+      categoryDropDownValue = 'Electrical';
+    } else if (intent.contains('noise') || intent.contains('disturb')) {
+      categoryDropDownValue = 'Disturbance';
+    } else if (intent.contains('hvac') || intent.contains('air') || intent.contains('temperature')) {
+      categoryDropDownValue = 'HVAC';
+    } else if (intent.contains('tech') || intent.contains('computer')) {
+      categoryDropDownValue = 'Technology';
+    } else if (intent.contains('equipment')) {
+      categoryDropDownValue = 'Equipment';
+    } else if (intent.contains('security') || intent.contains('lock')) {
+      categoryDropDownValue = 'Security';
+    }
+  }
+
+  // 📝 Notes → Description (limit to 50 chars max)
+  String descriptionText = '';
+  if (data['notes'] != null &&
+      data['notes'] != 'null' &&
+      (data['notes'] as String).trim().isNotEmpty) {
+    descriptionText = data['notes'].toString().trim();
+  }
+
+  // ✂️ Limit to 50 characters
+  if (descriptionText.length > 50) {
+    descriptionText = descriptionText.substring(0, 50);
+  }
+
+  description.text = descriptionText;
+
+  // ⚡ Default urgency if not set
+  urgencyDropDownValue ??= 'Standard';
+
+  setState(() {});
+}
+
 
   // -------------------------------
   // Fetch buildings from backend
