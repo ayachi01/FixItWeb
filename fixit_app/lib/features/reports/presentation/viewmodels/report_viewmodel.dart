@@ -1,17 +1,15 @@
 import 'dart:io' show File;
 import 'dart:typed_data';
-import 'package:flutter/foundation.dart' show ChangeNotifier, kIsWeb;
+import 'package:flutter/foundation.dart' show ChangeNotifier, kIsWeb, debugPrint;
 import 'package:camera/camera.dart';
 import 'package:flutter/scheduler.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '/core/services/image_picker_service.dart';
 import '/core/api_service.dart';
-import 'dart:html' as html;
+import '/core/utils/storage_helper.dart';
 
 class ReportViewModel extends ChangeNotifier {
   final ImagePickerService _imagePicker;
   final ApiService _apiService = ApiService();
-  final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
 
   CameraController? _controller;
   List<CameraDescription> _cameras = [];
@@ -20,9 +18,6 @@ class ReportViewModel extends ChangeNotifier {
   Future<void>? get initializeControllerFuture => _initializeControllerFuture;
   CameraController? get controller => _controller;
 
-  bool _isTorchOn = false;
-  bool get isTorchOn => _isTorchOn;
-
   File? selectedImage;
   Uint8List? selectedImageBytes;
 
@@ -30,9 +25,13 @@ class ReportViewModel extends ChangeNotifier {
   List<Map<String, dynamic>> locationOptions = [];
 
   String? _webToken;
+  bool _isPickingImage = false;
 
   ReportViewModel(this._imagePicker);
 
+  // -------------------------------
+  // Safe notify to prevent rebuild errors
+  // -------------------------------
   void safeNotify() {
     if (SchedulerBinding.instance.schedulerPhase == SchedulerPhase.idle ||
         SchedulerBinding.instance.schedulerPhase ==
@@ -45,6 +44,9 @@ class ReportViewModel extends ChangeNotifier {
     }
   }
 
+  // -------------------------------
+  // Current date & time
+  // -------------------------------
   Map<String, String> get currentDateTime {
     final now = DateTime.now();
     final formattedDate =
@@ -54,6 +56,9 @@ class ReportViewModel extends ChangeNotifier {
     return {"date": formattedDate, "time": formattedTime};
   }
 
+  // -------------------------------
+  // Fetch locations/buildings
+  // -------------------------------
   Future<List<Map<String, dynamic>>> fetchLocations() async {
     try {
       isLoading = true;
@@ -72,39 +77,29 @@ class ReportViewModel extends ChangeNotifier {
     }
   }
 
+  // -------------------------------
+  // Token storage
+  // -------------------------------
   Future<void> saveToken(String token) async {
     _webToken = token;
-    if (kIsWeb) {
-      html.window.localStorage['access_token'] = token;
-    } else {
-      await _secureStorage.write(key: 'access_token', value: token);
-    }
+    await StorageHelper.saveToken(token);
   }
 
   Future<String?> _getStoredToken() async {
     if (_webToken != null && _webToken!.isNotEmpty) return _webToken;
 
-    if (kIsWeb) {
-      final stored = html.window.localStorage['access_token'];
-      if (stored != null && stored.isNotEmpty) {
-        _webToken = stored;
-        return stored;
-      }
-    } else {
-      try {
-        final token = await _secureStorage.read(key: 'access_token');
-        if (token != null && token.isNotEmpty) {
-          _webToken = token;
-          return token;
-        }
-      } catch (_) {
-        return null;
-      }
+    final stored = await StorageHelper.getToken();
+    if (stored != null && stored.isNotEmpty) {
+      _webToken = stored;
+      return stored;
     }
 
     return null;
   }
 
+  // -------------------------------
+  // Create ticket/report
+  // -------------------------------
   Future<void> createTicket(Map<String, dynamic> formData) async {
     try {
       isLoading = true;
@@ -145,15 +140,32 @@ class ReportViewModel extends ChangeNotifier {
     }
   }
 
+  // -------------------------------
+  // Pick image from gallery
+  // -------------------------------
   Future<void> pickFromGallery() async {
-    final image = await _imagePicker.pickImageFromGallery();
-    if (image != null) {
-      if (kIsWeb) {
-        selectedImageBytes = await image.readAsBytes();
-      } else {
-        selectedImage = File(image.path);
+    if (_isPickingImage) return; // prevent multiple picks
+    _isPickingImage = true;
+
+    try {
+      final image = await _imagePicker.pickImageFromGallery();
+      if (image != null) {
+        // clear previous image
+        selectedImage = null;
+        selectedImageBytes = null;
+
+        if (kIsWeb) {
+          selectedImageBytes = await image.readAsBytes();
+        } else {
+          selectedImage = File(image.path);
+        }
+
+        safeNotify();
       }
-      safeNotify();
+    } catch (e) {
+      debugPrint("Error picking image: $e");
+    } finally {
+      _isPickingImage = false;
     }
   }
 
@@ -163,6 +175,9 @@ class ReportViewModel extends ChangeNotifier {
     safeNotify();
   }
 
+  // -------------------------------
+  // Camera setup and disposal
+  // -------------------------------
   Future<void> setupCamera() async {
     if (_controller != null) return;
     _cameras = await availableCameras();
@@ -189,13 +204,15 @@ class ReportViewModel extends ChangeNotifier {
     safeNotify();
   }
 
+  // -------------------------------
+  // Logout and reset
+  // -------------------------------
   Future<void> logoutAndReset() async {
     try {
       await _apiService.logout();
 
       _webToken = null;
-      await _secureStorage.delete(key: 'access_token');
-      if (kIsWeb) html.window.localStorage.remove('access_token');
+      await StorageHelper.clearToken();
 
       selectedImage = null;
       selectedImageBytes = null;

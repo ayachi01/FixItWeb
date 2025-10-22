@@ -3,10 +3,10 @@ import 'dart:io' show File;
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'dart:html' as html; // Used only on web
+import '/core/utils/storage_helper.dart'; // ✅ use your helper
 
 class ApiService {
-  final String baseUrl = "http://192.168.5.137:8000/api"; // Update if needed
+  final String baseUrl = "http://192.168.8.118:8000/api";
   late Dio dio;
   final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
   String? _webAccessToken;
@@ -28,7 +28,6 @@ class ApiService {
       ),
     );
 
-    // ✅ Prevent "unsafe header" warnings in web
     dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) {
@@ -46,13 +45,9 @@ class ApiService {
     _webAccessToken = access;
     _webRefreshToken = refresh;
 
-    if (kIsWeb) {
-      html.window.localStorage['access_token'] = access;
-      html.window.localStorage['refresh_token'] = refresh;
-    } else {
-      await _secureStorage.write(key: 'access_token', value: access);
-      await _secureStorage.write(key: 'refresh_token', value: refresh);
-    }
+    // ✅ Use your StorageHelper instead of html.window
+    await StorageHelper.saveToken(access);
+    // You can extend your StorageHelper later to save refresh token too
 
     dio.options.headers['Authorization'] = 'Bearer $access';
   }
@@ -63,34 +58,21 @@ class ApiService {
       return _webAccessToken;
     }
 
-    if (kIsWeb) {
-      final access = html.window.localStorage['access_token'];
-      if (access != null && access.isNotEmpty) {
-        _webAccessToken = access;
-        dio.options.headers['Authorization'] = 'Bearer $access';
-        return access;
-      }
-      return null;
-    } else {
-      final access = await _secureStorage.read(key: 'access_token');
-      if (access != null && access.isNotEmpty) {
-        _webAccessToken = access;
-        dio.options.headers['Authorization'] = 'Bearer $access';
-        return access;
-      }
-      return null;
+    // ✅ Unified token retrieval
+    final access = await StorageHelper.getToken();
+    if (access != null && access.isNotEmpty) {
+      _webAccessToken = access;
+      dio.options.headers['Authorization'] = 'Bearer $access';
+      return access;
     }
+
+    return null;
   }
 
   Future<void> clearTokens() async {
     try {
-      if (kIsWeb) {
-        html.window.localStorage.remove('access_token');
-        html.window.localStorage.remove('refresh_token');
-      } else {
-        await _secureStorage.delete(key: 'access_token');
-        await _secureStorage.delete(key: 'refresh_token');
-      }
+      // ✅ Unified clearing
+      await StorageHelper.clearToken();
 
       _webAccessToken = null;
       _webRefreshToken = null;
