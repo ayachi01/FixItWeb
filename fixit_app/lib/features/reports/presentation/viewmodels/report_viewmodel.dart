@@ -1,10 +1,8 @@
 import 'dart:io';
 import 'dart:typed_data';
-import 'dart:convert';
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import '/core/services/image_picker_service.dart';
 import '/core/services/llm_service.dart';
 import '/core/api_service.dart';
@@ -117,8 +115,6 @@ class ReportViewModel extends ChangeNotifier {
       final locations = await _apiService.getLocations();
       locationOptions = List<Map<String, dynamic>>.from(locations);
       return locationOptions;
-    } catch (e) {
-      rethrow;
     } finally {
       isLoading = false;
       safeNotify();
@@ -178,8 +174,6 @@ class ReportViewModel extends ChangeNotifier {
         imagePaths: imagePaths.isNotEmpty ? imagePaths : null,
         imageBytesList: imageBytesList.isNotEmpty ? imageBytesList : null,
       );
-    } catch (e) {
-      rethrow;
     } finally {
       isLoading = false;
       safeNotify();
@@ -187,17 +181,19 @@ class ReportViewModel extends ChangeNotifier {
   }
 
   // -------------------------------
-  // 🧠 Send to LLM for Prefill
+  // 🧠 Send to LLM for Prefill (uses LLMService)
   // -------------------------------
   Future<Map<String, dynamic>> sendToLLM(File imageFile) async {
     try {
       isLoading = true;
       safeNotify();
 
-      // 🧠 Send actual image to LLM backend (Flask)
-      final response = await _llmService.reportIssue(image: imageFile);
+      // ✅ Use LLMService to send image
+      final response = await _llmService.reportIssue(
+        message: "Detect classroom issue",
+        image: imageFile,
+      );
 
-      // Parse AI reply
       _llmResult = response["ai_reply"]?.toString() ?? "No AI response";
       safeNotify();
 
@@ -214,7 +210,7 @@ class ReportViewModel extends ChangeNotifier {
   // -------------------------------
   // 🖼️ Pick Image
   // -------------------------------
-  Future<void> pickFromGallery() async {
+  Future<void> pickFromGallery({bool autoSendToLLM = true}) async {
     if (_isPickingImage) return;
     _isPickingImage = true;
 
@@ -223,12 +219,18 @@ class ReportViewModel extends ChangeNotifier {
       if (image != null) {
         selectedImage = File(image.path);
         selectedImageBytes = await image.readAsBytes();
+
+        if (autoSendToLLM) {
+          await sendToLLM(selectedImage!);
+        }
+
         safeNotify();
       }
     } catch (e) {
       debugPrint("Error picking image: $e");
     } finally {
       _isPickingImage = false;
+      safeNotify();
     }
   }
 

@@ -67,13 +67,12 @@ class _ScannerScreenState extends State<ScannerScreen> {
     });
 
     try {
+      // ✅ Use the updated LLM call
       final response = await reportVM.sendToLLM(imageFile);
 
       if (response != null && mounted) {
         debugPrint('✅ LLM Response received: $response');
 
-        // 🔍 Handle nested JSON structure like:
-        // { ai_reply: "...", ticket: { building: ..., room: ..., item: ..., intent: ..., notes: ... } }
         final ticket = response['ticket'] ?? {};
         debugPrint('🎟️ Extracted ticket data: $ticket');
 
@@ -87,10 +86,14 @@ class _ScannerScreenState extends State<ScannerScreen> {
 
         debugPrint('🧠 Prefilling fields with LLM data: $llmData');
 
+        // ✅ Pass imageFile to CreateReport
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) => CreateReport(llmData: llmData),
+            builder: (_) => CreateReport(
+              llmData: llmData,
+              imageFile: _imageFile, // ✅ this ensures image shows in CreateReport
+            ),
           ),
         );
       } else {
