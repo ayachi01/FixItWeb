@@ -6,7 +6,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '/core/utils/storage_helper.dart'; // ✅ your helper
 
 class ApiService {
-  final String baseUrl = "http://192.168.5.137:8000/api";
+  final String baseUrl = "http://192.168.1.254:8000/api";
   late Dio dio;
   final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
   String? _webAccessToken;
