@@ -134,10 +134,10 @@ class SignupFormState extends State<SignupForm> {
               TextFormField(
                 controller: emailController,
                 keyboardType: TextInputType.emailAddress,
-                decoration: inputDecoration("name@pirmaed.com"),
+                decoration: inputDecoration("name@phinmaed.com"),
                 validator: (value) {
                   if (value == null || value.isEmpty) return "Please enter your email!";
-                  if (!value.endsWith("@pirmaed.com")) return "Only pirmaed.com emails allowed!";
+                  if (!value.endsWith("@phinmaed.com")) return "Only phinmaed.com emails allowed!";
                   return null;
                 },
               ),

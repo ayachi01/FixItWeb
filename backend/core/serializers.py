@@ -283,9 +283,9 @@ class StudentRegisterSerializer(serializers.ModelSerializer):
 
         # Only allow emails from pirmaed.com
         email_domain = attrs["email"].split("@")[-1]
-        if email_domain.lower() != "pirmaed.com":
+        if email_domain.lower() != "phinmaed.com":
             raise serializers.ValidationError(
-                {"email": "Only pirmaed.com email addresses are allowed."}
+                {"email": "Only phinmaed.com email addresses are allowed."}
             )
 
         return attrs

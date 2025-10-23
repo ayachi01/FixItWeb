@@ -299,13 +299,13 @@ class UserViewSet(viewsets.ModelViewSet):
             return Response({'error': 'Email already registered'}, status=status.HTTP_400_BAD_REQUEST)
 
         domain = email.split('@')[-1].lower()
-        if domain != "pirmaed.com":
-            return Response({'error': 'Only pirmaed.com emails are allowed for registration'}, status=status.HTTP_400_BAD_REQUEST)
+        if domain != "phinmaed.com":
+            return Response({'error': 'Only phinmaed.com emails are allowed for registration'}, status=status.HTTP_400_BAD_REQUEST)
 
         mapping = DomainRoleMapping.objects.filter(domain__iexact=domain).first()
         role = mapping.role if mapping else Role.objects.get_or_create(name="Student")[0]
 
-        # ✅ Detect if this is a mobile registration
+        # Detect if this is a mobile registration
         is_mobile = request.data.get("is_mobile", False) in [True, "true", "True", 1, "1"]
 
         with transaction.atomic():
@@ -314,7 +314,7 @@ class UserViewSet(viewsets.ModelViewSet):
                 password=request.data["password"],
                 first_name=request.data["first_name"],
                 last_name=request.data["last_name"],
-                # ✅ For mobile: immediately active, no verification needed
+                # For mobile: immediately active, no verification needed
                 is_active=True if is_mobile else False
             )
             profile, _ = UserProfile.objects.get_or_create(
@@ -335,7 +335,7 @@ class UserViewSet(viewsets.ModelViewSet):
                     enrollment_year=request.data.get("enrollment_year"),
                 )
 
-            # ✅ If mobile: skip verification email, auto-generate JWT tokens
+            # If mobile: skip verification email, auto-generate JWT tokens
             if is_mobile:
                 refresh = RefreshToken.for_user(user)
                 access = str(refresh.access_token)
@@ -347,7 +347,7 @@ class UserViewSet(viewsets.ModelViewSet):
                     "profile": UserProfileSerializer(profile).data
                 }, status=status.HTTP_201_CREATED)
 
-            # ✅ Normal web flow (unchanged)
+            # Normal web flow (unchanged)
             uidb64 = urlsafe_base64_encode(force_bytes(user.pk))
             token = default_token_generator.make_token(user)
             verify_url = f"http://localhost:5173/verify-email/{uidb64}/{token}/"

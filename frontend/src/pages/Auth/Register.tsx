@@ -26,8 +26,8 @@ export default function Register() {
 
     // ✅ Frontend-only email domain check
     const emailDomain = email.split("@")[1]?.toLowerCase();
-    if (emailDomain !== "pirmaed.com") {
-      setError("Only pirmaed.com email addresses are allowed.");
+    if (emailDomain !== "phinmaed.com") {
+      setError("Only phinmaed.com email addresses are allowed.");
       return;
     }
 
