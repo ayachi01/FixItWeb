@@ -3,10 +3,10 @@ import 'dart:io' show File;
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import '/core/utils/storage_helper.dart'; // ✅ use your helper
+import '/core/utils/storage_helper.dart'; // ✅ your helper
 
 class ApiService {
-  final String baseUrl = "http://192.168.8.118:8000/api";
+  final String baseUrl = "http://192.168.5.137:8000/api";
   late Dio dio;
   final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
   String? _webAccessToken;
@@ -47,7 +47,7 @@ class ApiService {
 
     // ✅ Use your StorageHelper instead of html.window
     await StorageHelper.saveToken(access);
-    // You can extend your StorageHelper later to save refresh token too
+    // (Optionally save refresh token later if needed)
 
     dio.options.headers['Authorization'] = 'Bearer $access';
   }
@@ -58,7 +58,6 @@ class ApiService {
       return _webAccessToken;
     }
 
-    // ✅ Unified token retrieval
     final access = await StorageHelper.getToken();
     if (access != null && access.isNotEmpty) {
       _webAccessToken = access;
@@ -71,7 +70,6 @@ class ApiService {
 
   Future<void> clearTokens() async {
     try {
-      // ✅ Unified clearing
       await StorageHelper.clearToken();
 
       _webAccessToken = null;
@@ -125,6 +123,9 @@ class ApiService {
     }
   }
 
+  // ====================================================
+  //  REGISTRATION (AUTO LOGIN FOR MOBILE)
+  // ====================================================
   Future<Map<String, dynamic>> registerSelfService({
     required String firstName,
     required String lastName,
@@ -133,6 +134,7 @@ class ApiService {
     required String confirmPassword,
   }) async {
     try {
+      // ✅ Mobile requests include is_mobile flag
       final response = await dio.post(
         '/users/register_self_service/',
         data: {
@@ -141,14 +143,26 @@ class ApiService {
           "email": email,
           "password": password,
           "confirm_password": confirmPassword,
+          "is_mobile": true, // ✅ Let backend know it's mobile registration
         },
       );
-      return response.data as Map<String, dynamic>;
+
+      final data = response.data as Map<String, dynamic>;
+
+      // ✅ If mobile backend returns tokens, store and auto-login
+      if (data.containsKey('access') && data.containsKey('refresh')) {
+        await saveTokens(data['access'], data['refresh']);
+      }
+
+      return data;
     } on DioException catch (e) {
       throw Exception(_handleError(e));
     }
   }
 
+  // ====================================================
+  //  OTP & PASSWORD RESET
+  // ====================================================
   Future<Map<String, dynamic>> verifyOtp(String email, String otp) async {
     try {
       final response = await dio.post(
@@ -200,6 +214,10 @@ class ApiService {
       throw Exception(_handleError(e));
     }
   }
+
+2
+
+
 
   // ====================================================
   //  LOCATIONS

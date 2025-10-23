@@ -284,6 +284,8 @@ class UserViewSet(viewsets.ModelViewSet):
         )
 
     # -------------------- Self-service Registration --------------------
+    from rest_framework_simplejwt.tokens import RefreshToken
+
     @action(detail=False, methods=['post'], permission_classes=[AllowAny])
     def register_self_service(self, request):
         required = ["first_name", "last_name", "email", "password", "confirm_password"]
@@ -303,15 +305,22 @@ class UserViewSet(viewsets.ModelViewSet):
         mapping = DomainRoleMapping.objects.filter(domain__iexact=domain).first()
         role = mapping.role if mapping else Role.objects.get_or_create(name="Student")[0]
 
+        # ✅ Detect if this is a mobile registration
+        is_mobile = request.data.get("is_mobile", False) in [True, "true", "True", 1, "1"]
+
         with transaction.atomic():
             user = User.objects.create_user(
                 email=email,
                 password=request.data["password"],
                 first_name=request.data["first_name"],
                 last_name=request.data["last_name"],
-                is_active=False
+                # ✅ For mobile: immediately active, no verification needed
+                is_active=True if is_mobile else False
             )
-            profile, _ = UserProfile.objects.get_or_create(user=user, defaults={"role": role, "is_email_verified": False})
+            profile, _ = UserProfile.objects.get_or_create(
+                user=user,
+                defaults={"role": role, "is_email_verified": True if is_mobile else False}
+            )
 
             if role.name.lower() == "student" and any([
                 request.data.get("student_id"), request.data.get("course"), request.data.get("year_level")
@@ -326,6 +335,19 @@ class UserViewSet(viewsets.ModelViewSet):
                     enrollment_year=request.data.get("enrollment_year"),
                 )
 
+            # ✅ If mobile: skip verification email, auto-generate JWT tokens
+            if is_mobile:
+                refresh = RefreshToken.for_user(user)
+                access = str(refresh.access_token)
+                create_audit("User Created (self - mobile)", None, user, details=f"Mobile self-service registration for {email}")
+                return Response({
+                    "message": "User registered and logged in successfully (mobile).",
+                    "access": str(access),
+                    "refresh": str(refresh),
+                    "profile": UserProfileSerializer(profile).data
+                }, status=status.HTTP_201_CREATED)
+
+            # ✅ Normal web flow (unchanged)
             uidb64 = urlsafe_base64_encode(force_bytes(user.pk))
             token = default_token_generator.make_token(user)
             verify_url = f"http://localhost:5173/verify-email/{uidb64}/{token}/"
@@ -340,9 +362,11 @@ class UserViewSet(viewsets.ModelViewSet):
             "profile": UserProfileSerializer(profile).data
         }, status=status.HTTP_201_CREATED)
 
+
     @action(detail=False, methods=['post'], permission_classes=[AllowAny], url_path='create')
     def create_user(self, request):
         return self.register_self_service(request)
+
 
      
     # -------------------- OTP Verification --------------------
