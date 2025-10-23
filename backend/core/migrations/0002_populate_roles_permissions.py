@@ -49,7 +49,7 @@ def populate_roles_permissions(apps, schema_editor):
 
     # ---- Domain → Role Mapping ----
     domain_map = {
-        "pirmaed.com": roles["Student"],
+        "phinmaed.com": roles["Student"],
     }
 
     for domain, role in domain_map.items():

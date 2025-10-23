@@ -66,7 +66,7 @@ class BottomNavBar extends StatelessWidget {
           label: 'My Reports',
         ),
 
-        // Chatbot
+        /* Chatbot
         BottomNavigationBarItem(
           icon: Image.asset(
             'assets/images/chatbot.png',
@@ -75,7 +75,7 @@ class BottomNavBar extends StatelessWidget {
           ),
           label: 'Chatbot'
         ),
-
+        */
       // Settings
         BottomNavigationBarItem(
           icon: Image.asset(

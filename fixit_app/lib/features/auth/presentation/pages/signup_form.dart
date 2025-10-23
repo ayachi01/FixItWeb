@@ -15,6 +15,7 @@ class SignupForm extends StatefulWidget {
 class SignupFormState extends State<SignupForm> {
   // Form Key
   final _signUpFormKey = GlobalKey<FormState>();
+
   // Controllers
   final firstNameController = TextEditingController();
   final lastNameController = TextEditingController();
@@ -25,7 +26,7 @@ class SignupFormState extends State<SignupForm> {
   bool obscurePassword = true;
   bool isLoading = false;
 
-  final ApiService apiService = ApiService(); // <-- use ApiService
+  final ApiService apiService = ApiService();
 
   // ------------------- SIGN UP HANDLER -------------------
   void handleSignUp() async {
@@ -35,6 +36,7 @@ class SignupFormState extends State<SignupForm> {
     setState(() => isLoading = true);
 
     try {
+      // ✅ Register without verification requirement
       final response = await apiService.registerSelfService(
         firstName: firstNameController.text.trim(),
         lastName: lastNameController.text.trim(),
@@ -43,10 +45,12 @@ class SignupFormState extends State<SignupForm> {
         confirmPassword: confirmPasswordController.text.trim(),
       );
 
+      // ✅ Success message (no verification link)
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Registration successful! Please verify your email.')),
+        const SnackBar(content: Text('Registration successful! Welcome to FixIt.')),
       );
 
+      // ✅ Auto-login / direct navigation to HomePage
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
@@ -104,7 +108,7 @@ class SignupFormState extends State<SignupForm> {
                 ),
               ),
               const SizedBox(height: 15),
-              
+
               const Text("First Name", style: TextStyle(fontSize: 16, fontFamily: 'Inter', color: Color(0XFF000000))),
               const SizedBox(height: 8),
               TextFormField(
@@ -130,10 +134,10 @@ class SignupFormState extends State<SignupForm> {
               TextFormField(
                 controller: emailController,
                 keyboardType: TextInputType.emailAddress,
-                decoration: inputDecoration("name@pirmaed.com"),
+                decoration: inputDecoration("name@phinmaed.com"),
                 validator: (value) {
                   if (value == null || value.isEmpty) return "Please enter your email!";
-                  if (!value.endsWith("@pirmaed.com")) return "Only pirmaed.com emails allowed!";
+                  if (!value.endsWith("@phinmaed.com")) return "Only phinmaed.com emails allowed!";
                   return null;
                 },
               ),
@@ -194,10 +198,18 @@ class SignupFormState extends State<SignupForm> {
                   const Text("Already have an account?", style: TextStyle(fontSize: 18, fontFamily: 'Inter')),
                   const SizedBox(width: 6),
                   GestureDetector(
-                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const LoginForm())),
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const LoginForm()),
+                    ),
                     child: const Text(
                       "Login",
-                      style: TextStyle(fontSize: 18, fontFamily: 'Inter', fontWeight: FontWeight.w700, color: Color(0XFF4F774A)),
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontFamily: 'Inter',
+                        fontWeight: FontWeight.w700,
+                        color: Color(0XFF4F774A),
+                      ),
                     ),
                   ),
                 ],

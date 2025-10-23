@@ -3,10 +3,10 @@ import 'dart:io' show File;
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'dart:html' as html; // Used only on web
+import '/core/utils/storage_helper.dart'; // ✅ your helper
 
 class ApiService {
-  final String baseUrl = "http://192.168.5.137:8000/api"; // Update if needed
+  final String baseUrl = "http://192.168.1.254:8000/api";
   late Dio dio;
   final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
   String? _webAccessToken;
@@ -28,7 +28,6 @@ class ApiService {
       ),
     );
 
-    // ✅ Prevent "unsafe header" warnings in web
     dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) {
@@ -46,13 +45,9 @@ class ApiService {
     _webAccessToken = access;
     _webRefreshToken = refresh;
 
-    if (kIsWeb) {
-      html.window.localStorage['access_token'] = access;
-      html.window.localStorage['refresh_token'] = refresh;
-    } else {
-      await _secureStorage.write(key: 'access_token', value: access);
-      await _secureStorage.write(key: 'refresh_token', value: refresh);
-    }
+    // ✅ Use your StorageHelper instead of html.window
+    await StorageHelper.saveToken(access);
+    // (Optionally save refresh token later if needed)
 
     dio.options.headers['Authorization'] = 'Bearer $access';
   }
@@ -63,34 +58,19 @@ class ApiService {
       return _webAccessToken;
     }
 
-    if (kIsWeb) {
-      final access = html.window.localStorage['access_token'];
-      if (access != null && access.isNotEmpty) {
-        _webAccessToken = access;
-        dio.options.headers['Authorization'] = 'Bearer $access';
-        return access;
-      }
-      return null;
-    } else {
-      final access = await _secureStorage.read(key: 'access_token');
-      if (access != null && access.isNotEmpty) {
-        _webAccessToken = access;
-        dio.options.headers['Authorization'] = 'Bearer $access';
-        return access;
-      }
-      return null;
+    final access = await StorageHelper.getToken();
+    if (access != null && access.isNotEmpty) {
+      _webAccessToken = access;
+      dio.options.headers['Authorization'] = 'Bearer $access';
+      return access;
     }
+
+    return null;
   }
 
   Future<void> clearTokens() async {
     try {
-      if (kIsWeb) {
-        html.window.localStorage.remove('access_token');
-        html.window.localStorage.remove('refresh_token');
-      } else {
-        await _secureStorage.delete(key: 'access_token');
-        await _secureStorage.delete(key: 'refresh_token');
-      }
+      await StorageHelper.clearToken();
 
       _webAccessToken = null;
       _webRefreshToken = null;
@@ -143,6 +123,9 @@ class ApiService {
     }
   }
 
+  // ====================================================
+  //  REGISTRATION (AUTO LOGIN FOR MOBILE)
+  // ====================================================
   Future<Map<String, dynamic>> registerSelfService({
     required String firstName,
     required String lastName,
@@ -151,6 +134,7 @@ class ApiService {
     required String confirmPassword,
   }) async {
     try {
+      // ✅ Mobile requests include is_mobile flag
       final response = await dio.post(
         '/users/register_self_service/',
         data: {
@@ -159,14 +143,26 @@ class ApiService {
           "email": email,
           "password": password,
           "confirm_password": confirmPassword,
+          "is_mobile": true, // ✅ Let backend know it's mobile registration
         },
       );
-      return response.data as Map<String, dynamic>;
+
+      final data = response.data as Map<String, dynamic>;
+
+      // ✅ If mobile backend returns tokens, store and auto-login
+      if (data.containsKey('access') && data.containsKey('refresh')) {
+        await saveTokens(data['access'], data['refresh']);
+      }
+
+      return data;
     } on DioException catch (e) {
       throw Exception(_handleError(e));
     }
   }
 
+  // ====================================================
+  //  OTP & PASSWORD RESET
+  // ====================================================
   Future<Map<String, dynamic>> verifyOtp(String email, String otp) async {
     try {
       final response = await dio.post(
@@ -218,6 +214,9 @@ class ApiService {
       throw Exception(_handleError(e));
     }
   }
+
+
+
 
   // ====================================================
   //  LOCATIONS
