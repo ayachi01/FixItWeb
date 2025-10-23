@@ -33,7 +33,7 @@ export default function RolesPage() {
 
   return (
     <div className="p-4">
-      <h1 className="text-2xl font-bold mb-4">🛡️ Roles</h1>
+      <h1 className="text-2xl font-bold mb-4"> Roles</h1>
 
       <div className="bg-white shadow rounded-lg overflow-hidden">
         <table className="w-full text-left border-collapse">

@@ -62,7 +62,7 @@ export default function MyTicketsPage() {
   return (
     <div className="p-6 max-w-7xl mx-auto mt-8 bg-white shadow rounded-lg">
       <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl font-semibold">📄 My Tickets</h2>
+        <h2 className="text-xl font-semibold"> My Tickets</h2>
         <button
           onClick={fetchMyTickets}
           className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
@@ -100,9 +100,8 @@ export default function MyTicketsPage() {
                 </td>
                 <td className="px-4 py-2 border-b">
                   <span
-                    className={`px-2 py-1 rounded text-xs font-medium ${
-                      statusColors[ticket.status]
-                    }`}
+                    className={`px-2 py-1 rounded text-xs font-medium ${statusColors[ticket.status]
+                      }`}
                   >
                     {formatStatus(ticket.status)}
                   </span>
@@ -113,11 +112,10 @@ export default function MyTicketsPage() {
                 <td className="px-4 py-2 border-b">{ticket.category}</td>
                 <td className="px-4 py-2 border-b">
                   <span
-                    className={`px-2 py-1 rounded text-xs font-medium ${
-                      ticket.urgency === "URGENT"
+                    className={`px-2 py-1 rounded text-xs font-medium ${ticket.urgency === "URGENT"
                         ? "bg-red-100 text-red-800"
                         : "bg-gray-100 text-gray-800"
-                    }`}
+                      }`}
                   >
                     {ticket.urgency}
                   </span>

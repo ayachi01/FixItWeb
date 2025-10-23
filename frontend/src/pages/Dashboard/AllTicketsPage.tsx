@@ -60,12 +60,12 @@ export default function TicketsPage() {
           status: t.status,
           reporter: t.reporter
             ? {
-                id: t.reporter.id,
-                full_name:
-                  t.reporter.first_name || t.reporter.last_name
-                    ? `${t.reporter.first_name} ${t.reporter.last_name}`.trim()
-                    : t.reporter.email,
-              }
+              id: t.reporter.id,
+              full_name:
+                t.reporter.first_name || t.reporter.last_name
+                  ? `${t.reporter.first_name} ${t.reporter.last_name}`.trim()
+                  : t.reporter.email,
+            }
             : undefined,
           assignees:
             t.assignments?.map((a: any) => ({
@@ -171,7 +171,7 @@ export default function TicketsPage() {
 
   return (
     <div className="p-4">
-      <h1 className="text-2xl font-bold mb-4">🎫 All Tickets</h1>
+      <h1 className="text-2xl font-bold mb-4"> All Tickets</h1>
 
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 space-y-2 md:space-y-0 md:space-x-2">
         <input
@@ -233,9 +233,8 @@ export default function TicketsPage() {
               return (
                 <tr
                   key={ticket.id}
-                  className={`border-t hover:bg-gray-50 ${
-                    ticket.urgency === "Urgent" ? "bg-red-50" : ""
-                  }`}
+                  className={`border-t hover:bg-gray-50 ${ticket.urgency === "Urgent" ? "bg-red-50" : ""
+                    }`}
                 >
                   <td className="p-2">{ticket.id}</td>
                   <td className="p-2">{ticket.title}</td>
@@ -252,13 +251,13 @@ export default function TicketsPage() {
                   <td className="p-2">
                     {ticket.assignees?.length
                       ? ticket.assignees.map((a) => (
-                          <span
-                            key={a.id}
-                            className="inline-block bg-gray-200 px-2 py-1 mr-1 rounded"
-                          >
-                            {a.full_name}
-                          </span>
-                        ))
+                        <span
+                          key={a.id}
+                          className="inline-block bg-gray-200 px-2 py-1 mr-1 rounded"
+                        >
+                          {a.full_name}
+                        </span>
+                      ))
                       : "—"}
                   </td>
                   <td className="p-2">{ticket.assignees?.length || 0}</td>

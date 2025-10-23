@@ -1,4 +1,3 @@
-// 📂 src/components/Sidebar.tsx
 import React from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuthStore } from "../../store/authStore";
@@ -38,38 +37,15 @@ export default function Sidebar() {
   };
 
   const menuItems: MenuItem[] = [
-    // 🟨 General
-    {
-      label: "Dashboard Overview",
-      path: "/dashboard/main",
-      icon: <LayoutDashboard size={18} />,
-      section: "General",
-    },
-    {
-      label: "Submit Ticket",
-      path: "/dashboard/submit-ticket",
-      icon: <Home size={18} />,
-      section: "General",
-    },
-    {
-      label: "My Tickets",
-      path: "/dashboard/my-tickets",
-      icon: <FileText size={18} />,
-      section: "General",
-    },
-
-    // 🟨 Tickets
+    { label: "Dashboard Overview", path: "/dashboard/main", icon: <LayoutDashboard size={18} />, section: "General" },
+    /*{ label: "Submit Ticket", path: "/dashboard/submit-ticket", icon: <Home size={18} />, section: "General" },*/
+    { label: "My Tickets", path: "/dashboard/my-tickets", icon: <FileText size={18} />, section: "General" },
     {
       label: "My Assigned Tickets",
       path: "/dashboard/my-assigned-tickets",
       icon: <ClipboardCheck size={18} />,
       section: "Tickets",
-      roles: [
-        "Support",
-        "Janitorial Staff",
-        "Utility Worker",
-        "Security Guard",
-      ],
+      roles: ["Support", "Janitorial Staff", "Utility Worker", "Security Guard"],
     },
     {
       label: "My Unassigned Tickets",
@@ -85,8 +61,6 @@ export default function Sidebar() {
       section: "Tickets",
       roles: ["University Admin", "Maintenance Officer"],
     },
-
-    // 🟨 Analytics
     {
       label: "Reports & Analytics",
       path: "/dashboard/reports",
@@ -100,8 +74,6 @@ export default function Sidebar() {
       icon: <Bell size={18} />,
       section: "Analytics",
     },
-
-    // 🟨 Management
     {
       label: "Manage Users",
       path: "/dashboard/users",
@@ -144,29 +116,23 @@ export default function Sidebar() {
       section: "Management",
       roles: ["University Admin"],
     },
-
-    // 🟨 Account
-    {
-      label: "Logout",
-      icon: <LogOut size={18} />,
-      section: "Account",
-      onClick: handleLogout,
-    },
   ];
 
   const sections = Array.from(new Set(menuItems.map((i) => i.section)));
 
   return (
-    <div className="flex flex-col h-screen w-60 bg-[#FFF9ED] shadow-[2px_0_6px_rgba(0,0,0,0.05)]">
-      {/* Logo */}
-      <div className="p-5 flex items-center justify-center bg-gradient-to-r from-amber-50 to-[#FFF9ED] shadow-sm">
-        <h1 className="text-xl font-bold text-amber-900 tracking-wide">
-          📊 FixIt Reports
-        </h1>
+    <div className="flex flex-col h-screen w-64 bg-[#FFFFFF] border-r border-gray-200">
+      {/* Logo Section */}
+      <div className="flex items-center justify-center py-6 bg-white">
+        <img
+          src="/src/assets/fixit_logo.png"
+          alt="FixIt Logo"
+          className="h-20 w-auto transition-transform duration-300 hover:scale-105"
+        />
       </div>
 
-      {/* Navigation */}
-      <nav className="flex-1 px-4 py-6 space-y-6">
+      {/* Menu Section (No Scroll) */}
+      <div className="flex-1 px-4 py-4">
         {sections.map((section) => {
           const visibleItems = menuItems.filter((item) => {
             if (item.section !== section) return false;
@@ -176,44 +142,43 @@ export default function Sidebar() {
           if (visibleItems.length === 0) return null;
 
           return (
-            <div key={section}>
-              <p className="text-xs uppercase tracking-widest text-amber-700 font-semibold px-2 mb-2">
+            <div key={section} className="w-full mb-5">
+              <p className="text-xs uppercase tracking-widest text-[#2E5E3A] font-semibold px-2 mb-2">
                 {section}
               </p>
               <ul className="space-y-1">
                 {visibleItems.map((item) => (
                   <li key={item.label}>
-                    {item.onClick ? (
-                      <div
-                        onClick={item.onClick}
-                        className="flex items-center gap-3 px-4 py-2 rounded-md text-sm text-gray-700 hover:bg-red-50 hover:text-red-600 cursor-pointer transition-all"
-                      >
-                        <span className="text-amber-700">{item.icon}</span>
-                        <span>{item.label}</span>
-                      </div>
-                    ) : (
-                      <NavLink
-                        to={item.path!}
-                        className={({ isActive }) =>
-                          `flex items-center gap-3 px-4 py-2 rounded-md transition-all duration-200
-                           ${
-                             isActive
-                               ? "bg-amber-100 text-amber-900 font-semibold text-[15px] shadow-sm border-l-4 border-amber-500"
-                               : "text-gray-700 text-[14px] hover:bg-amber-50 hover:text-amber-800"
-                           }`
-                        }
-                      >
-                        <span className="text-amber-700">{item.icon}</span>
-                        <span>{item.label}</span>
-                      </NavLink>
-                    )}
+                    <NavLink
+                      to={item.path!}
+                      className={({ isActive }) =>
+                        `flex items-center gap-3 px-4 py-2 rounded-md transition-all duration-200 ${isActive
+                          ? "bg-[#2E5E3A] text-white font-semibold shadow-sm"
+                          : "text-[#2E5E3A] hover:bg-[#E8EFEA]"
+                        }`
+                      }
+                    >
+                      <span>{item.icon}</span>
+                      <span>{item.label}</span>
+                    </NavLink>
                   </li>
                 ))}
               </ul>
             </div>
           );
         })}
-      </nav>
+      </div>
+
+      {/* Logout Button */}
+      <div className="p-4 bg-white">
+        <button
+          onClick={handleLogout}
+          className="w-full flex items-center justify-center gap-2 py-2 rounded-md bg-[#2E5E3A] text-white font-medium hover:bg-[#254D2F] transition-all duration-200 shadow-sm"
+        >
+          <LogOut className="w-5 h-5" />
+          Logout
+        </button>
+      </div>
     </div>
   );
 }

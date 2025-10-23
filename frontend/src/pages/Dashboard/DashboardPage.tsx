@@ -1,5 +1,6 @@
 // src/pages/Dashboard/ReportsPage.tsx
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { api } from "../../api/client";
 import {
   BarChart,
@@ -15,7 +16,6 @@ import {
   LineChart,
   Line,
   CartesianGrid,
-  ComposedChart,
 } from "recharts";
 
 // Generic base interface for Recharts compatibility
@@ -46,41 +46,56 @@ interface Category extends ChartFriendly {
   count: number;
 }
 
-interface Location extends ChartFriendly {
-  location__building_name: string;
-  count: number;
+interface Reporter {
+  id: number;
+  full_name: string;
 }
 
-interface FixerPerformance extends ChartFriendly {
-  assignments__user__email: string;
-  resolved_count: number;
-  avg_time_hours?: number;
+interface Assignee {
+  id: number;
+  full_name: string;
+}
+
+interface Ticket {
+  id: number;
+  title: string;
+  category: string;
+  urgency: string;
+  status: string;
+  reporter: Reporter | null;
+  assignees: Assignee[];
+  created_at: string;
 }
 
 interface AnalyticsData {
   overview: Overview;
   status_summary: StatusSummary[];
   monthly_trend: Trend[];
-  top_locations: Location[];
   top_categories: Category[];
-  fixer_performance: FixerPerformance[];
 }
 
 export default function ReportsPage() {
   const [data, setData] = useState<AnalyticsData | null>(null);
+  const [tickets, setTickets] = useState<Ticket[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const navigate = useNavigate();
+
   useEffect(() => {
-    api
-      .get<AnalyticsData>("/tickets/analytics/")
-      .then((res) => {
-        console.log("✅ Analytics loaded:", res.data);
-        setData(res.data);
+    Promise.all([
+      api.get<AnalyticsData>("/tickets/analytics/"),
+      api.get<Ticket[]>("/tickets/"),
+    ])
+      .then(([analyticsRes, ticketsRes]) => {
+        console.log("✅ Analytics loaded:", analyticsRes.data);
+        console.log("✅ Tickets loaded:", ticketsRes.data);
+        setData(analyticsRes.data);
+        setTickets(ticketsRes.data);
       })
       .catch((err) => {
-        console.error("❌ Failed to load analytics:", err);
-        setError("Failed to load analytics data.");
+        console.error("❌ Failed to load:", err);
+        setError("Failed to load analytics or tickets data.");
       })
       .finally(() => setLoading(false));
   }, []);
@@ -90,17 +105,19 @@ export default function ReportsPage() {
   if (!data) return <p className="p-6 text-gray-500">No analytics data.</p>;
 
   const COLORS = ["#8884d8", "#82ca9d", "#ffc658", "#ff8042", "#a4de6c"];
-
   const formatMonth = (dateString: string) =>
     new Date(dateString).toLocaleString("default", {
       month: "short",
       year: "2-digit",
     });
 
+  // For now, show all tickets
+  const displayedTickets = tickets;
+
   return (
     <div className="p-8 bg-gray-50 min-h-screen space-y-10">
       <h1 className="text-3xl font-bold mb-6 text-gray-800">
-        📊 Reports Dashboard
+        Reports Dashboard
       </h1>
 
       {/* --- Overview KPIs --- */}
@@ -142,63 +159,66 @@ export default function ReportsPage() {
         ))}
       </div>
 
-      {/* --- Ticket Status Summary (Pie Chart) --- */}
-      <div className="bg-white rounded-2xl shadow p-6">
-        <h2 className="text-xl font-semibold mb-4">Tickets by Status</h2>
-        {data.status_summary.length ? (
-          <ResponsiveContainer width="100%" height={300}>
-            <PieChart>
-              <Pie
-                data={data.status_summary}
-                dataKey="count"
-                nameKey="status"
-                outerRadius={120}
-                label
+      {/* --- Charts Row: Pie + Line --- */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* --- Ticket Status Summary (Pie Chart) --- */}
+        <div className="bg-white rounded-2xl shadow p-6">
+          <h2 className="text-xl font-semibold mb-4">Tickets by Status</h2>
+          {data.status_summary.length ? (
+            <ResponsiveContainer width="100%" height={300}>
+              <PieChart>
+                <Pie
+                  data={data.status_summary}
+                  dataKey="count"
+                  nameKey="status"
+                  outerRadius={120}
+                  label
+                >
+                  {data.status_summary.map((_, i) => (
+                    <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip />
+                <Legend />
+              </PieChart>
+            </ResponsiveContainer>
+          ) : (
+            <p className="text-gray-400">No status data available.</p>
+          )}
+        </div>
+
+        {/* --- Monthly Trends (Line Chart) --- */}
+        <div className="bg-white rounded-2xl shadow p-6">
+          <h2 className="text-xl font-semibold mb-4">Monthly Ticket Trends</h2>
+          {data.monthly_trend.length ? (
+            <ResponsiveContainer width="100%" height={300}>
+              <LineChart
+                data={data.monthly_trend.map((d) => ({
+                  ...d,
+                  month: formatMonth(d.month),
+                }))}
               >
-                {data.status_summary.map((_, i) => (
-                  <Cell key={i} fill={COLORS[i % COLORS.length]} />
-                ))}
-              </Pie>
-              <Tooltip />
-              <Legend />
-            </PieChart>
-          </ResponsiveContainer>
-        ) : (
-          <p className="text-gray-400">No status data available.</p>
-        )}
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="month" />
+                <YAxis />
+                <Tooltip />
+                <Legend />
+                <Line
+                  type="monotone"
+                  dataKey="count"
+                  stroke="#3b82f6"
+                  strokeWidth={3}
+                  dot={{ r: 5 }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          ) : (
+            <p className="text-gray-400">No monthly trend data available.</p>
+          )}
+        </div>
       </div>
 
-      {/* --- Monthly Trends (Line Chart) --- */}
-      <div className="bg-white rounded-2xl shadow p-6">
-        <h2 className="text-xl font-semibold mb-4">Monthly Ticket Trends</h2>
-        {data.monthly_trend.length ? (
-          <ResponsiveContainer width="100%" height={300}>
-            <LineChart
-              data={data.monthly_trend.map((d) => ({
-                ...d,
-                month: formatMonth(d.month),
-              }))}
-            >
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="month" />
-              <YAxis />
-              <Tooltip />
-              <Legend />
-              <Line
-                type="monotone"
-                dataKey="count"
-                stroke="#3b82f6"
-                strokeWidth={3}
-                dot={{ r: 5 }}
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        ) : (
-          <p className="text-gray-400">No monthly trend data available.</p>
-        )}
-      </div>
-
-      {/* --- Top Categories (Vertical Bar Chart) --- */}
+      {/* --- Bottom Chart: Top Categories --- */}
       <div className="bg-white rounded-2xl shadow p-6">
         <h2 className="text-xl font-semibold mb-4">Top 5 Categories</h2>
         {data.top_categories.length ? (
@@ -216,64 +236,42 @@ export default function ReportsPage() {
         )}
       </div>
 
-      {/* --- Top Locations (Horizontal Bar Chart) --- */}
-      <div className="bg-white rounded-2xl shadow p-6">
-        <h2 className="text-xl font-semibold mb-4">Top 5 Locations</h2>
-        {data.top_locations.length ? (
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart
-              layout="vertical"
-              data={data.top_locations}
-              margin={{ left: 50 }}
-            >
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis type="number" />
-              <YAxis
-                dataKey="location__building_name"
-                type="category"
-                width={150}
-              />
-              <Tooltip />
-              <Bar dataKey="count" fill="#fbbf24" radius={[0, 8, 8, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        ) : (
-          <p className="text-gray-400">No location data available.</p>
-        )}
+      {/* --- New Table: Ticket Details --- */}
+      <div className="bg-white shadow rounded-lg overflow-hidden">
+        <h2 className="text-xl font-semibold p-4 border-b">In Progress</h2>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead className="bg-gray-200">
+              <tr>
+                <th className="p-2">ID</th>
+                <th className="p-2">Title</th>
+                <th className="p-2">Category</th>
+                <th className="p-2">Status</th>
+                <th className="p-2">Reporter</th>
+                <th className="p-2">Created</th>
+              </tr>
+            </thead>
+            <tbody>
+              {displayedTickets.map((ticket) => (
+                <tr
+                  key={ticket.id}
+                  className="border-t hover:bg-gray-50"
+                >
+                  <td className="p-2">{ticket.id}</td>
+                  <td className="p-2">{ticket.title}</td>
+                  <td className="p-2">{ticket.category}</td>
+                  <td className="p-2">{ticket.status}</td>
+                  <td className="p-2">{ticket.reporter?.full_name || "—"}</td>
+                  <td className="p-2">
+                    {new Date(ticket.created_at).toLocaleDateString()}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
 
-      {/* --- Fixer Performance (Composed Chart: Bar + Line) --- */}
-      <div className="bg-white rounded-2xl shadow p-6">
-        <h2 className="text-xl font-semibold mb-4">
-          Fixer Performance (Resolved vs Avg Time)
-        </h2>
-        {data.fixer_performance.length ? (
-          <ResponsiveContainer width="100%" height={300}>
-            <ComposedChart data={data.fixer_performance}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="assignments__user__email" />
-              <YAxis />
-              <Tooltip />
-              <Legend />
-              <Bar
-                dataKey="resolved_count"
-                fill="#fb923c"
-                name="Resolved Tickets"
-                radius={[6, 6, 0, 0]}
-              />
-              <Line
-                type="monotone"
-                dataKey="avg_time_hours"
-                stroke="#1d4ed8"
-                strokeWidth={2}
-                name="Avg Time (hrs)"
-              />
-            </ComposedChart>
-          </ResponsiveContainer>
-        ) : (
-          <p className="text-gray-400">No fixer performance data available.</p>
-        )}
-      </div>
     </div>
   );
 }

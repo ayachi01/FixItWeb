@@ -1,3 +1,5 @@
+
+
 // 📂 src/pages/Dashboard/SubmitTicketPage.tsx
 import { useState, useEffect } from "react";
 import { useAuthStore } from "../../store/authStore";
@@ -115,9 +117,9 @@ export default function SubmitTicketPage() {
       console.error(err.response);
       toast.error(
         err.response?.data?.detail ||
-          (err.response?.data?.image
-            ? err.response.data.image[0]
-            : "❌ Failed to submit ticket")
+        (err.response?.data?.image
+          ? err.response.data.image[0]
+          : "❌ Failed to submit ticket")
       );
     } finally {
       setLoading(false);
@@ -126,7 +128,7 @@ export default function SubmitTicketPage() {
 
   return (
     <div className="max-w-xl mx-auto mt-8 p-6 bg-white rounded-xl shadow-md">
-      <h1 className="text-2xl font-bold mb-4">📝 Report a Ticket</h1>
+      <h1 className="text-2xl font-bold mb-4">Report a Ticket</h1>
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <input
@@ -221,11 +223,10 @@ export default function SubmitTicketPage() {
         <button
           type="submit"
           disabled={loading}
-          className={`w-full py-3 rounded-lg text-white font-semibold ${
-            loading
-              ? "bg-blue-300 cursor-not-allowed"
-              : "bg-blue-500 hover:bg-blue-600"
-          }`}
+          className={`w-full py-3 rounded-lg text-white font-semibold ${loading
+            ? "bg-blue-300 cursor-not-allowed"
+            : "bg-blue-500 hover:bg-blue-600"
+            }`}
         >
           {loading ? "Submitting..." : "Submit Ticket"}
         </button>

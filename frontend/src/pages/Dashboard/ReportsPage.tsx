@@ -100,47 +100,10 @@ export default function ReportsPage() {
   return (
     <div className="p-8 bg-gray-50 min-h-screen space-y-10">
       <h1 className="text-3xl font-bold mb-6 text-gray-800">
-        📊 Reports Dashboard
+        Reports Dashboard
       </h1>
 
-      {/* --- Overview KPIs --- */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-        {[
-          {
-            label: "Total Tickets",
-            value: data.overview.total_tickets,
-            color: "bg-blue-600",
-          },
-          {
-            label: "Resolved",
-            value: data.overview.resolved,
-            color: "bg-green-500",
-          },
-          {
-            label: "Open",
-            value: data.overview.open,
-            color: "bg-yellow-500",
-          },
-          {
-            label: "Completion Rate",
-            value: `${data.overview.completion_rate}%`,
-            color: "bg-indigo-500",
-          },
-          {
-            label: "Avg Resolution (hrs)",
-            value: data.overview.avg_resolution_hours ?? "N/A",
-            color: "bg-purple-500",
-          },
-        ].map((card, i) => (
-          <div
-            key={i}
-            className={`p-4 text-white rounded-2xl shadow ${card.color}`}
-          >
-            <p className="text-sm opacity-80">{card.label}</p>
-            <h3 className="text-2xl font-bold">{card.value}</h3>
-          </div>
-        ))}
-      </div>
+
 
       {/* --- Ticket Status Summary (Pie Chart) --- */}
       <div className="bg-white rounded-2xl shadow p-6">

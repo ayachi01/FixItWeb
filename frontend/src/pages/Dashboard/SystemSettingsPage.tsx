@@ -4,7 +4,7 @@ import React from "react";
 export default function SettingsPage() {
   return (
     <div className="p-4">
-      <h1 className="text-2xl font-bold mb-4">⚙️ System Settings</h1>
+      <h1 className="text-2xl font-bold mb-4"> System Settings</h1>
       <p className="mb-4">
         Manage categories, permissions, and other system-wide settings.
       </p>

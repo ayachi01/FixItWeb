@@ -134,7 +134,7 @@ export default function AssignedTicketsPage() {
 
   return (
     <div className="max-w-5xl mx-auto mt-8 p-6 bg-white rounded-xl shadow-md">
-      <h1 className="text-2xl font-bold mb-6">📝 Assign Tickets</h1>
+      <h1 className="text-2xl font-bold mb-6"> Assign Tickets</h1>
 
       {loading ? (
         <p>Loading tickets...</p>

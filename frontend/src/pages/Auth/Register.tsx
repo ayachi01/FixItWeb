@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { register as apiRegister } from "../../api"; // ✅ your API helper
+import { register as apiRegister } from "../../api";
 
 export default function Register() {
   const [firstName, setFirstName] = useState("");
@@ -18,13 +18,11 @@ export default function Register() {
     setError("");
     setSuccessMessage("");
 
-    // ✅ Frontend-only confirm password check
     if (password !== confirmPassword) {
       setError("Passwords do not match");
       return;
     }
 
-    // ✅ Frontend-only email domain check
     const emailDomain = email.split("@")[1]?.toLowerCase();
     if (emailDomain !== "pirmaed.com") {
       setError("Only pirmaed.com email addresses are allowed.");
@@ -33,49 +31,27 @@ export default function Register() {
 
     setLoading(true);
     try {
-      // ✅ Send confirm_password to backend
-      const res = await apiRegister(
-        firstName,
-        lastName,
-        email,
-        password,
-        confirmPassword
-      );
-
-      console.group("🔍 Registration Debug");
-      console.log("✅ Raw response from backend:", res);
-      console.log("📩 Email used (frontend):", email);
-      console.log("🧩 Role from backend response:", res?.profile?.role);
-      console.groupEnd();
-
+      await apiRegister(firstName, lastName, email, password, confirmPassword);
       setSuccessMessage(
         "🎉 Registration successful! Please check your email to verify your account."
       );
 
-      // Clear form fields
       setFirstName("");
       setLastName("");
       setEmail("");
       setPassword("");
       setConfirmPassword("");
 
-      // Redirect after 2 seconds
-      setTimeout(() => {
-        navigate("/login");
-      }, 2000);
+      setTimeout(() => navigate("/login"), 2000);
     } catch (err: any) {
-      console.error("❌ Registration error:", err);
-      console.error("🔍 Error response:", err.response?.data);
-
-      // Handle different possible backend validation errors
       const backendData = err.response?.data;
       setError(
         backendData?.error ||
-          backendData?.password?.[0] ||
-          backendData?.email?.[0] ||
-          backendData?.first_name?.[0] ||
-          backendData?.last_name?.[0] ||
-          "Registration failed"
+        backendData?.password?.[0] ||
+        backendData?.email?.[0] ||
+        backendData?.first_name?.[0] ||
+        backendData?.last_name?.[0] ||
+        "Registration failed"
       );
     } finally {
       setLoading(false);
@@ -83,73 +59,126 @@ export default function Register() {
   };
 
   return (
-    <div className="flex items-center justify-center h-screen bg-gray-100">
-      <form
-        onSubmit={handleSubmit}
-        className="bg-white p-6 rounded-2xl shadow-md w-96"
-      >
-        <h2 className="text-xl font-bold mb-4">Register</h2>
+    <div className="relative flex flex-col items-center justify-center min-h-screen bg-[#F8F8F8] overflow-hidden">
+      {/* Subtle background */}
+      <div className="absolute inset-0 overflow-hidden">
+        <div className="absolute -top-32 -left-32 w-80 h-80 bg-green-100/40 rounded-full blur-3xl"></div>
+        <div className="absolute -bottom-32 -right-32 w-80 h-80 bg-green-100/40 rounded-full blur-3xl"></div>
+      </div>
 
-        {error && <p className="text-red-500 mb-3">{error}</p>}
-        {successMessage && (
-          <p className="text-green-500 mb-3">{successMessage}</p>
-        )}
+      {/* Register card */}
+      <div className="relative z-10 w-full max-w-md mx-4">
+        <div className="bg-white p-8 rounded-3xl shadow-lg border border-gray-200">
+          {/* Logo */}
+          <div className="text-center mb-8">
+            <img
+              src="/src/assets/fixit_logo.png"
+              alt="FixIt Logo"
+              className="w-28 h-28 mx-auto mb-4 object-contain"
+            />
+            <h2 className="text-3xl font-bold text-gray-800">Create Account</h2>
+            <p className="text-gray-500 mt-2">
+              Join FixIt and start your journey
+            </p>
+          </div>
 
-        <input
-          type="text"
-          placeholder="First Name"
-          className="w-full p-2 border rounded mb-3"
-          value={firstName}
-          onChange={(e) => setFirstName(e.target.value)}
-        />
+          {/* Error & Success messages */}
+          {error && (
+            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl">
+              <p className="text-red-600 text-sm font-medium">{error}</p>
+            </div>
+          )}
+          {successMessage && (
+            <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-xl">
+              <p className="text-green-600 text-sm font-medium">
+                {successMessage}
+              </p>
+            </div>
+          )}
 
-        <input
-          type="text"
-          placeholder="Last Name"
-          className="w-full p-2 border rounded mb-3"
-          value={lastName}
-          onChange={(e) => setLastName(e.target.value)}
-        />
+          {/* Form */}
+          <form onSubmit={handleSubmit} className="space-y-5">
+            <div className="flex gap-3">
+              <input
+                type="text"
+                placeholder="First Name"
+                className="w-1/2 p-3 bg-white border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-600 focus:border-transparent transition-all placeholder:text-gray-400"
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+                required
+              />
+              <input
+                type="text"
+                placeholder="Last Name"
+                className="w-1/2 p-3 bg-white border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-600 focus:border-transparent transition-all placeholder:text-gray-400"
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
+                required
+              />
+            </div>
 
-        <input
-          type="email"
-          placeholder="Email"
-          className="w-full p-2 border rounded mb-3"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-        />
+            <input
+              type="email"
+              placeholder="Email (use @pirmaed.com)"
+              className="w-full p-3 bg-white border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-600 focus:border-transparent transition-all placeholder:text-gray-400"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
 
-        <input
-          type="password"
-          placeholder="Password"
-          className="w-full p-2 border rounded mb-3"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-        />
+            <input
+              type="password"
+              placeholder="Password"
+              className="w-full p-3 bg-white border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-600 focus:border-transparent transition-all placeholder:text-gray-400"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+            />
 
-        <input
-          type="password"
-          placeholder="Confirm Password"
-          className="w-full p-2 border rounded mb-3"
-          value={confirmPassword}
-          onChange={(e) => setConfirmPassword(e.target.value)}
-        />
+            <input
+              type="password"
+              placeholder="Confirm Password"
+              className="w-full p-3 bg-white border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-600 focus:border-transparent transition-all placeholder:text-gray-400"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              required
+            />
 
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full bg-green-500 text-white p-2 rounded hover:bg-green-600 mb-3"
-        >
-          {loading ? "Registering..." : "Register"}
-        </button>
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full bg-green-700 text-white py-3.5 rounded-xl font-semibold shadow-md hover:bg-green-800 hover:scale-[1.01] active:scale-[0.99] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loading ? "Registering..." : "Register"}
+            </button>
+          </form>
 
-        <div className="text-sm text-center">
-          Already have an account?{" "}
-          <Link to="/login" className="text-blue-500 hover:underline">
+          {/* Divider */}
+          <div className="relative my-6">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-gray-200"></div>
+            </div>
+            <div className="relative flex justify-center text-sm">
+              <span className="px-4 bg-white text-gray-500">
+                Already have an account?
+              </span>
+            </div>
+          </div>
+
+          {/* Login link */}
+          <Link
+            to="/login"
+            className="block w-full py-3.5 text-center font-semibold text-green-700 border border-green-700 rounded-xl hover:bg-green-50 transition-all hover:scale-[1.01] active:scale-[0.99]"
+          >
             Login
           </Link>
         </div>
-      </form>
+
+        {/* Footer text */}
+        <p className="text-center text-gray-400 text-sm mt-6">
+          FixIt — secure and reliable registration
+        </p>
+      </div>
     </div>
   );
 }
