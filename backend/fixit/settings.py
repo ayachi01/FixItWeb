@@ -18,7 +18,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "unsafe-secret-key")
 DEBUG = os.environ.get("DEBUG", "True") == "True"
 
-# ALLOWED_HOSTS = ["localhost", "127.0.0.1", "192.168.8.118", "192.168.8.118:8000"]
+# ALLOWED_HOSTS = ["localhost", "127.0.0.1", "172.20.10.2, "1172.20.10.2:8000"]
 ALLOWED_HOSTS = ["*"]
 
 if not DEBUG:
@@ -44,6 +44,7 @@ INSTALLED_APPS = [
 
     # Local
     "core.apps.CoreConfig",
+    "llm",
 ]
 
 MIDDLEWARE = [
@@ -62,7 +63,7 @@ MIDDLEWARE = [
 # -------------------------------------------------------------------
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",  # Frontend dev URL
-    "http://localhost:54940", # need to change
+    "http://localhost:54385", # need to change
 
 ]
 if not DEBUG:
@@ -81,7 +82,7 @@ CORS_ALLOW_HEADERS = [
 # CSRF / Cookie Security
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:5173",
-    "http://localhost:54940",
+    "http://localhost:54385",
    
 
 ]
@@ -134,7 +135,7 @@ DATABASES = {
         "ENGINE": "django.db.backends.postgresql",
         "NAME": os.environ.get("DB_NAME", "fixit_db"),
         "USER": os.environ.get("DB_USER", "postgres"),
-        "PASSWORD": os.environ.get("DB_PASSWORD", "postgres"),
+        "PASSWORD": os.environ.get("DB_PASSWORD", "Ry4nQu1nt01029"),
         "HOST": os.environ.get("DB_HOST", "localhost"),
         "PORT": os.environ.get("DB_PORT", "5432"),
     }
