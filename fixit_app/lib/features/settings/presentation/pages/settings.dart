@@ -15,6 +15,7 @@ import '/features/reports/presentation/pages/create_report.dart';
 import '/features/reports/presentation/viewmodels/report_viewmodel.dart';
 import '/core/widgets/bottom_nav_bar.dart';
 import '/core/widgets/ticket_card.dart';
+import '/core/api_service.dart';
 
 class Settings extends StatefulWidget {
   final TextEditingController? firstNameController;
@@ -34,7 +35,62 @@ class Settings extends StatefulWidget {
 
 class _SettingsState extends State<Settings> {
   List<Widget> ticketCards = [];
-  int _selectedIndex = 3;
+  int _selectedIndex = 2;
+  final ApiService _apiService = ApiService();
+
+  // ====================================================
+  // LOGOUT HANDLER WITH CONFIRMATION
+  // ====================================================
+  Future<void> _handleLogout(BuildContext context) async {
+    final reportVM = Provider.of<ReportViewModel>(context, listen: false);
+
+    final shouldLogout = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Confirm Logout"),
+        content: const Text("Are you sure you want to log out?"),
+        actions: [
+          TextButton(
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.grey, // 👈 gray for "No"
+            ),
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text("No"),
+          ),
+          TextButton(
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.red, // 👈 red for "Yes"
+            ),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text("Yes"),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldLogout != true) return;
+
+    try {
+      await reportVM.logoutAndReset();
+      await _apiService.logout();
+
+      if (context.mounted) {
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (_) => const LoginForm()),
+          (route) => false,
+        );
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("✅ Logged out successfully.")),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Logout failed: $e")),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -102,15 +158,12 @@ class _SettingsState extends State<Settings> {
                       ),
                     ),
                   ),
+
+                  // ✅ Logout button (unchanged)
                   IconButton(
                     icon: const Icon(Icons.logout, color: Colors.black),
-                    onPressed: () {
-                      Navigator.pushAndRemoveUntil(
-                        context,
-                        MaterialPageRoute(builder: (_) => const LoginForm()),
-                        (route) => false,
-                      );
-                    },
+                    tooltip: "Logout",
+                    onPressed: () => _handleLogout(context),
                   ),
                 ],
               ),
@@ -124,7 +177,6 @@ class _SettingsState extends State<Settings> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.start,
                   children: [
-                    // User Profile
                     _settingsItem(
                       icon: Icons.account_circle,
                       label: 'User Profile',
@@ -142,8 +194,6 @@ class _SettingsState extends State<Settings> {
                       },
                     ),
                     _divider(),
-
-                    // Change Password
                     _settingsItem(
                       icon: Icons.lock,
                       label: 'Change Password',
@@ -158,8 +208,6 @@ class _SettingsState extends State<Settings> {
                       },
                     ),
                     _divider(),
-
-                    // FAQs
                     _settingsItem(
                       icon: Icons.help,
                       label: 'FAQs',
@@ -171,8 +219,6 @@ class _SettingsState extends State<Settings> {
                       },
                     ),
                     _divider(),
-
-                    // About Us
                     _settingsItem(
                       icon: Icons.info,
                       label: 'About Us',
@@ -184,15 +230,14 @@ class _SettingsState extends State<Settings> {
                       },
                     ),
                     _divider(),
-
-                    // Privacy Policy
                     _settingsItem(
                       icon: Icons.privacy_tip,
                       label: 'Privacy Policy',
                       onTap: () {
                         Navigator.push(
                           context,
-                          MaterialPageRoute(builder: (_) => const PrivacyPolicy()),
+                          MaterialPageRoute(
+                              builder: (_) => const PrivacyPolicy()),
                         );
                       },
                     ),
@@ -224,23 +269,6 @@ class _SettingsState extends State<Settings> {
               );
               break;
             case 2:
-              final newReport = await Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => ChangeNotifierProvider(
-                    create: (_) => ReportViewModel(ImagePickerService()),
-                    child: const CreateReport(),
-                  ),
-                ),
-              );
-              if (newReport != null) {
-                setState(() {
-                  ticketCards.add(TicketCard(report: newReport));
-                });
-              }
-              break;
-            case 3:
-              // Already on settings, do nothing
               break;
           }
         },

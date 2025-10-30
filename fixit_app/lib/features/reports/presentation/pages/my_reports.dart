@@ -235,6 +235,7 @@ class _MyReportsPageState extends State<MyReportsPage> {
             );
           }
 
+          /*
           if (index == 2) {
             final newReport = await Navigator.push(
               context,
@@ -252,8 +253,9 @@ class _MyReportsPageState extends State<MyReportsPage> {
               });
             }
           }
+          */
 
-          if (index == 3) {
+          if (index == 2) {
             Navigator.push(
               context,
               MaterialPageRoute(

@@ -28,6 +28,21 @@ class SignupFormState extends State<SignupForm> {
 
   final ApiService apiService = ApiService();
 
+  // ------------------- PASSWORD VALIDATOR -------------------
+  String? validatePassword(String? value) {
+    if (value == null || value.isEmpty) {
+      return 'Please enter your password!';
+    }
+
+    // At least 8 characters, 1 lowercase, 1 uppercase
+    final regex = RegExp(r'^(?=.*[a-z])(?=.*[A-Z]).{8,}$');
+    if (!regex.hasMatch(value)) {
+      return 'Password must be at least 8 characters and include both uppercase and lowercase letters.';
+    }
+
+    return null;
+  }
+
   // ------------------- SIGN UP HANDLER -------------------
   void handleSignUp() async {
     if (isLoading) return;
@@ -36,7 +51,7 @@ class SignupFormState extends State<SignupForm> {
     setState(() => isLoading = true);
 
     try {
-      // ✅ Register without verification requirement
+      // Register without verification requirement
       final response = await apiService.registerSelfService(
         firstName: firstNameController.text.trim(),
         lastName: lastNameController.text.trim(),
@@ -45,12 +60,11 @@ class SignupFormState extends State<SignupForm> {
         confirmPassword: confirmPasswordController.text.trim(),
       );
 
-      // ✅ Success message (no verification link)
+      // Success message
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Registration successful! Welcome to FixIt.')),
       );
 
-      // ✅ Auto-login / direct navigation to HomePage
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
@@ -149,12 +163,16 @@ class SignupFormState extends State<SignupForm> {
                 controller: passwordController,
                 obscureText: obscurePassword,
                 decoration: inputDecoration("Enter your password").copyWith(
+                  errorMaxLines: 3,
                   suffixIcon: IconButton(
-                    icon: Icon(obscurePassword ? Icons.visibility_off : Icons.visibility, color: Colors.grey),
+                    icon: Icon(
+                      obscurePassword ? Icons.visibility_off : Icons.visibility,
+                      color: Colors.grey,
+                    ),
                     onPressed: () => setState(() => obscurePassword = !obscurePassword),
                   ),
                 ),
-                validator: (value) => value == null || value.isEmpty ? "Please enter your password!" : null,
+                validator: validatePassword,
               ),
               const SizedBox(height: 16),
 
@@ -165,7 +183,10 @@ class SignupFormState extends State<SignupForm> {
                 obscureText: obscurePassword,
                 decoration: inputDecoration("Confirm your password").copyWith(
                   suffixIcon: IconButton(
-                    icon: Icon(obscurePassword ? Icons.visibility_off : Icons.visibility, color: Colors.grey),
+                    icon: Icon(
+                      obscurePassword ? Icons.visibility_off : Icons.visibility,
+                      color: Colors.grey,
+                    ),
                     onPressed: () => setState(() => obscurePassword = !obscurePassword),
                   ),
                 ),
