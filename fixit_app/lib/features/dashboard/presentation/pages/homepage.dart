@@ -40,47 +40,6 @@ class _HomePageState extends State<HomePage> {
   int _selectedIndex = 0;
   final ApiService _apiService = ApiService();
 
-  // ====================================================
-  // LOGOUT HANDLER (COMPLETE RESET)
-  // ====================================================
-  Future<void> _handleLogout(BuildContext context) async {
-    final reportVM = Provider.of<ReportViewModel>(context, listen: false);
-
-    try {
-      // Fully reset everything inside ReportViewModel (token + data + camera)
-      await reportVM.logoutAndReset();
-
-      // Also clear token from ApiService (double safety)
-      await _apiService.logout();
-
-      //Clear any controllers in HomePage
-      _searchController.clear();
-      ticketCards.clear();
-      _selectedIndex = 0;
-
-      // Navigate back to LoginForm (remove all previous routes)
-      if (context.mounted) {
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(builder: (context) => const LoginForm()),
-          (route) => false,
-        );
-      }
-
-      // Show confirmation
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("✅ Logged out successfully.")),
-      );
-
-      print("🚪 Logout completed. All data cleared successfully.");
-    } catch (e) {
-      print("❌ Logout error: $e");
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Logout failed: $e")),
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final firstName = widget.firstNameController?.text ?? "User";
@@ -123,7 +82,7 @@ class _HomePageState extends State<HomePage> {
           ),
         ),
         actions: [
-          // 👤 Profile avatar
+          // 👤 Profile avatar only (logout button removed)
           Container(
             margin: const EdgeInsets.only(right: 8),
             child: ProfileAvatar(
@@ -131,12 +90,6 @@ class _HomePageState extends State<HomePage> {
                   "http://192.168.5.137:8000/api/proxy-avatar/?url=https://i.pravatar.cc/300",
               radius: 27,
             ),
-          ),
-          // Logout button
-          IconButton(
-            icon: const Icon(Icons.logout, color: Colors.redAccent),
-            onPressed: () => _handleLogout(context),
-            tooltip: "Logout",
           ),
         ],
       ),
@@ -237,8 +190,8 @@ class _HomePageState extends State<HomePage> {
             );
           }
 
+          /*
           if (index == 2) {
-            // Use existing provider (no reset)
             final newReport = await Navigator.push(
               context,
               MaterialPageRoute(builder: (context) => const CreateReport()),
@@ -250,8 +203,9 @@ class _HomePageState extends State<HomePage> {
               });
             }
           }
+          */
 
-          if (index == 3) {
+          if (index == 2) {
             Navigator.push(
               context,
               MaterialPageRoute(
