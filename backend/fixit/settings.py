@@ -64,6 +64,7 @@ MIDDLEWARE = [
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",  # Frontend dev URL
     "http://localhost:54385", # need to change
+    "http://192.168.1.254:8000",
 
 ]
 if not DEBUG:

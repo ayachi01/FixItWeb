@@ -73,10 +73,7 @@ def resize_image(image_path, max_size=(320, 320)) -> bytes:
 
 
 def extract_ollama_content(response):
-    """
-    Safely extract content from Ollama's response object,
-    even if it's streamed or empty.
-    """
+    """Safely extract text from Ollama response."""
     if not response:
         return ""
     if isinstance(response, dict):
@@ -100,8 +97,73 @@ def report_issue(request):
     if request.method != "POST":
         return JsonResponse({"error": "POST required"}, status=405)
 
+    print("📩 POST received at /llm/report/")
+    print("Fields:", request.POST)
+    print("Files:", request.FILES)
+
     user_message = request.POST.get("message", "")
     image_file = request.FILES.get("image")
+
+    if image_file:
+        print(f"✅ Image received: {image_file.name}, size = {image_file.size} bytes")
+
+        # Save and preprocess image
+        image_path = os.path.join(UPLOAD_FOLDER, image_file.name)
+        with open(image_path, "wb+") as dest:
+            for chunk in image_file.chunks():
+                dest.write(chunk)
+
+        try:
+            # Resize for performance
+            image_bytes = resize_image(image_path)
+
+            prompt_img = """
+            You are FixIt Felix 🤖, a classroom issue reporting assistant.
+            Look at the image and respond ONLY in JSON:
+            {
+              "item": "chair/table/projector/etc. or null",
+              "intent": "broken/missing/problem/faulty or null",
+              "notes": "short description under 50 characters"
+            }
+            """
+
+            response = ollama.chat(
+                model="llava:7b",
+                messages=[{"role": "user", "content": prompt_img, "images": [image_bytes]}]
+            )
+
+            ai_reply = extract_ollama_content(response)
+            print("🧠 Raw Ollama image reply:", ai_reply)
+
+            if not ai_reply:
+                raise ValueError("Empty AI response for image.")
+
+            try:
+                parsed = json.loads(ai_reply)
+            except Exception:
+                parsed = json.loads(clean_json(ai_reply))
+
+            ticket = {
+                "building": None,
+                "room": None,
+                "item": parsed.get("item"),
+                "intent": parsed.get("intent"),
+                "notes": limit_notes(parsed.get("notes")),
+            }
+            ticket = normalize_fields(ticket)
+
+            bot_reply = f"Detected {ticket['intent']} {ticket['item']}. Please provide the building and room number."
+            return JsonResponse({"ai_reply": bot_reply, "ticket": ticket})
+
+        except Exception as e:
+            logging.error(f"Error analyzing image: {e}")
+            return JsonResponse({
+                "ai_reply": "⚠️ Could not analyze the image. Please describe the issue instead.",
+                "ticket": {},
+            })
+
+    # -- Handle text input (fallback) --
+    print("💬 No image detected. Processing text message only.")
 
     conversation = request.session.get("conversation", {
         "ticket": {"building": None, "room": None, "item": None, "intent": None, "notes": None},
@@ -109,7 +171,6 @@ def report_issue(request):
     })
     ticket = conversation["ticket"]
 
-    # -- Handle text input --
     prompt = f"""
     You are FixIt Felix 🤖, a classroom issue reporting assistant.
     Extract structured data (building, room, item, intent, notes) from this message.
@@ -127,23 +188,15 @@ def report_issue(request):
 
     try:
         response = ollama.chat(model="symonvalencia/fixitV2", messages=[{"role": "user", "content": prompt}])
-        logging.debug(f"🧠 Raw Ollama response: {response}")
+        logging.debug(f"🧠 Raw Ollama text response: {response}")
 
         ai_reply = extract_ollama_content(response)
         if not ai_reply:
-            logging.warning("⚠️ Ollama returned an empty reply. Using fallback model (llama3.2).")
+            logging.warning("⚠️ Empty reply, retrying with llama3.2.")
             response = ollama.chat(model="llama3.2", messages=[{"role": "user", "content": prompt}])
             ai_reply = extract_ollama_content(response)
 
-        if not ai_reply:
-            raise ValueError("No text content returned from Ollama.")
-
-        logging.info(f"✅ AI reply text: {ai_reply}")
-
-        try:
-            parsed = json.loads(ai_reply)
-        except Exception:
-            parsed = json.loads(clean_json(ai_reply))
+        parsed = json.loads(ai_reply) if ai_reply.strip().startswith("{") else json.loads(clean_json(ai_reply))
 
         for key in ["building", "room", "item", "intent", "notes"]:
             if parsed.get(key):
@@ -170,7 +223,7 @@ def report_issue(request):
             conversation["previewed"] = True
 
     except Exception as e:
-        logging.error(f"❌ Error in report_issue: {e}")
+        logging.error(f"❌ Error in text analysis: {e}")
         bot_reply = "⚠️ Something went wrong, please try again."
 
     conversation["ticket"] = ticket

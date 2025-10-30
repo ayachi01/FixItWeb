@@ -11,7 +11,11 @@ class CreateReport extends StatefulWidget {
   final Map<String, dynamic>? llmData;
   final File? imageFile; // ✅ Added
 
-  const CreateReport({super.key, this.llmData, this.imageFile}); // ✅ Added imageFile
+  const CreateReport({
+    super.key,
+    this.llmData,
+    this.imageFile,
+  }); // ✅ Added imageFile
 
   @override
   State<CreateReport> createState() => CreateReportState();
@@ -47,10 +51,7 @@ class CreateReportState extends State<CreateReport> {
     "Parking",
   ];
 
-  final List<String> urgencyOptions = [
-    "Standard",
-    "Urgent",
-  ];
+  final List<String> urgencyOptions = ["Standard", "Urgent"];
 
   @override
   void initState() {
@@ -58,11 +59,14 @@ class CreateReportState extends State<CreateReport> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _fetchBuildings();
       _prefillFromLLM(widget.llmData);
-      // ✅ Preload image if passed from scanner
+
       if (widget.imageFile != null) {
         final vm = context.read<ReportViewModel>();
         vm.selectedImage = widget.imageFile!;
         vm.safeNotify();
+
+        // 🧠 Trigger LLM analysis automatically
+        vm.sendToLLM(widget.imageFile!);
       }
     });
   }
@@ -113,9 +117,9 @@ class CreateReportState extends State<CreateReport> {
     } catch (e) {
       if (!mounted) return;
       setState(() => isLoadingBuildings = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Failed to load buildings: $e")),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("Failed to load buildings: $e")));
     }
   }
 
@@ -144,9 +148,9 @@ class CreateReportState extends State<CreateReport> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error submitting ticket: $e")),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text("Error submitting ticket: $e")));
       }
     }
   }
@@ -182,8 +186,10 @@ class CreateReportState extends State<CreateReport> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // Incident Type
-                const Text("Incident Type",
-                    style: TextStyle(fontSize: 16, fontFamily: 'Inter')),
+                const Text(
+                  "Incident Type",
+                  style: TextStyle(fontSize: 16, fontFamily: 'Inter'),
+                ),
                 const SizedBox(height: 8),
                 TextFormField(
                   controller: incidentType,
@@ -195,8 +201,10 @@ class CreateReportState extends State<CreateReport> {
                 const SizedBox(height: 20),
 
                 // Building Dropdown
-                const Text("Building",
-                    style: TextStyle(fontSize: 16, fontFamily: 'Inter')),
+                const Text(
+                  "Building",
+                  style: TextStyle(fontSize: 16, fontFamily: 'Inter'),
+                ),
                 const SizedBox(height: 8),
                 isLoadingBuildings
                     ? const Center(
@@ -206,7 +214,7 @@ class CreateReportState extends State<CreateReport> {
                         ),
                       )
                     : DropdownButtonFormField<int>(
-                        value: selectedLocationId,
+                        initialValue: selectedLocationId,
                         hint: const Text('Select Location'),
                         onChanged: (value) {
                           if (!mounted) return;
@@ -217,7 +225,8 @@ class CreateReportState extends State<CreateReport> {
                               "${loc['building_name']} - Floor ${loc['floor_number']} - Room ${loc['room_identifier']}";
                           return DropdownMenuItem<int>(
                             value: loc['id'],
-                            child: Flexible( // ✅ Prevent overflow
+                            child: Flexible(
+                              // ✅ Prevent overflow
                               child: Text(
                                 displayName,
                                 overflow: TextOverflow.ellipsis,
@@ -232,11 +241,13 @@ class CreateReportState extends State<CreateReport> {
                 const SizedBox(height: 20),
 
                 // Category Dropdown
-                const Text("Category",
-                    style: TextStyle(fontSize: 16, fontFamily: 'Inter')),
+                const Text(
+                  "Category",
+                  style: TextStyle(fontSize: 16, fontFamily: 'Inter'),
+                ),
                 const SizedBox(height: 8),
                 DropdownButtonFormField<String>(
-                  value: categoryDropDownValue,
+                  initialValue: categoryDropDownValue,
                   hint: const Text('Select Category'),
                   onChanged: (value) {
                     if (!mounted) return;
@@ -252,11 +263,13 @@ class CreateReportState extends State<CreateReport> {
                 const SizedBox(height: 20),
 
                 // Urgency Dropdown
-                const Text("Urgency",
-                    style: TextStyle(fontSize: 16, fontFamily: 'Inter')),
+                const Text(
+                  "Urgency",
+                  style: TextStyle(fontSize: 16, fontFamily: 'Inter'),
+                ),
                 const SizedBox(height: 8),
                 DropdownButtonFormField<String>(
-                  value: urgencyDropDownValue,
+                  initialValue: urgencyDropDownValue,
                   hint: const Text('Select Urgency'),
                   onChanged: (value) {
                     if (!mounted) return;
@@ -272,8 +285,10 @@ class CreateReportState extends State<CreateReport> {
                 const SizedBox(height: 20),
 
                 // Description
-                const Text("Description",
-                    style: TextStyle(fontSize: 16, fontFamily: 'Inter')),
+                const Text(
+                  "Description",
+                  style: TextStyle(fontSize: 16, fontFamily: 'Inter'),
+                ),
                 const SizedBox(height: 8),
                 TextFormField(
                   controller: description,
@@ -296,7 +311,8 @@ class CreateReportState extends State<CreateReport> {
                   child: Center(
                     child: Consumer<ReportViewModel>(
                       builder: (context, vm, child) {
-                        final hasImage = (kIsWeb && vm.selectedImageBytes != null) ||
+                        final hasImage =
+                            (kIsWeb && vm.selectedImageBytes != null) ||
                             (!kIsWeb && vm.selectedImage != null);
 
                         if (hasImage) {
@@ -323,8 +339,11 @@ class CreateReportState extends State<CreateReport> {
                                     shape: BoxShape.circle,
                                   ),
                                   child: IconButton(
-                                    icon: const Icon(Icons.clear,
-                                        color: Colors.red, size: 18),
+                                    icon: const Icon(
+                                      Icons.clear,
+                                      color: Colors.red,
+                                      size: 18,
+                                    ),
                                     onPressed: vm.removeImage,
                                   ),
                                 ),
@@ -335,8 +354,11 @@ class CreateReportState extends State<CreateReport> {
 
                         // ✅ Show preloaded scanner image if VM has none
                         if (widget.imageFile != null) {
-                          return Image.file(widget.imageFile!,
-                              height: 150, fit: BoxFit.cover);
+                          return Image.file(
+                            widget.imageFile!,
+                            height: 150,
+                            fit: BoxFit.cover,
+                          );
                         }
 
                         return MaterialButton(

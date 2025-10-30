@@ -215,9 +215,6 @@ class ApiService {
     }
   }
 
-
-
-
   // ====================================================
   //  LOCATIONS
   // ====================================================
@@ -259,9 +256,7 @@ class ApiService {
         'location': locationId,
         if (imagePaths != null && imagePaths.isNotEmpty)
           'image': await Future.wait(
-            imagePaths.map(
-              (path) async => await MultipartFile.fromFile(path),
-            ),
+            imagePaths.map((path) async => await MultipartFile.fromFile(path)),
           ),
         if (imageBytesList != null && imageBytesList.isNotEmpty)
           'image': imageBytesList
@@ -279,10 +274,7 @@ class ApiService {
       final response = await dio.post(
         '/tickets/report_issue/',
         data: formData,
-        options: Options(
-          headers: headers,
-          contentType: 'multipart/form-data',
-        ),
+        options: Options(headers: headers, contentType: 'multipart/form-data'),
       );
 
       return response.data as Map<String, dynamic>;
